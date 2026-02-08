@@ -1,0 +1,26 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Class } from '@/types/models';
+import { Plus, Pencil, Trash2, Users, School, ArrowLeft } from 'lucide-react';
+import { Modal } from '@/components/ui/modal';
+import { ClassForm } from '@/components/class-form';
+import { createClass, updateClass, deleteClass } from './actions';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { db } from '@/app/actions/common-client'; // We need to fetch data. Actually better to use server component + client wrapper, but for speed let's fetch in useEffect or pass initial data. 
+// Wait, this page should be a Server Component fetching data, passing to Client Component?
+// Let's make this page a Client Component that fetches data via an action or API?
+// The file is `page.tsx` so it's a Server Component by default. Let's keep it Server Component for data fetching.
+
+// Ah, I need to fetch classes. 
+// Let's mix Server Component (Shell) and Client Component (List).
+// But for simplicity in Phase 02, I will make the whole page client-side fetch or server-side fetch?
+// Server-side fetch serves best.
+
+// Wait, I cannot export 'use client' and async component easily in same file if I want interactivity.
+// Let's stick to: Page (Server) -> ClassList (Client).
+
+// Refactoring strategy:
+// 1. src/app/classes/page.tsx -> Server Component. Fetches all classes.
+// 2. src/app/classes/client-list.tsx -> Client Component. Handles Modal, Edit, Delete interactions.

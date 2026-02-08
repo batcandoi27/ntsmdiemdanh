@@ -1,0 +1,238 @@
+import ExcelJS from 'exceljs';
+import * as XLSX from 'xlsx'; // Giữ lại nếu cần helper phụ, nhưng logic chính sẽ override.
+import { saveAs } from 'file-saver';
+
+// --- Types ---
+interface ExportData {
+    className: string;
+    students: {
+        code: string;
+        name: string;
+        absences: Record<string, string>; // date (YYYY-MM-DD) -> status
+    }[];
+    year: number;
+    month: number;
+}
+
+// --- Helpers ---
+
+// Hàm helper để convert sang border style
+const BORDER_STYLE: Partial<ExcelJS.Borders> = {
+    top: { style: 'thin' },
+    left: { style: 'thin' },
+    bottom: { style: 'thin' },
+    right: { style: 'thin' }
+};
+
+// Hàm set style chung cho header
+const setHeaderStyle = (cell: ExcelJS.Cell, bgColor: string = 'E0E0E0') => {
+    cell.font = { bold: true, size: 11, name: 'Times New Roman' };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: `FF${bgColor}` } // Add FF for Alpha
+    };
+    cell.border = BORDER_STYLE;
+};
+
+// Màu cho từng loại trạng thái (ARGB)
+const STATUS_COLORS: Record<string, string> = {
+    P: 'FFF59E0B', // Yellow
+    K: 'FFEF4444', // Red
+    V: 'FF9CA3AF', // Gray
+    T: 'FF3B82F6', // Blue
+    VP: 'FF8B5CF6' // Purple
+};
+
+const STATUS_TEXT_COLORS: Record<string, string> = {
+    P: 'FFFFFF', // White text on colored bg
+    K: 'FFFFFF',
+    V: 'FFFFFF',
+    T: 'FFFFFF',
+    VP: 'FFFFFF'
+};
+
+
+// --- Main Export Function ---
+
+export const exportMonthlyReport = async (data: ExportData[], fileName: string) => {
+    const workbook = new ExcelJS.Workbook();
+
+    data.forEach(classData => {
+        const sheet = workbook.addWorksheet(`Lớp ${classData.className}`);
+
+        // --- 1. Title Section ---
+        sheet.mergeCells('A1:E1');
+        const title1 = sheet.getCell('A1');
+        title1.value = "TRƯỜNG THCS TRẦN BỘI CƠ";
+        title1.font = { bold: true, size: 12, name: 'Times New Roman' };
+        title1.alignment = { horizontal: 'left' };
+
+        sheet.mergeCells('A3:AC3'); // Merge Rộng ra
+        const titleMain = sheet.getCell('A3');
+        titleMain.value = `BẢNG ĐIỂM DANH THÁNG ${classData.month} - NĂM ${classData.year} - LỚP ${classData.className}`;
+        titleMain.font = { bold: true, size: 14, name: 'Times New Roman', color: { argb: 'FF0000FF' } }; // Blue Title
+        titleMain.alignment = { horizontal: 'center' };
+
+        // --- 2. Header Rows ---
+        // Row 5: STT, Họ Tên, Mã HS | Ngày 1...31 | Tổng kết
+        const headerRowIdx = 5;
+        const subHeaderRowIdx = 6;
+
+        // Cấu hình cột
+        // A: STT, B: Họ Tên, C: Mã HS
+        sheet.getColumn(1).width = 5;  // STT
+        sheet.getColumn(2).width = 25; // Name
+        sheet.getColumn(3).width = 10; // Code
+
+        sheet.getCell(`A${headerRowIdx}`).value = "STT";
+        sheet.mergeCells(`A${headerRowIdx}:A${subHeaderRowIdx}`);
+
+        sheet.getCell(`B${headerRowIdx}`).value = "Họ và Tên";
+        sheet.mergeCells(`B${headerRowIdx}:B${subHeaderRowIdx}`);
+
+        sheet.getCell(`C${headerRowIdx}`).value = "Mã HS";
+        sheet.mergeCells(`C${headerRowIdx}:C${subHeaderRowIdx}`);
+
+        setHeaderStyle(sheet.getCell(`A${headerRowIdx}`));
+        setHeaderStyle(sheet.getCell(`B${headerRowIdx}`));
+        setHeaderStyle(sheet.getCell(`C${headerRowIdx}`));
+        setHeaderStyle(sheet.getCell(`A${subHeaderRowIdx}`)); // Apply border to merged
+        setHeaderStyle(sheet.getCell(`B${subHeaderRowIdx}`));
+        setHeaderStyle(sheet.getCell(`C${subHeaderRowIdx}`));
+
+        // Generate Days Columns
+        const daysInMonth = new Date(classData.year, classData.month, 0).getDate();
+        let colIdx = 4; // Start from D
+
+        for (let d = 1; d <= daysInMonth; d++) {
+            const date = new Date(classData.year, classData.month - 1, d);
+            const dayOfWeek = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][date.getDay()];
+            const isWeekend = dayOfWeek === 'CN' || dayOfWeek === 'T7';
+
+            // Row 5: Date
+            const cellDate = sheet.getRow(headerRowIdx).getCell(colIdx);
+            cellDate.value = d;
+
+            // Row 6: Day Name (T2, T3...)
+            const cellDay = sheet.getRow(subHeaderRowIdx).getCell(colIdx);
+            cellDay.value = dayOfWeek;
+
+            // Style
+            const bg = isWeekend ? 'FFEDD5' : 'F3F4F6'; // Orange-ish for weekend
+            setHeaderStyle(cellDate, bg);
+            setHeaderStyle(cellDay, bg);
+            if (isWeekend) {
+                cellDate.font = { ...cellDate.font, color: { argb: 'FFDD6B20' } }; // Orange text
+                cellDay.font = { ...cellDay.font, color: { argb: 'FFDD6B20' } };
+            }
+
+            sheet.getColumn(colIdx).width = 4; // Narrow for days
+            colIdx++;
+        }
+
+        // Summary Columns
+        const summaryHeaders = ["P", "K", "V", "Tổng"];
+        summaryHeaders.forEach(h => {
+            const cell = sheet.getRow(headerRowIdx).getCell(colIdx);
+            cell.value = h;
+            sheet.mergeCells(headerRowIdx, colIdx, subHeaderRowIdx, colIdx);
+            setHeaderStyle(cell, 'FEF3C7'); // Light Yellow
+            sheet.getColumn(colIdx).width = 5;
+            colIdx++;
+        });
+
+
+        // --- 3. Data Rows ---
+        let currentRowIdx = 7;
+        classData.students.forEach((s, index) => {
+            const row = sheet.getRow(currentRowIdx);
+
+            // Basic Info
+            row.getCell(1).value = index + 1;
+            row.getCell(2).value = s.name;
+            row.getCell(3).value = s.code;
+
+            // Style Basic Info
+            [1, 2, 3].forEach(c => {
+                const cell = row.getCell(c);
+                cell.border = BORDER_STYLE;
+                cell.font = { name: 'Times New Roman', size: 11 };
+                if (c !== 2) cell.alignment = { horizontal: 'center' }; // Center STT & Code
+            });
+
+            // Iterate Days
+            let dayColIdx = 4;
+            let countP = 0, countK = 0, countV = 0;
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateStr = `${classData.year}-${classData.month.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
+                const status = s.absences[dateStr] || '';
+                const cell = row.getCell(dayColIdx);
+
+                cell.value = status;
+                cell.border = BORDER_STYLE;
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                cell.font = { name: 'Times New Roman', size: 10, bold: true };
+
+                // Stats
+                if (status === 'P') countP++;
+                if (status === 'K') countK++;
+                if (status === 'V') countV++;
+
+                // Color Logic
+                if (STATUS_COLORS[status]) {
+                    cell.fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: STATUS_COLORS[status] }
+                    };
+                    cell.font = { ...cell.font, color: { argb: 'FFFFFFFF' } }; // White text
+                } else {
+                    // Default weekend color for empty cells?
+                    const date = new Date(classData.year, classData.month - 1, d);
+                    const dayOfWeek = date.getDay(); // 0 is Sunday
+                    if (dayOfWeek === 0 || dayOfWeek === 6) {
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } };
+                    }
+                }
+
+                dayColIdx++;
+            }
+
+            // Summary Data
+            row.getCell(dayColIdx).value = countP > 0 ? countP : '';
+            row.getCell(dayColIdx + 1).value = countK > 0 ? countK : '';
+            row.getCell(dayColIdx + 2).value = countV > 0 ? countV : '';
+            const total = countP + countK + countV;
+            row.getCell(dayColIdx + 3).value = total > 0 ? total : '';
+
+            // Style Summary
+            [0, 1, 2, 3].forEach(offset => {
+                const cell = row.getCell(dayColIdx + offset);
+                cell.border = BORDER_STYLE;
+                cell.alignment = { horizontal: 'center' };
+                cell.font = { bold: true };
+            });
+
+            currentRowIdx++;
+        });
+
+    });
+
+    // Write file
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    saveAs(blob, `${fileName}.xlsx`);
+};
+
+// Simple export fallback (unchanged or updated if needed, but Monthly is priority)
+export const exportToExcel = (data: any[], fileName: string) => {
+    // Existing simple implementation can remain as fallback or be upgraded similarly
+    // For now keeping lightweight as User emphasized Monthly Report style.
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "BaoCao");
+    XLSX.writeFile(wb, `${fileName}.xlsx`);
+};

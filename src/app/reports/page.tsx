@@ -1,0 +1,194 @@
+'use client';
+
+import { useState, useEffect, useMemo } from 'react';
+import { getReports, getMonthlyReportData, ReportCriteria, ReportResult } from '@/app/actions/report';
+import { getAllClasses } from '@/app/actions/common';
+import { Class } from '@/types/models';
+import { FileBarChart } from 'lucide-react';
+import { exportMonthlyReport } from '@/lib/export-utils';
+import { ReportsStats } from '@/components/reports/reports-stats';
+import { ReportsFilter } from '@/components/reports/reports-filter';
+import { ReportsListView } from '@/components/reports/reports-list-view';
+import { ReportsGridView } from '@/components/reports/reports-grid-view';
+import { startOfMonth, endOfMonth, format } from 'date-fns';
+
+export default function ReportsPage() {
+    const [loading, setLoading] = useState(false);
+    const [result, setResult] = useState<ReportResult | null>(null);
+    const [classes, setClasses] = useState<Class[]>([]);
+
+    // View State
+    const [viewMode, setViewMode] = useState<'LIST' | 'GRID'>('LIST');
+    const [groupBy, setGroupBy] = useState<'DATE' | 'CLASS'>('DATE');
+
+    // Filters
+    const now = new Date();
+    const [dateRange, setDateRange] = useState({
+        start: format(startOfMonth(now), 'yyyy-MM-dd'),
+        end: format(endOfMonth(now), 'yyyy-MM-dd')
+    });
+    const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
+    const [isFilterActive, setIsFilterActive] = useState(false); // Track if user has manually triggered report
+
+    useEffect(() => {
+        getAllClasses().then(c => {
+            setClasses(c);
+            // Default select all? Or none (All)? Let's assume empty = All
+        });
+    }, []);
+
+    // Auto re-fetch ONLY when date changes AND report is already active
+    useEffect(() => {
+        if (isFilterActive) {
+            handleFetch();
+        }
+    }, [dateRange]);
+
+    const handleManualFetch = () => {
+        setIsFilterActive(true);
+        handleFetch();
+    };
+
+    const handleFetch = async () => {
+        setLoading(true);
+        try {
+            const criteria: ReportCriteria = {
+                startDate: dateRange.start,
+                endDate: dateRange.end,
+                classIds: selectedClasses.length > 0 ? selectedClasses : undefined
+            };
+            const data = await getReports(criteria);
+            setResult(data);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleExport = async () => {
+        // Export logic: Selected classes OR All classes if none selected
+        const targets = selectedClasses.length > 0 ? selectedClasses : classes.map(c => c.id);
+
+        if (targets.length === 0) {
+            alert("Không có dữ liệu lớp để xuất.");
+            return;
+        }
+
+        const month = new Date(dateRange.start).getMonth() + 1;
+        const year = new Date(dateRange.start).getFullYear();
+
+        setLoading(true);
+        try {
+            const allReportsData = [];
+            // Fetch all data sequentially to avoid server overload, or parallel if preferred. 
+            // Sequential is safer for reliability.
+            for (const clsId of targets) {
+                try {
+                    const data = await getMonthlyReportData(clsId, month, year);
+                    allReportsData.push(data);
+                } catch (e: any) {
+                    console.error(`Failed to fetch report data for class ${clsId}`, e);
+                }
+            }
+
+            if (allReportsData.length > 0) {
+                const fileName = targets.length === 1
+                    ? `Báo_Cáo_Tháng_${month}_${allReportsData[0].className}`
+                    : `Báo_Cáo_Tong_Hop_Tháng_${month}_Năm_${year}`;
+
+                await exportMonthlyReport(allReportsData, fileName);
+            } else {
+                alert("Không lấy được dữ liệu báo cáo nào.");
+            }
+
+        } catch (error) {
+            console.error("Export error:", error);
+            alert("Có lỗi xảy ra khi xuất báo cáo.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const stats = result ? {
+        P: result.totalP,
+        K: result.totalK,
+        V: result.totalV,
+        T: result.totalT,
+        VP: result.totalVP,
+        Total: result.absences.length // Total records (violations/absences)
+    } : { P: 0, K: 0, V: 0, T: 0, VP: 0, Total: 0 };
+
+    return (
+        <div className="p-4 md:p-8 min-h-screen bg-gray-50/50 space-y-6">
+            {/* Header Title */}
+            <div>
+                <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                    <FileBarChart className="text-blue-600" size={28} />
+                    Báo Cáo Điểm Danh
+                </h1>
+                <p className="text-gray-500 text-sm">Thống kê chi tiết & Xuất dữ liệu</p>
+            </div>
+
+            {/* Filter Bar */}
+            <ReportsFilter
+                dateRange={dateRange}
+                setDateRange={setDateRange}
+                selectedClasses={selectedClasses}
+                setSelectedClasses={setSelectedClasses}
+                classes={classes}
+                viewMode={viewMode}
+                setViewMode={setViewMode}
+                groupBy={groupBy}
+                setGroupBy={setGroupBy}
+                onExport={handleExport}
+                onGenerateReport={handleManualFetch}
+            />
+
+            {/* Stats Cards */}
+            <ReportsStats stats={stats} loading={loading} />
+
+            {/* Main Content Area */}
+            <div className="min-h-[400px]">
+                {loading && !result ? (
+                    <div className="flex justify-center p-12 text-gray-400">Đang tải dữ liệu...</div>
+                ) : (
+                    <>
+                        {viewMode === 'LIST' ? (
+                            <ReportsListView
+                                data={result?.absences || []}
+                                groupBy={groupBy}
+                            />
+                        ) : (
+                            <ReportsGridView
+                                dateRange={dateRange}
+                                selectedClasses={selectedClasses}
+                                absences={result?.absences || []}
+                                classes={classes}
+                            />
+                        )}
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// Assuming 'cn' utility is imported or defined elsewhere.
+// If not, you might need to add `import { cn } from '@/lib/utils';` or define `cn` locally.
+function StatCard({ label, value, color }: { label: string, value: number, color: string }) {
+    const mapColor = {
+        yellow: "text-yellow-600 bg-yellow-50 border-yellow-100",
+        red: "text-red-600 bg-red-50 border-red-100",
+        blue: "text-blue-600 bg-blue-50 border-blue-100",
+        purple: "text-purple-600 bg-purple-50 border-purple-100",
+        orange: "text-orange-600 bg-orange-50 border-orange-100",
+    };
+
+    return (
+        <div className={cn("p-4 rounded-2xl border shadow-sm flex flex-col items-center justify-center gap-1", mapColor[color as keyof typeof mapColor])}>
+            <p className="text-[10px] font-bold uppercase opacity-70 tracking-wider">{label}</p>
+            <p className="text-3xl font-black">{value}</p>
+        </div>
+    );
+}
