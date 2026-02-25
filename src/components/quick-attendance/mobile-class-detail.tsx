@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { MobileStudentCard } from "./mobile-student-card";
-import { getClassAttendanceDetails, updateBatchAttendance, StudentAttendanceDetail } from "@/app/actions/quick-attendance";
-import { AttendanceStatus } from "@/types/models";
-import { cn } from "@/lib/utils"; // Added import for cn utility
+import { getDailyAttendanceData, toggleDailyCheck, updateBatchAttendance, StudentAttendanceDetail } from "@/app/actions/quick-attendance";
+import { AttendanceStatus, Column } from "@/types/models";
+import { cn } from "@/lib/utils";
+import { useAppSettings } from "@/hooks/use-settings";
 
 interface MobileClassDetailProps {
     classId: string;
@@ -16,24 +17,37 @@ interface MobileClassDetailProps {
 }
 
 export function MobileClassDetail({ classId, className, date, onDateChange, onBack }: MobileClassDetailProps) {
+    const { settings } = useAppSettings();
+
+    // Data State
     const [students, setStudents] = useState<StudentAttendanceDetail[]>([]);
+    const [customColumns, setCustomColumns] = useState<Column[]>([]);
+    const [initialRecords, setInitialRecords] = useState<Record<string, Record<string, boolean>>>({});
+
     const [loading, setLoading] = useState(true);
-    // Track local changes: map of studentCode -> { status, note }
-    const [changes, setChanges] = useState<Record<string, { status: AttendanceStatus; note?: string }>>({});
+
+    // Changes State
+    // studentCode -> { status?, note?, custom: { colId -> checked } }
+    const [changes, setChanges] = useState<Record<string, {
+        status?: AttendanceStatus;
+        note?: string;
+        custom?: Record<string, boolean>;
+    }>>({});
 
     useEffect(() => {
-        loadStudents();
+        loadData();
     }, [classId, date]);
 
-    const loadStudents = async () => {
+    const loadData = async () => {
         setLoading(true);
         try {
-            const result = await getClassAttendanceDetails(classId, date);
-            setStudents(result);
-            setChanges({}); // Reset changes
+            const data = await getDailyAttendanceData(classId, date);
+            setStudents(data.students);
+            setCustomColumns(data.customColumns);
+            setInitialRecords(data.studentRecords);
+            setChanges({});
         } catch (error) {
             console.error(error);
-            // alert("Không thể tải danh sách học sinh");
         } finally {
             setLoading(false);
         }
@@ -42,42 +56,86 @@ export function MobileClassDetail({ classId, className, date, onDateChange, onBa
     const handleUpdateStatus = (studentCode: string, status: AttendanceStatus, note?: string) => {
         setChanges(prev => ({
             ...prev,
-            [studentCode]: { status, note }
+            [studentCode]: {
+                ...prev[studentCode],
+                status,
+                note
+            }
+        }));
+    };
+
+    const handleUpdateCustom = (studentCode: string, colId: string, checked: boolean) => {
+        setChanges(prev => ({
+            ...prev,
+            [studentCode]: {
+                ...prev[studentCode],
+                custom: {
+                    ...prev[studentCode]?.custom,
+                    [colId]: checked
+                }
+            }
         }));
     };
 
     const handleSave = async () => {
-        // Prepare payload from changes
-        const updates = Object.entries(changes).map(([studentCode, data]) => ({
-            studentCode,
-            status: data.status,
-            note: data.note
-        }));
+        const studentCodes = Object.keys(changes);
+        if (studentCodes.length === 0) return onBack();
 
-        if (updates.length === 0) {
-            onBack();
-            return;
-        }
-
+        setLoading(true);
         try {
-            await updateBatchAttendance(classId, date, updates);
+            // 1. Separate Core Updates vs Custom Updates
+            const coreUpdates: { studentCode: string, status: AttendanceStatus, note?: string }[] = [];
+            const customUpdates: Promise<void>[] = [];
+
+            studentCodes.forEach(code => {
+                const change = changes[code];
+
+                // Core
+                if (change.status !== undefined || change.note !== undefined) {
+                    // We need status. If status is undefined in change, use current from records?
+                    // `updateBatchAttendance` expects status.
+                    // If we only changed note, we should pass current status.
+                    // Find student
+                    const student = students.find(s => (s.student.code || s.student.id) === code);
+                    const currentStatus = change.status ?? student?.status ?? 'Present'; // Default?
+                    // Actually if student.status is empty string, it means Present?
+                    // Let's ensure we pass core status.
+                    // If change.status is undefined, use existing status from `students` prop.
+
+                    coreUpdates.push({
+                        studentCode: code,
+                        status: currentStatus as AttendanceStatus,
+                        note: change.note
+                    });
+                }
+
+                // Custom
+                if (change.custom) {
+                    Object.entries(change.custom).forEach(([colId, checked]) => {
+                        customUpdates.push(toggleDailyCheck(colId, date, code, checked));
+                    });
+                }
+            });
+
+            // Execute
+            await Promise.all([
+                coreUpdates.length > 0 ? updateBatchAttendance(classId, date, coreUpdates) : Promise.resolve(),
+                ...customUpdates
+            ]);
+
             onBack();
         } catch (error) {
             console.error(error);
-            alert("Lưu thất bại");
+            alert("Lưu thất bại. Vui lòng thử lại.");
+            setLoading(false);
         }
     };
-
-    // Calculate current stats
-    const presentCount = students.filter(s => {
-        const changed = changes[s.student.code];
-        const status = changed ? changed.status : s.status;
-        return status === '' || status === 'C';
-    }).length;
 
     if (loading) {
         return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-blue-600" /></div>;
     }
+
+    const hasChanges = Object.keys(changes).length > 0;
 
     return (
         <div className="flex flex-col h-full bg-white">
@@ -102,34 +160,39 @@ export function MobileClassDetail({ classId, className, date, onDateChange, onBa
                 </div>
                 <button
                     onClick={handleSave}
-                    disabled={Object.keys(changes).length === 0}
+                    disabled={!hasChanges}
                     className={cn(
                         "px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-wide transition-all whitespace-nowrap",
-                        Object.keys(changes).length > 0
+                        hasChanges
                             ? "bg-blue-600 text-white shadow-md active:scale-95"
                             : "bg-gray-100 text-gray-400"
                     )}
                 >
-                    {Object.keys(changes).length > 0 ? 'Lưu' : 'Xong'}
+                    {hasChanges ? 'Lưu' : 'Xong'}
                 </button>
             </div>
 
             {/* List */}
             <div className="divide-y divide-gray-100">
                 {students.map((detail) => {
-                    const studentCode = detail.student.code || detail.student.id; // Fallback
-                    // Check if changed locally, else use loaded status
-                    const currentStatus = changes[studentCode]?.status || detail.status || 'Present';
-                    const currentNote = changes[studentCode]?.note !== undefined ? changes[studentCode].note : detail.student.note; // Need to check where note is stored. `detail.student` has note? No, `detail` has status. 
-                    // Wait, `StudentAttendanceDetail` interface: { student: Student, status: AttendanceStatus }. 
-                    // Does `Student` have note?
-                    // In `quick-attendance.ts` types: `Student` ...
-                    // Let's assume `detail.student` might not have the daily note.
-                    // The note is likely in the `AttendanceRecord` but spread out?
-                    // `getClassAttendanceDetails` implementation should be checked if it returns notes.
-                    // If not, we might miss notes.
-                    // But for "Quick Selection", maybe notes are secondary.
-                    // Let's pass what we can.
+                    const studentCode = detail.student.code || detail.student.id;
+                    const change = changes[studentCode];
+
+                    // Core Status
+                    const currentStatus = change?.status ?? detail.status ?? '';
+                    const currentNote = change?.note ?? detail.note; // Use detail.note as fallback
+
+                    // Custom Columns
+                    // Merge initial state with changes
+                    const rowCustomColumns = customColumns.map(col => {
+                        const isCheckedInitial = initialRecords[studentCode]?.[col.id] || false;
+                        const isCheckedChanged = change?.custom?.[col.id];
+                        return {
+                            id: col.id,
+                            name: col.name,
+                            checked: isCheckedChanged !== undefined ? isCheckedChanged : isCheckedInitial
+                        };
+                    });
 
                     return (
                         <MobileStudentCard
@@ -140,9 +203,13 @@ export function MobileClassDetail({ classId, className, date, onDateChange, onBa
                                 code: studentCode,
                                 stt: detail.student.order
                             }}
-                            status={currentStatus}
-                            note={currentNote} // This might be stale if API doesn't return note in detail
-                            onUpdateStatus={(status, note) => handleUpdateStatus(studentCode, status, note)}
+                            status={currentStatus as AttendanceStatus}
+                            note={currentNote}
+                            onUpdateStatus={(s, n) => handleUpdateStatus(studentCode, s, n)}
+                            // New Props
+                            visibleStatuses={settings.visibleDefaultColumns}
+                            customColumns={rowCustomColumns}
+                            onUpdateCustomColumn={(colId, checked) => handleUpdateCustom(studentCode, colId, checked)}
                         />
                     );
                 })}

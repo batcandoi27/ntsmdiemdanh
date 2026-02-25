@@ -12,6 +12,8 @@ interface ReportsFilterProps {
     setSelectedClasses: (ids: string[]) => void;
 
     classes: Class[];
+    visibleColumns: string[];
+    setVisibleColumns: (cols: string[]) => void;
 
     viewMode: 'LIST' | 'GRID';
     setViewMode: (mode: 'LIST' | 'GRID') => void;
@@ -20,29 +22,45 @@ interface ReportsFilterProps {
     setGroupBy: (group: 'DATE' | 'CLASS') => void;
 
     onExport: () => void;
+    onExportAdvanced?: () => void; // Optional for backward compatibility if needed
     onGenerateReport: () => void;
 }
 
 type FilterMode = 'WEEK' | 'MONTH' | 'CUSTOM';
 
+const COLUMNS = [
+    { id: 'P', label: 'Phép (P)' },
+    { id: 'K', label: 'Không (K)' },
+    { id: 'T', label: 'Trễ (T)' },
+    { id: 'VP', label: 'Vi phạm (VP)' },
+    { id: 'KH', label: 'Khen thưởng (KH)' }
+];
+
 export function ReportsFilter({
     dateRange, setDateRange,
     selectedClasses, setSelectedClasses,
     classes,
+    visibleColumns, setVisibleColumns,
     viewMode, setViewMode,
     groupBy, setGroupBy,
     onExport,
+    onExportAdvanced,
     onGenerateReport
 }: ReportsFilterProps) {
     const [openClassDropdown, setOpenClassDropdown] = useState(false);
+    const [openColumnDropdown, setOpenColumnDropdown] = useState(false); // New
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const columnDropdownRef = useRef<HTMLDivElement>(null); // New
     const [filterMode, setFilterMode] = useState<FilterMode>('MONTH');
 
-    // Close dropdown on click outside
+    // Close dropdowns on click outside
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
                 setOpenClassDropdown(false);
+            }
+            if (columnDropdownRef.current && !columnDropdownRef.current.contains(event.target as Node)) {
+                setOpenColumnDropdown(false);
             }
         }
         document.addEventListener("mousedown", handleClickOutside);
@@ -62,6 +80,14 @@ export function ReportsFilter({
             setSelectedClasses([]);
         } else {
             setSelectedClasses(classes.map(c => c.id));
+        }
+    };
+
+    const toggleColumn = (id: string) => {
+        if (visibleColumns.includes(id)) {
+            setVisibleColumns(visibleColumns.filter(c => c !== id));
+        } else {
+            setVisibleColumns([...visibleColumns, id]);
         }
     };
 
@@ -237,6 +263,39 @@ export function ReportsFilter({
                 )}
             </div>
 
+            {/* Column Multi-Select */}
+            <div className="relative" ref={columnDropdownRef}>
+                <button
+                    onClick={() => setOpenColumnDropdown(!openColumnDropdown)}
+                    className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 min-w-[160px] justify-between transition-all shadow-sm active:translate-y-0.5"
+                >
+                    <div className="flex items-center gap-2 text-sm text-black font-bold">
+                        <Settings2 size={16} className="text-gray-700 stroke-[2.5px]" />
+                        <span>
+                            {visibleColumns.length === COLUMNS.length ? "Tất cả cột" : `Chọn cột (${visibleColumns.length})`}
+                        </span>
+                    </div>
+                    <ChevronsUpDown size={14} className="text-gray-600 stroke-[2px]" />
+                </button>
+
+                {openColumnDropdown && (
+                    <div className="absolute top-full mt-2 left-0 w-56 bg-white rounded-xl shadow-xl border border-gray-200 z-50 p-2 animate-in fade-in zoom-in-95 duration-200">
+                        {COLUMNS.map(col => (
+                            <div
+                                key={col.id}
+                                className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
+                                onClick={() => toggleColumn(col.id)}
+                            >
+                                <div className={cn("w-4 h-4 border rounded flex items-center justify-center", visibleColumns.includes(col.id) ? "bg-blue-600 border-blue-600" : "border-gray-400 bg-white")}>
+                                    {visibleColumns.includes(col.id) && <Check size={12} className="text-white stroke-[3px]" />}
+                                </div>
+                                <span className="text-sm font-medium text-gray-900">{col.label}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
             <div className="ml-auto flex gap-2">
                 {/* Generate Report Button */}
                 <button
@@ -253,6 +312,16 @@ export function ReportsFilter({
                 >
                     <LayoutGrid size={18} className="stroke-[2.5px]" /> Xuất Excel
                 </button>
+
+                {onExportAdvanced && (
+                    <button
+                        onClick={onExportAdvanced}
+                        className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-md flex items-center gap-2 transition-all active:scale-95 border border-purple-700 whitespace-nowrap"
+                        title="Xuất báo cáo tổng hợp kèm cột tùy chỉnh"
+                    >
+                        <Settings2 size={18} className="stroke-[2.5px]" /> Xuất Tổng Hợp
+                    </button>
+                )}
             </div>
 
             {/* Sub-toolbar for List View Grouping */}

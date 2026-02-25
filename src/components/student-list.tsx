@@ -111,13 +111,22 @@ export function StudentList({ classInfo, initialStudents }: StudentListProps) {
                         />
                     </div>
 
-                    <button
-                        onClick={openCreateModal}
-                        className="w-full md:w-auto bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/30 transition-all"
-                    >
-                        <Plus size={20} />
-                        Thêm Học Sinh
-                    </button>
+                    <div className="flex gap-2 w-full md:w-auto">
+                        <Link
+                            href={`/classes/${classInfo.id}/monitor`}
+                            className="flex-1 md:flex-none bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg font-bold flex items-center justify-center gap-2 transition-all"
+                        >
+                            <Filter size={20} />
+                            Theo Dõi & Thu Phí
+                        </Link>
+                        <button
+                            onClick={openCreateModal}
+                            className="flex-1 md:flex-none bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/30 transition-all"
+                        >
+                            <Plus size={20} />
+                            Thêm Học Sinh
+                        </button>
+                    </div>
                 </div>
 
                 {/* Content: Mobile List vs Desktop Table */}

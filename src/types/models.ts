@@ -22,6 +22,7 @@ export interface Class {
 }
 
 export interface Student {
+    id: string; // Document ID
     code: string; // VD: "6A1_1" hoặc "HS001"
     classId: string;
     order: number; // STT
@@ -42,7 +43,7 @@ export interface Student {
 // 'V': Absent Unknown (Vắng - chưa rõ P/K)
 // 'T': Late (Trễ)
 // 'VP': Violation (Vi Phạm)
-export type AttendanceStatus = 'P' | 'K' | '' | 'C' | 'V' | 'T' | 'VP';
+export type AttendanceStatus = 'P' | 'K' | '' | 'C' | 'V' | 'T' | 'VP' | 'KH';
 
 export interface AttendanceRecord {
     id: string; // composite: classId_date
@@ -83,6 +84,13 @@ export interface PeriodConfig {
     endDate: string;   // YYYY-MM-DD
 }
 
+export interface SubPeriod {
+    id: string; // e.g. "T09", "HK1"
+    label: string; // e.g. "Tháng 9", "Học kỳ 1"
+    startDate?: string;
+    endDate?: string;
+}
+
 /**
  * Column - Định nghĩa một cột theo dõi
  */
@@ -93,9 +101,20 @@ export interface Column {
     scope: ColumnScope;
     frequency: ColumnFrequency;
     periodConfig?: PeriodConfig; // Required if frequency = 'period'
+    subPeriods?: SubPeriod[]; // For Multi-Period columns (e.g. Monthly Tuition)
+
+    // Suggestion & Input Logic
     suggestions: string[]; // Danh sách gợi ý mặc định
     allowFreeText: boolean; // Cho phép nhập tự do
+
+    // Student Assignments (P9)
+    applicableScope?: 'all' | 'subset';
+    applicableStudentIds?: string[]; // If subset, only these students
+
+    // Visibility & Lifecycle
     archived: boolean; // Đã hoàn thành/hết hạn
+    defaultVisibility?: boolean; // Default show/hide in Attendance
+
     order: number; // Thứ tự hiển thị
     createdAt: string; // ISO string
     updatedAt: string; // ISO string
@@ -170,4 +189,3 @@ export interface ColumnVisibilityPreset {
     hiddenColumnIds: string[]; // Các cột bị ẩn
     updatedAt: string;
 }
-

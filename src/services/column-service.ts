@@ -59,9 +59,18 @@ export async function createColumn(column: Omit<Column, 'createdAt' | 'updatedAt
         throw new Error('Period config is required for period columns');
     }
 
+    // Validate student scope
+    if (column.applicableScope === 'subset' && (!column.applicableStudentIds || column.applicableStudentIds.length === 0)) {
+        throw new Error('Student IDs are required when scope is subset');
+    }
+
     const now = new Date().toISOString();
     const fullColumn: Column = {
         ...column,
+        // Set defaults
+        applicableScope: column.applicableScope || 'all',
+        defaultVisibility: column.defaultVisibility ?? true,
+        subPeriods: column.subPeriods || [],
         createdAt: now,
         updatedAt: now,
     };
@@ -197,4 +206,23 @@ export async function clonePeriodColumn(columnId: string, newPeriodConfig: Colum
     };
 
     return createColumn(newColumn);
+}
+
+/**
+ * Get columns that are candidates for archiving (e.g. expired period)
+ */
+export async function getExpiredColumns(classId: string): Promise<Column[]> {
+    const columns = await getColumns(classId);
+    const now = new Date();
+
+    return columns.filter(c => {
+        if (c.archived) return false;
+        if (c.frequency === 'period' && c.periodConfig) {
+            const endDate = new Date(c.periodConfig.endDate);
+            // End of the day
+            endDate.setHours(23, 59, 59, 999);
+            return endDate < now;
+        }
+        return false;
+    });
 }

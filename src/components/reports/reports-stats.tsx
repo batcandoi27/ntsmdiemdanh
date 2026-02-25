@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 interface ReportsStatsProps {
-    stats: ReportResult['summary'] | { P: 0, K: 0, V: 0, T: 0, VP: 0, Total: 0 };
+    stats: ReportResult['summary'] | { P: 0, K: 0, V: 0, T: 0, VP: 0, KH: 0, Total: 0 };
     loading?: boolean;
 }
 
@@ -17,6 +17,7 @@ export function ReportsStats({ stats, loading }: ReportsStatsProps) {
         { name: 'Phép', value: stats.P, color: '#EAB308' },
         { name: 'Không', value: stats.K, color: '#EF4444' },
         { name: 'Trễ', value: stats.T, color: '#3B82F6' },
+        { name: 'Khen', value: stats.KH || 0, color: '#F97316' }, // Orange
         // { name: 'Vi Phạm', value: stats.VP, color: '#A855F7' }, 
     ].filter(d => d.value > 0);
 
@@ -31,6 +32,7 @@ export function ReportsStats({ stats, loading }: ReportsStatsProps) {
             <StatCard label="Phép (P)" value={stats.P} color="yellow" icon={<Clock size={16} />} />
             <StatCard label="Không (K)" value={stats.K} color="red" icon={<Ban size={16} />} />
             <StatCard label="Trễ (T)" value={stats.T} color="blue" icon={<AlertTriangle size={16} />} />
+            <StatCard label="Khen (KH)" value={stats.KH || 0} color="orange" icon={<CheckCircle size={16} />} />
             <StatCard label="Vi Phạm (VP)" value={stats.VP} color="purple" icon={<Ban size={16} />} />
 
             {/* Chart */}

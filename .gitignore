@@ -54,3 +54,11 @@ temp/
 tmp/
 excel_analysis.txt
 AICHAT - prd app diemdanh.txt
+
+# AI Consultation & Internal Notes
+AI - tuvan*.txt
+AICHAT*.txt
+*- Copy.txt
+*- Copy.md
+.brain/
+.gemini/

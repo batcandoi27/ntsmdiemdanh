@@ -2,39 +2,28 @@ import { AbsenceDetail } from "@/app/actions/report";
 import { useMemo } from "react";
 import { format, eachDayOfInterval, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
+import { ShieldCheck } from "lucide-react";
 
 interface ReportsGridViewProps {
     dateRange: { start: string, end: string };
     selectedClasses: string[]; // IDs
     absences: AbsenceDetail[];
     classes: { id: string, name: string }[];
+    visibleColumns: string[]; // New prop
 }
 
-export function ReportsGridView({ dateRange, selectedClasses, absences, classes }: ReportsGridViewProps) {
-    // 1. Generate Date Columns
-    const dates = useMemo(() => {
-        return eachDayOfInterval({
-            start: parseISO(dateRange.start),
-            end: parseISO(dateRange.end)
-        });
-    }, [dateRange.start, dateRange.end]);
+export function ReportsGridView({ dateRange, selectedClasses, absences, classes, visibleColumns }: ReportsGridViewProps) {
+    // ...
+    const dates = eachDayOfInterval({ start: parseISO(dateRange.start), end: parseISO(dateRange.end) });
 
-    // 2. Group Absences by Class -> Student
-    // Filter: Include ONLY 'P' and 'K'
+    // 2. Group Absences
     const groupedData = useMemo(() => {
-        const groups: Record<string, {
-            className: string,
-            students: Record<string, {
-                code: string,
-                name: string,
-                stt: number,
-                absences: Record<string, string> // date -> status
-            }>
-        }> = {};
+        const groups: Record<string, { className: string; students: Record<string, any> }> = {};
 
+        // ...
         absences.forEach(record => {
-            // STRICT FILTER: Only 'P' and 'K'
-            if (!['P', 'K'].includes(record.status)) return;
+            // Filter by visible columns
+            if (!visibleColumns.includes(record.status)) return;
 
             const clsId = record.classId;
             // Filter by selectedClasses if set
@@ -147,13 +136,16 @@ export function ReportsGridView({ dateRange, selectedClasses, absences, classes 
                                                 </th>
                                             );
                                         })}
-                                        <th className="p-1 border border-gray-500 w-10 bg-yellow-300 text-black sticky right-10 z-50 font-black shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.3)] text-center">P</th>
-                                        <th className="p-1 border border-gray-500 w-10 bg-red-300 text-black sticky right-0 z-50 font-black text-center">K</th>
+                                        {visibleColumns.includes('P') && <th className="p-1 border border-gray-500 w-10 bg-yellow-300 text-black font-black text-center">P</th>}
+                                        {visibleColumns.includes('K') && <th className="p-1 border border-gray-500 w-10 bg-red-300 text-black font-black text-center">K</th>}
+                                        {visibleColumns.includes('T') && <th className="p-1 border border-gray-500 w-10 bg-blue-300 text-black font-black text-center">T</th>}
+                                        {visibleColumns.includes('VP') && <th className="p-1 border border-gray-500 w-10 bg-purple-300 text-black font-black text-center">VP</th>}
+                                        {visibleColumns.includes('KH') && <th className="p-1 border border-gray-500 w-10 bg-orange-300 text-black font-black text-center">KH</th>}
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {students.map((student, idx) => {
-                                        const rowStats = { P: 0, K: 0 };
+                                        const rowStats = { P: 0, K: 0, T: 0, VP: 0, KH: 0 };
 
                                         return (
                                             <tr key={student.code} className="hover:bg-blue-100 transition-colors border-b border-gray-400 font-bold text-black">
@@ -173,16 +165,22 @@ export function ReportsGridView({ dateRange, selectedClasses, absences, classes 
 
                                                     if (status === 'P') rowStats.P++;
                                                     if (status === 'K') rowStats.K++;
+                                                    if (status === 'T') rowStats.T++;
+                                                    if (status === 'VP') rowStats.VP++;
+                                                    if (status === 'KH') rowStats.KH++;
 
                                                     return (
                                                         <td key={dateStr} className={cn("p-1 border border-gray-400 text-center relative", colClass)}>
-                                                            <GridCell status={status} />
+                                                            <GridCell status={status} visibleColumns={visibleColumns} />
                                                         </td>
                                                     );
                                                 })}
 
-                                                <td className="p-1 border border-gray-400 text-center text-base font-black text-black bg-yellow-200 sticky right-10 z-30 shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.2)]">{rowStats.P > 0 ? rowStats.P : ''}</td>
-                                                <td className="p-1 border border-gray-400 text-center text-base font-black text-black bg-red-200 sticky right-0 z-30">{rowStats.K > 0 ? rowStats.K : ''}</td>
+                                                {visibleColumns.includes('P') && <td className="p-1 border border-gray-400 text-center text-base font-black text-black bg-yellow-200">{rowStats.P > 0 ? rowStats.P : ''}</td>}
+                                                {visibleColumns.includes('K') && <td className="p-1 border border-gray-400 text-center text-base font-black text-black bg-red-200">{rowStats.K > 0 ? rowStats.K : ''}</td>}
+                                                {visibleColumns.includes('T') && <td className="p-1 border border-gray-400 text-center text-base font-black text-black bg-blue-200">{rowStats.T > 0 ? rowStats.T : ''}</td>}
+                                                {visibleColumns.includes('VP') && <td className="p-1 border border-gray-400 text-center text-base font-black text-black bg-purple-200">{rowStats.VP > 0 ? rowStats.VP : ''}</td>}
+                                                {visibleColumns.includes('KH') && <td className="p-1 border border-gray-400 text-center text-base font-black text-black bg-orange-200">{rowStats.KH > 0 ? rowStats.KH : ''}</td>}
                                             </tr>
                                         );
                                     })}
@@ -196,23 +194,25 @@ export function ReportsGridView({ dateRange, selectedClasses, absences, classes 
     );
 }
 
-function GridCell({ status }: { status: string }) {
+function GridCell({ status, visibleColumns }: { status: string, visibleColumns: string[] }) {
     if (!status) return null;
 
-    // Only render P and K, ignore others
-    if (!['P', 'K'].includes(status)) return null;
+    // Filter by visibility (redundant if parent filters, but good for safety)
+    if (!visibleColumns.includes(status)) return null;
 
     const map = {
         'P': "bg-yellow-400 text-black border border-yellow-600",
         'K': "bg-red-500 text-white border border-red-700",
-        // Others map to empty/null if they slip through, but we only style P/K
-        'V': "hidden",
-        'T': "hidden",
-        'VP': "hidden",
+        'T': "bg-blue-400 text-white border border-blue-600",
+        'VP': "bg-purple-400 text-white border border-purple-600",
+        'KH': "bg-orange-400 text-white border border-orange-600",
     };
 
+    const style = map[status as keyof typeof map];
+    if (!style) return null; // Or render default?
+
     return (
-        <div className={cn("w-7 h-7 mx-auto rounded-md flex items-center justify-center text-xs font-black shadow-sm", map[status as keyof typeof map])}>
+        <div className={cn("w-7 h-7 mx-auto rounded-md flex items-center justify-center text-xs font-black shadow-sm", style)}>
             {status}
         </div>
     );

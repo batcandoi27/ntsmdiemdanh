@@ -1,6 +1,6 @@
 # Plan: Custom Columns with Data Lifecycle
 Created: 2026-02-08
-Status: 🟡 In Progress
+Status: ✅ Complete
 Branch: `feature/custom-columns-lifecycle`
 
 ## Overview
@@ -18,6 +18,8 @@ Thêm cột "Khen thưởng", phân loại frequency (daily/period/one_time), au
 | 05 | Reports Filter & Preset | ✅ Complete | 100% |
 | 06 | Record Services | ✅ Complete | 100% |
 | 07 | Testing & Migration | ✅ Complete | 100% |
+| 08 | Refinement & Feedback | ✅ Complete | 100% |
+| 09 | Lifecycle & Advanced Reports | ⬜ Pending | 0% |
 
 ## Quick Commands
 - Start Phase 1: `/code phase-01`

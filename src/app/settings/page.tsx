@@ -2,28 +2,37 @@
 
 import { useState, useEffect, useTransition } from 'react';
 import { generateMockData, clearAttendance } from '@/app/actions/settings';
-import { Settings, Database, Trash2, CheckCircle, AlertTriangle, RefreshCw, Lock, Sliders } from 'lucide-react';
+import { Settings, Database, Trash2, CheckCircle, AlertTriangle, RefreshCw, Lock, Sliders, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { PasswordGuard } from '@/components/auth/password-guard';
 import { FixedColumnsTab } from '@/components/settings/fixed-columns-tab';
 import { CustomColumnsTab } from '@/components/settings/custom-columns-tab';
+import { MyClassesTab } from '@/components/settings/my-classes-tab';
 import { FirebaseAdapter } from '@/services/firebase-adapter';
 import { Class } from '@/types/models';
-import { initializeFixedColumns } from '@/services/column-service';
 
-type TabType = 'data' | 'fixed-columns' | 'custom-columns';
+type TabType = 'data' | 'fixed-columns' | 'custom-columns' | 'my-classes';
 
 export default function SettingsPage() {
     const [isPending, startTransition] = useTransition();
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     const [activeTab, setActiveTab] = useState<TabType>('data');
+    const [myClassIds, setMyClassIds] = useState<string[]>([]);
     const [classes, setClasses] = useState<Class[]>([]);
-    const [selectedClassId, setSelectedClassId] = useState<string>('');
     const router = useRouter();
 
     useEffect(() => {
+        // Initial load
+        loadMyClasses();
         loadClasses();
+
+        // Listen for updates from MyClassesTab
+        const handleMyClassesUpdate = () => {
+            loadMyClasses();
+        };
+        window.addEventListener('myClassesUpdated', handleMyClassesUpdate);
+        return () => window.removeEventListener('myClassesUpdated', handleMyClassesUpdate);
     }, []);
 
     const loadClasses = async () => {
@@ -31,22 +40,28 @@ export default function SettingsPage() {
             const adapter = new FirebaseAdapter();
             const classList = await adapter.getClasses();
             setClasses(classList);
-            if (classList.length > 0 && !selectedClassId) {
-                setSelectedClassId(classList[0].id);
-                // Auto-initialize fixed columns for the class
-                await initializeFixedColumns(classList[0].id);
-            }
         } catch (error) {
             console.error('Error loading classes:', error);
         }
     };
 
-    const handleClassChange = async (classId: string) => {
-        setSelectedClassId(classId);
-        // Initialize fixed columns for this class if needed
-        await initializeFixedColumns(classId);
+    const loadMyClasses = () => {
+        const saved = localStorage.getItem('myClasses');
+        if (saved) {
+            try {
+                setMyClassIds(JSON.parse(saved));
+            } catch (e) {
+                console.error('Error parsing myClasses', e);
+                setMyClassIds([]);
+            }
+        } else {
+            setMyClassIds([]);
+        }
     };
 
+    const selectedClasses = classes.filter(c => myClassIds.includes(c.id));
+
+    // ... handleGenerate, handleClear ...
     const handleGenerate = () => {
         if (!confirm('Bạn có chắc muốn tạo dữ liệu giả? Dữ liệu cũ (nếu có trùng ngày) có thể bị ghi đè.')) return;
 
@@ -79,6 +94,7 @@ export default function SettingsPage() {
 
     const tabs = [
         { id: 'data' as TabType, label: 'Dữ liệu', icon: Database },
+        { id: 'my-classes' as TabType, label: 'Lớp của tôi', icon: BookOpen },
         { id: 'fixed-columns' as TabType, label: 'Cột cố định', icon: Lock },
         { id: 'custom-columns' as TabType, label: 'Cột tùy chỉnh', icon: Sliders },
     ];
@@ -122,28 +138,12 @@ export default function SettingsPage() {
                                 )}
                             >
                                 <tab.icon size={18} />
-                                {tab.label}
+                                <span className="hidden md:inline">{tab.label}</span>
                             </button>
                         ))}
                     </div>
 
                     <div className="p-6">
-                        {/* Class Selector for Column Tabs */}
-                        {(activeTab === 'fixed-columns' || activeTab === 'custom-columns') && (
-                            <div className="mb-6">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Chọn lớp</label>
-                                <select
-                                    value={selectedClassId}
-                                    onChange={e => handleClassChange(e.target.value)}
-                                    className="w-full md:w-64 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                >
-                                    {classes.map(cls => (
-                                        <option key={cls.id} value={cls.id}>{cls.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
-
                         {/* Tab Content */}
                         {activeTab === 'data' && (
                             <div className="grid md:grid-cols-2 gap-6">
@@ -203,24 +203,28 @@ export default function SettingsPage() {
                                         </div>
                                         <div className="flex justify-between py-2 border-b border-gray-100">
                                             <span className="text-gray-500">Phiên bản</span>
-                                            <span className="font-medium">v2.0.0 (Custom Columns)</span>
+                                            <span className="font-medium">v2.1.0</span>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         )}
 
-                        {activeTab === 'fixed-columns' && selectedClassId && (
-                            <FixedColumnsTab classId={selectedClassId} />
+                        {activeTab === 'my-classes' && (
+                            <MyClassesTab />
                         )}
 
-                        {activeTab === 'custom-columns' && selectedClassId && (
-                            <CustomColumnsTab classId={selectedClassId} />
+                        {activeTab === 'fixed-columns' && (
+                            <FixedColumnsTab classIds={myClassIds} selectedClasses={selectedClasses} />
                         )}
 
-                        {(activeTab === 'fixed-columns' || activeTab === 'custom-columns') && classes.length === 0 && (
+                        {activeTab === 'custom-columns' && (
+                            <CustomColumnsTab classIds={myClassIds} selectedClasses={selectedClasses} />
+                        )}
+
+                        {(activeTab === 'fixed-columns' || activeTab === 'custom-columns') && myClassIds.length === 0 && (
                             <div className="text-center py-12 text-gray-400">
-                                Chưa có lớp học nào. Vui lòng tạo lớp học trước.
+                                Vui lòng chọn ít nhất một lớp trong tab "Lớp của tôi" để xem cài đặt.
                             </div>
                         )}
                     </div>

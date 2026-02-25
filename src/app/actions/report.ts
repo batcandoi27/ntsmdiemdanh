@@ -2,6 +2,9 @@
 
 import { db } from '@/services/db';
 import { AttendanceRecord, AttendanceStatus } from '@/types/models';
+import { getCustomColumns } from '@/services/column-service';
+import { getPeriodRecords, getOneTimeRecords } from '@/services/record-service';
+import { TermReportData } from '@/lib/export-utils';
 
 export interface ReportCriteria {
     startDate: string;
@@ -28,6 +31,7 @@ export interface ReportResult {
     totalV: number;
     totalT: number;
     totalVP: number;
+    totalKH: number;
     absences: AbsenceDetail[];
 }
 
@@ -48,6 +52,7 @@ export async function getReports(criteria: ReportCriteria): Promise<ReportResult
     let totalV = 0;
     let totalT = 0;
     let totalVP = 0;
+    let totalKH = 0;
 
     const recordsByClass: Record<string, AttendanceRecord[]> = {};
     records.forEach(r => {
@@ -73,6 +78,7 @@ export async function getReports(criteria: ReportCriteria): Promise<ReportResult
                     if (status === 'V') totalV++;
                     if (status === 'T') totalT++;
                     if (status === 'VP') totalVP++;
+                    if (status === 'KH') totalKH++;
 
                     const info = studentInfoMap.get(code) || { name: code, stt: 0 };
 
@@ -95,7 +101,7 @@ export async function getReports(criteria: ReportCriteria): Promise<ReportResult
     // Sort by Date DESC
     absences.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    return { totalP, totalK, totalV, totalT, totalVP, absences };
+    return { totalP, totalK, totalV, totalT, totalVP, totalKH, absences };
 }
 
 export async function getMonthlyReportData(classId: string, month: number, year: number) {
@@ -135,4 +141,107 @@ export async function getMonthlyReportData(classId: string, month: number, year:
         month,
         students: studentData
     };
+}
+
+
+export async function getAdvancedReportData(startDate: string, endDate: string, classIds: string[]): Promise<TermReportData[]> {
+    // 1. Get Classes
+    const allClasses = await db.getClasses();
+    const targetClasses = classIds.length > 0
+        ? allClasses.filter(c => classIds.includes(c.id))
+        : allClasses;
+
+    const reports: TermReportData[] = [];
+
+    for (const cls of targetClasses) {
+        // 2. Get Students
+        const students = await db.getStudentsByClass(cls.id);
+
+        // 3. Get Custom Columns
+        const columns = await getCustomColumns(cls.id);
+        const reportColumns = columns.filter(c => !c.archived && (c.frequency === 'period' || c.frequency === 'one_time'))
+            .map(c => ({
+                id: c.id,
+                name: c.name,
+                frequency: c.frequency,
+                subPeriods: c.subPeriods?.map(sp => sp.label)
+            }));
+
+        // 4. Get Data
+        const data: Record<string, { stats: Record<string, number>; custom: Record<string, string> }> = {};
+
+        // Initialize Data
+        students.forEach(s => {
+            data[s.id] = { stats: {}, custom: {} };
+        });
+
+        // 4a. Get Basic Stats (P, K, T...)
+        // We reuse getReportData from DB service which returns raw records
+        const attendanceRecords = await db.getReportData(startDate, endDate, [cls.id]);
+
+        attendanceRecords.forEach(record => {
+            Object.entries(record.absences).forEach(([studentCode, status]) => {
+                const student = students.find(s => s.code === studentCode);
+                if (student && status && status !== 'C') {
+                    if (!data[student.id].stats[status]) data[student.id].stats[status] = 0;
+                    data[student.id].stats[status]++;
+                }
+            });
+        });
+
+        // 4b. Get Custom Records
+        for (const col of columns) {
+            if (col.archived) continue;
+
+            if (col.frequency === 'period') {
+                const records = await getPeriodRecords(col.id);
+                records.forEach(r => {
+                    const student = students.find(s => s.code === r.studentCode); // periods use Code
+                    if (student) {
+                        // For Multi-Period, we might want to allow formatting
+                        // But for Excel single cell, maybe join them? 
+                        // Or if spreadsheet expects multiple columns?
+                        // capture: "Sub1: Val, Sub2: Val"
+                        const existing = data[student.id].custom[col.id] || '';
+                        // Helper to append?
+                        // Actually, let's just store Last Value or specialized formatter
+                        // For simplicity in this version:
+                        // If subPeriods exist, format as "Label: Value\nLabel2: Value"
+                        // Or just "Value" if single.
+
+                        let val = r.value;
+                        if (col.subPeriods && col.subPeriods.length > 0) {
+                            const sub = col.subPeriods.find(sp => sp.id === r.subPeriodId);
+                            if (sub) {
+                                val = `${sub.label}: ${r.value}`;
+                                // Append if multiple
+                                if (existing) val = `${existing}\n${val}`;
+                            }
+                        }
+
+                        data[student.id].custom[col.id] = val;
+                    }
+                });
+            } else if (col.frequency === 'one_time') {
+                const records = await getOneTimeRecords(col.id);
+                records.forEach(r => {
+                    const student = students.find(s => s.code === r.studentCode);
+                    if (student) {
+                        const status = r.completed ? (r.value || 'Hoàn thành') : '';
+                        data[student.id].custom[col.id] = status;
+                    }
+                });
+            }
+        }
+
+        reports.push({
+            className: cls.name,
+            students: students.map(s => ({ id: s.id, code: s.code, name: s.fullName })),
+            columns: reportColumns,
+            data,
+            timeRange: `${startDate} - ${endDate}`
+        });
+    }
+
+    return reports;
 }

@@ -1,9 +1,12 @@
 'use client';
 
 import { useState, useEffect, useTransition } from 'react';
-import { Student, AttendanceStatus, Class } from '@/types/models';
+import { Student, AttendanceStatus, Class, Column } from '@/types/models';
 import { submitAttendance, getAttendanceData } from '@/app/actions/attendance';
+import { getColumnsByFrequency } from '@/services/column-service';
+import { getDailyRecords, saveDailyRecord, deleteRecord } from '@/services/record-service';
 import { getClassAndStudents } from '@/app/actions/common';
+import { useAppSettings } from '@/hooks/use-settings';
 import { Loader2, Calendar, Save, CheckCircle, AlertCircle, Clock, Ban, HelpCircle, UserX, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Modal } from '@/components/ui/modal';
@@ -21,6 +24,12 @@ export function AttendanceSheet({ classId, onClose }: AttendanceSheetProps) {
     // State for Attendance
     const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
     const [notes, setNotes] = useState<Record<string, string>>({});
+
+    // Custom Columns
+    const [customColumns, setCustomColumns] = useState<Column[]>([]);
+    const [customRecords, setCustomRecords] = useState<Record<string, Record<string, boolean>>>({}); // studentCode -> colId -> checked
+
+    const { settings } = useAppSettings();
 
     const [loading, setLoading] = useState(true);
     const [isSaving, startTransition] = useTransition();
@@ -43,6 +52,28 @@ export function AttendanceSheet({ classId, onClose }: AttendanceSheetProps) {
                 const { cls: c, students: s } = await getClassAndStudents(classId);
                 setCls(c);
                 setStudents(s);
+
+                // 3. Get Custom Columns (Daily)
+                const cols = await getColumnsByFrequency(classId, 'daily');
+                setCustomColumns(cols);
+
+                // 4. Get Custom Records
+                const recordsMap: Record<string, Record<string, boolean>> = {};
+
+                // Initialize map
+                s.forEach(student => {
+                    recordsMap[student.code] = {};
+                });
+
+                await Promise.all(cols.map(async (col) => {
+                    const recs = await getDailyRecords(col.id, date);
+                    recs.forEach(r => {
+                        if (recordsMap[r.studentCode]) {
+                            recordsMap[r.studentCode][col.id] = true;
+                        }
+                    });
+                }));
+                setCustomRecords(recordsMap);
 
                 // 2. Get Existing Attendance
                 const record = await getAttendanceData(classId, date);
@@ -73,7 +104,7 @@ export function AttendanceSheet({ classId, onClose }: AttendanceSheetProps) {
                 ...prev,
                 [studentCode]: prev[studentCode] === status ? '' : status
             }));
-            if (attendance[studentCode] === 'VP' && status !== 'VP') {
+            if (attendance[studentCode] === 'VP') {
                 const newNotes = { ...notes };
                 delete newNotes[studentCode];
                 setNotes(newNotes);
@@ -97,9 +128,67 @@ export function AttendanceSheet({ classId, onClose }: AttendanceSheetProps) {
         setViolationModal({ isOpen: false, studentCode: null });
     };
 
+    const handleCustomChange = (studentCode: string, colId: string, checked: boolean) => {
+        setCustomRecords(prev => ({
+            ...prev,
+            [studentCode]: {
+                ...prev[studentCode],
+                [colId]: checked
+            }
+        }));
+    };
+
     const handleSave = () => {
         startTransition(async () => {
+            // Save core attendance
             const res = await submitAttendance(classId, date, attendance, notes);
+
+            // Save custom columns
+            // We need to diff? Or just save everything for the current view?
+            // To be efficient, we should only save if changed, but for now let's save all active checks (idempotent)
+            // Actually record-service `saveDailyRecord` is for one record.
+            // We might need a batch save logic or loop.
+
+            const customUpdates: Promise<void>[] = [];
+
+            // Iterate over all students and columns
+            for (const student of students) {
+                for (const col of customColumns) {
+                    const isChecked = customRecords[student.code]?.[col.id] || false;
+                    // We need to know previous state to delete?
+                    // Let's implement toggle logic similar to mobile
+
+                    // Optimization: In real app, we should track dirty state.
+                    // For now, let's just save valid true records and delete false records?
+                    // `deleteRecord` needs the ID.
+                    // `saveDailyRecord` overwrites.
+
+                    if (isChecked) {
+                        customUpdates.push(saveDailyRecord({
+                            classId,
+                            columnId: col.id,
+                            studentCode: student.code,
+                            date: date,
+                            selectedSuggestions: ['True'],
+                            note: ''
+                        }).then());
+                    } else {
+                        // Attempt delete if it existed?
+                        // We don't track if it existed before locally perfect without another state.
+                        // But `deleteRecord` shouldn't fail if not found (firestore delete is idempotent-ish if we know ID).
+                        const recId = `${col.id}_${date}_${student.code}`;
+                        // We can blindly delete unchecked ones? A bit heavy.
+                        // Maybe only delete if we know it was true?
+                        // Let's rely on the fact that we loaded `customRecords` from DB.
+                        // But we didn't keep a `initialCustomRecords` to diff.
+                        // Let's just blindly delete for now for correctness.
+                        customUpdates.push(deleteRecord(col.id, recId));
+                    }
+                }
+            }
+
+            await Promise.all(customUpdates);
+
             if (res.success) {
                 setMsg({ type: 'success', text: 'Đã lưu điểm danh thành công!' });
                 setTimeout(() => setMsg(null), 3000);
@@ -196,16 +285,43 @@ export function AttendanceSheet({ classId, onClose }: AttendanceSheetProps) {
                                     </div>
                                 </div>
 
-                                <div className="flex gap-1 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+                                <div className="flex gap-1 overflow-x-auto pb-1 md:pb-0 items-center">
+                                    {/* Core Attendance */}
                                     <div className="flex gap-1 pr-2 border-r border-gray-100">
-                                        <StatusBtn label="P" sub="Phép" color="warning" active={status === 'P'} onClick={() => handleStatusChange(hs.code, 'P')} compact />
-                                        <StatusBtn label="K" sub="Không" color="danger" active={status === 'K'} onClick={() => handleStatusChange(hs.code, 'K')} compact />
+                                        {settings.visibleDefaultColumns.P && <StatusBtn label="P" sub="Phép" color="warning" active={status === 'P'} onClick={() => handleStatusChange(hs.code, 'P')} compact />}
+                                        {settings.visibleDefaultColumns.K && <StatusBtn label="K" sub="Không" color="danger" active={status === 'K'} onClick={() => handleStatusChange(hs.code, 'K')} compact />}
+                                        {/* V - Maybe hide? */}
                                         <StatusBtn label="V" sub="Vắng?" color="gray" active={status === 'V'} onClick={() => handleStatusChange(hs.code, 'V')} compact />
                                     </div>
-                                    <div className="flex gap-1 pl-2">
-                                        <StatusBtn label="T" sub="Trễ" color="info" active={status === 'T'} onClick={() => handleStatusChange(hs.code, 'T')} compact />
-                                        <StatusBtn label="VP" sub="Vi Phạm" color="purple" active={status === 'VP'} onClick={() => handleStatusChange(hs.code, 'VP')} compact />
+                                    <div className="flex gap-1 pl-2 border-r border-gray-100 pr-2">
+                                        {settings.visibleDefaultColumns.T && <StatusBtn label="T" sub="Trễ" color="info" active={status === 'T'} onClick={() => handleStatusChange(hs.code, 'T')} compact />}
+                                        {settings.visibleDefaultColumns.VP && <StatusBtn label="VP" sub="Vi Phạm" color="purple" active={status === 'VP'} onClick={() => handleStatusChange(hs.code, 'VP')} compact />}
+                                        {settings.visibleDefaultColumns.KH && <StatusBtn label="KH" sub="Khen" color="orange" active={status === 'KH'} onClick={() => handleStatusChange(hs.code, 'KH')} compact />}
                                     </div>
+
+                                    {/* Custom Columns */}
+                                    {customColumns.length > 0 && (
+                                        <div className="flex gap-1 pl-2">
+                                            {customColumns.map(col => {
+                                                const isChecked = customRecords[hs.code]?.[col.id] || false;
+                                                return (
+                                                    <button
+                                                        key={col.id}
+                                                        onClick={() => handleCustomChange(hs.code, col.id, !isChecked)}
+                                                        className={cn(
+                                                            "w-10 h-10 rounded-lg flex items-center justify-center border transition-all active:scale-95",
+                                                            isChecked ? "bg-indigo-100 border-indigo-500 text-indigo-700 font-bold shadow-sm" : "bg-white border-gray-200 text-gray-400 hover:bg-gray-50"
+                                                        )}
+                                                        title={col.name}
+                                                    >
+                                                        <span className="text-[10px] leading-tight text-center line-clamp-2 px-0.5 pointer-events-none">
+                                                            {col.name.slice(0, 8)}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

@@ -107,16 +107,17 @@ export function MobileAttendanceList({ data, grade, onItemClick }: MobileAttenda
                         {/* Exceptions Preview */}
                         {(cls.attendanceCount.P + cls.attendanceCount.K + cls.attendanceCount.T + cls.attendanceCount.VP) > 0 && (
                             <div className="pt-2 border-t border-gray-100 mt-2 space-y-1">
-                                {cls.studentLists.P.map(s => <TinyStudentPill key={s.id} student={s} type="P" />)}
-                                {cls.studentLists.K.map(s => <TinyStudentPill key={s.id} student={s} type="K" />)}
-                                {cls.studentLists.T.map(s => <TinyStudentPill key={s.id} student={s} type="T" />)}
-                                {cls.studentLists.VP.map(s => <TinyStudentPill key={s.id} student={s} type="VP" />)}
+                                {cls.studentLists.P.map((s, i) => <TinyStudentPill key={`${i}_${s.stt}`} student={s as any} type="P" />)}
+                                {cls.studentLists.K.map((s, i) => <TinyStudentPill key={`${i}_${s.stt}`} student={s as any} type="K" />)}
+                                {cls.studentLists.T.map((s, i) => <TinyStudentPill key={`${i}_${s.stt}`} student={s as any} type="T" />)}
+                                {cls.studentLists.VP.map((s, i) => <TinyStudentPill key={`${i}_${s.stt}`} student={s as any} type="VP" />)}
+                                {cls.studentLists.KH.map((s, i) => <TinyStudentPill key={`${i}_${s.stt}`} student={s as any} type="KH" />)}
                             </div>
                         )}
 
                         {/* Action Button */}
                         <button
-                            onClick={() => onItemClick(cls.classId, 'Present', '')}
+                            onClick={() => onItemClick(cls.classId, '', '')}
                             className="w-full mt-2 py-3 bg-blue-600 text-white rounded-lg font-bold text-sm shadow-sm active:scale-95 transition-transform"
                         >
                             VÀO ĐIỂM DANH
@@ -134,6 +135,7 @@ function TinyStudentPill({ student, type }: { student: any, type: string }) {
         K: 'bg-red-100 text-red-800 border-red-200',
         T: 'bg-blue-100 text-blue-800 border-blue-200',
         VP: 'bg-purple-100 text-purple-800 border-purple-200',
+        KH: 'bg-orange-100 text-orange-800 border-orange-200',
     }[type];
 
     return (

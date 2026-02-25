@@ -3,21 +3,23 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { School, BookOpen, BarChart3, Upload, Menu, X, Home, Smartphone, Tablet, Monitor } from 'lucide-react'; // Added icons
+import { School, BookOpen, BarChart3, Upload, Menu, X, Home, Smartphone, Tablet, Monitor, Settings, Zap } from 'lucide-react';
 import { useState } from 'react';
-import { useViewMode } from '@/context/view-mode-context'; // Import context
+import { useViewMode } from '@/context/view-mode-context';
 
 const navItems = [
     { href: '/', label: 'Trang Chủ', icon: Home },
+    { href: '/quick-attendance', label: 'Điểm Danh', icon: Zap },
+    { href: '/monitor', label: 'Sổ Theo Dõi', icon: BookOpen },
     { href: '/classes', label: 'Lớp Học', icon: School },
     { href: '/reports', label: 'Báo Cáo', icon: BarChart3 },
-    { href: '/import', label: 'Nhập Liệu', icon: Upload },
+    { href: '/settings', label: 'Cài Đặt', icon: Settings },
 ];
 
 export function SiteHeader() {
     const pathname = usePathname();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const { viewDevice, setViewDevice } = useViewMode(); // Use global context
+    const { viewDevice, setViewDevice } = useViewMode();
 
     return (
         <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -41,7 +43,7 @@ export function SiteHeader() {
                         </Link>
                     </div>
 
-                    {/* View Mode Toggles - Centered (Hidden on mobile originally, but let's keep it visible or responsive) */}
+                    {/* View Mode Toggles - Desktop Center */}
                     <div className="hidden md:flex items-center justify-center absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
                         <div className="flex gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200 shadow-inner">
                             <button
@@ -115,7 +117,6 @@ export function SiteHeader() {
             {isMenuOpen && (
                 <div className="md:hidden border-t border-gray-100 bg-white absolute w-full shadow-lg animate-in slide-in-from-top-2">
                     <div className="px-4 pt-2 pb-4 space-y-1">
-                        {/* Mobile view toggles also? Maybe not needed as mobile users are on mobile, but could be useful for testing on mobile device */}
                         <div className="flex gap-2 justify-center p-2 mb-2 bg-gray-50 rounded-lg">
                             <button onClick={() => setViewDevice('mobile')} className={cn("p-2 rounded", viewDevice === 'mobile' ? "bg-white shadow text-blue-600" : "text-gray-400")}><Smartphone size={20} /></button>
                             <button onClick={() => setViewDevice('tablet')} className={cn("p-2 rounded", viewDevice === 'tablet' ? "bg-white shadow text-blue-600" : "text-gray-400")}><Tablet size={20} /></button>

@@ -1,16 +1,17 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { getReports, getMonthlyReportData, ReportCriteria, ReportResult } from '@/app/actions/report';
+import { getReports, getMonthlyReportData, getAdvancedReportData, ReportCriteria, ReportResult } from '@/app/actions/report';
 import { getAllClasses } from '@/app/actions/common';
 import { Class } from '@/types/models';
 import { FileBarChart } from 'lucide-react';
-import { exportMonthlyReport } from '@/lib/export-utils';
+import { exportMonthlyReport, exportTermReport } from '@/lib/export-utils';
 import { ReportsStats } from '@/components/reports/reports-stats';
 import { ReportsFilter } from '@/components/reports/reports-filter';
 import { ReportsListView } from '@/components/reports/reports-list-view';
 import { ReportsGridView } from '@/components/reports/reports-grid-view';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 export default function ReportsPage() {
     const [loading, setLoading] = useState(false);
@@ -28,87 +29,18 @@ export default function ReportsPage() {
         end: format(endOfMonth(now), 'yyyy-MM-dd')
     });
     const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
+    const [visibleColumns, setVisibleColumns] = useState<string[]>(['P', 'K', 'T', 'VP', 'KH']); // Default visible columns
     const [isFilterActive, setIsFilterActive] = useState(false); // Track if user has manually triggered report
 
     useEffect(() => {
-        getAllClasses().then(c => {
-            setClasses(c);
-            // Default select all? Or none (All)? Let's assume empty = All
-        });
+        const loadClasses = async () => {
+            const cls = await getAllClasses();
+            setClasses(cls);
+        };
+        loadClasses();
     }, []);
 
-    // Auto re-fetch ONLY when date changes AND report is already active
-    useEffect(() => {
-        if (isFilterActive) {
-            handleFetch();
-        }
-    }, [dateRange]);
-
-    const handleManualFetch = () => {
-        setIsFilterActive(true);
-        handleFetch();
-    };
-
-    const handleFetch = async () => {
-        setLoading(true);
-        try {
-            const criteria: ReportCriteria = {
-                startDate: dateRange.start,
-                endDate: dateRange.end,
-                classIds: selectedClasses.length > 0 ? selectedClasses : undefined
-            };
-            const data = await getReports(criteria);
-            setResult(data);
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleExport = async () => {
-        // Export logic: Selected classes OR All classes if none selected
-        const targets = selectedClasses.length > 0 ? selectedClasses : classes.map(c => c.id);
-
-        if (targets.length === 0) {
-            alert("Không có dữ liệu lớp để xuất.");
-            return;
-        }
-
-        const month = new Date(dateRange.start).getMonth() + 1;
-        const year = new Date(dateRange.start).getFullYear();
-
-        setLoading(true);
-        try {
-            const allReportsData = [];
-            // Fetch all data sequentially to avoid server overload, or parallel if preferred. 
-            // Sequential is safer for reliability.
-            for (const clsId of targets) {
-                try {
-                    const data = await getMonthlyReportData(clsId, month, year);
-                    allReportsData.push(data);
-                } catch (e: any) {
-                    console.error(`Failed to fetch report data for class ${clsId}`, e);
-                }
-            }
-
-            if (allReportsData.length > 0) {
-                const fileName = targets.length === 1
-                    ? `Báo_Cáo_Tháng_${month}_${allReportsData[0].className}`
-                    : `Báo_Cáo_Tong_Hop_Tháng_${month}_Năm_${year}`;
-
-                await exportMonthlyReport(allReportsData, fileName);
-            } else {
-                alert("Không lấy được dữ liệu báo cáo nào.");
-            }
-
-        } catch (error) {
-            console.error("Export error:", error);
-            alert("Có lỗi xảy ra khi xuất báo cáo.");
-        } finally {
-            setLoading(false);
-        }
-    };
+    // ... (existing code)
 
     const stats = result ? {
         P: result.totalP,
@@ -116,8 +48,62 @@ export default function ReportsPage() {
         V: result.totalV,
         T: result.totalT,
         VP: result.totalVP,
+        KH: result.totalKH || 0, // Add KH
         Total: result.absences.length // Total records (violations/absences)
-    } : { P: 0, K: 0, V: 0, T: 0, VP: 0, Total: 0 };
+    } : { P: 0, K: 0, V: 0, T: 0, VP: 0, KH: 0, Total: 0 };
+
+    const handleManualFetch = async () => {
+        setLoading(true);
+        setIsFilterActive(true);
+        try {
+            const targetClassIds = selectedClasses.length > 0 ? selectedClasses : classes.map(c => c.id);
+            const data = await getReports(dateRange.start, dateRange.end, targetClassIds);
+            setResult(data);
+        } catch (error) {
+            console.error(error);
+            alert('Lỗi tải báo cáo: ' + (error as Error).message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleExport = async () => {
+        setLoading(true);
+        try {
+            if (!result || result.absences.length === 0) {
+                alert('Chưa có dữ liệu để xuất.');
+                return;
+            }
+            await exportMonthlyReport(result.absences, `BaoCao_${dateRange.start}_${dateRange.end}`);
+        } catch (error) {
+            console.error(error);
+            alert('Lỗi xuất báo cáo');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleExportAdvanced = async () => {
+        setLoading(true);
+        try {
+            const targetClassIds = selectedClasses.length > 0 ? selectedClasses : classes.map(c => c.id);
+            // Server Action
+            const data = await getAdvancedReportData(dateRange.start, dateRange.end, targetClassIds);
+
+            if (data.length === 0) {
+                alert('Không có dữ liệu để xuất.');
+                return;
+            }
+
+            // Export logic (Client)
+            await exportTermReport(data, `BaoCaoTongHop_${dateRange.start}_${dateRange.end}`);
+        } catch (error) {
+            console.error('Export error:', error);
+            alert('Có lỗi khi xuất báo cáo.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     return (
         <div className="p-4 md:p-8 min-h-screen bg-gray-50/50 space-y-6">
@@ -137,11 +123,14 @@ export default function ReportsPage() {
                 selectedClasses={selectedClasses}
                 setSelectedClasses={setSelectedClasses}
                 classes={classes}
+                visibleColumns={visibleColumns}
+                setVisibleColumns={setVisibleColumns}
                 viewMode={viewMode}
                 setViewMode={setViewMode}
                 groupBy={groupBy}
                 setGroupBy={setGroupBy}
                 onExport={handleExport}
+                onExportAdvanced={handleExportAdvanced}
                 onGenerateReport={handleManualFetch}
             />
 
@@ -158,6 +147,7 @@ export default function ReportsPage() {
                             <ReportsListView
                                 data={result?.absences || []}
                                 groupBy={groupBy}
+                                visibleColumns={visibleColumns}
                             />
                         ) : (
                             <ReportsGridView
@@ -165,6 +155,7 @@ export default function ReportsPage() {
                                 selectedClasses={selectedClasses}
                                 absences={result?.absences || []}
                                 classes={classes}
+                                visibleColumns={visibleColumns}
                             />
                         )}
                     </>

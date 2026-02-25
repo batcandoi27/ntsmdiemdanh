@@ -228,11 +228,111 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string) 
 };
 
 // Simple export fallback (unchanged or updated if needed, but Monthly is priority)
+// --- Term Report Export ---
+
+export interface TermReportData {
+    className: string;
+    students: {
+        id: string;
+        code: string;
+        name: string;
+    }[];
+    columns: {
+        id: string;
+        name: string;
+        frequency: string;
+        subPeriods?: string[]; // Labels
+    }[];
+    data: Record<string, { // studentId
+        stats: Record<string, number>; // P, K, T...
+        custom: Record<string, string>; // columnId -> Value string
+    }>;
+    timeRange: string;
+}
+
+export const exportTermReport = async (reports: TermReportData[], fileName: string) => {
+    const workbook = new ExcelJS.Workbook();
+
+    reports.forEach(report => {
+        const sheet = workbook.addWorksheet(`Lớp ${report.className}`);
+
+        // Title
+        sheet.mergeCells('A1:F1');
+        const title = sheet.getCell('A1');
+        title.value = `BÁO CÁO TỔNG HỢP - LỚP ${report.className}`;
+        title.font = { bold: true, size: 16, name: 'Times New Roman' };
+        title.alignment = { horizontal: 'center' };
+
+        sheet.mergeCells('A2:F2');
+        const subtitle = sheet.getCell('A2');
+        subtitle.value = `Thời gian: ${report.timeRange}`;
+        subtitle.alignment = { horizontal: 'center' };
+
+        // Headers
+        let colIdx = 1;
+        const headerRow = sheet.getRow(4);
+
+        // Fixed Info
+        const fixedHeaders = ["STT", "Mã HS", "Họ và Tên", "Có phép (P)", "Không phép (K)", "Đi trễ (T)", "Vi phạm", "Khen thưởng"];
+        fixedHeaders.forEach(h => {
+            const cell = headerRow.getCell(colIdx);
+            cell.value = h;
+            setHeaderStyle(cell, 'E0E0E0');
+            sheet.getColumn(colIdx).width = colIdx === 3 ? 25 : 10;
+            colIdx++;
+        });
+
+        // Custom Columns Headers
+        report.columns.forEach(col => {
+            const cell = headerRow.getCell(colIdx);
+            cell.value = col.name;
+            setHeaderStyle(cell, 'D1FAE5'); // Light Green
+            sheet.getColumn(colIdx).width = 15;
+            colIdx++;
+        });
+
+        // Data Rows
+        report.students.forEach((std, idx) => {
+            const row = sheet.getRow(5 + idx);
+            const stdData = report.data[std.id] || { stats: {}, custom: {} };
+
+            let c = 1;
+            // Basic Info
+            row.getCell(c++).value = idx + 1;
+            row.getCell(c++).value = std.code;
+            row.getCell(c++).value = std.name;
+
+            // Stats
+            row.getCell(c++).value = stdData.stats['P'] || 0;
+            row.getCell(c++).value = stdData.stats['K'] || 0;
+            row.getCell(c++).value = stdData.stats['T'] || 0;
+            row.getCell(c++).value = stdData.stats['VP'] || 0;
+            row.getCell(c++).value = stdData.stats['KH'] || 0;
+
+            // Custom Data
+            report.columns.forEach(col => {
+                row.getCell(c).value = stdData.custom[col.id] || '';
+                c++;
+            });
+
+            // Styling
+            for (let i = 1; i < c; i++) {
+                const cell = row.getCell(i);
+                cell.border = BORDER_STYLE;
+                cell.font = { name: 'Times New Roman', size: 11 };
+                if (i !== 3 && i > 2) cell.alignment = { horizontal: 'center' }; // Center numbers
+            }
+        });
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    saveAs(blob, `${fileName}.xlsx`);
+};
+
 export const exportToExcel = (data: any[], fileName: string) => {
-    // Existing simple implementation can remain as fallback or be upgraded similarly
-    // For now keeping lightweight as User emphasized Monthly Report style.
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "BaoCao");
+    XLSX.utils.book_append_sheet(wb, ws, "ShortReport");
     XLSX.writeFile(wb, `${fileName}.xlsx`);
 };

@@ -6,9 +6,10 @@ import { vi } from "date-fns/locale";
 interface ReportsListViewProps {
     data: AbsenceDetail[];
     groupBy: 'DATE' | 'CLASS';
+    visibleColumns: string[]; // New
 }
 
-export function ReportsListView({ data, groupBy }: ReportsListViewProps) {
+export function ReportsListView({ data, groupBy, visibleColumns }: ReportsListViewProps) {
 
     if (data.length === 0) {
         return (
@@ -36,6 +37,7 @@ export function ReportsListView({ data, groupBy }: ReportsListViewProps) {
     const groups: Record<string, AbsenceDetail[]> = {};
 
     data.forEach(item => {
+        if (!visibleColumns.includes(item.status)) return; // Filter
         const key = groupBy === 'DATE' ? item.date : item.className;
         if (!groups[key]) groups[key] = [];
         groups[key].push(item);
@@ -157,6 +159,7 @@ function CompactStatusBadge({ status }: { status: string }) {
         'V': { text: 'V', color: 'text-gray-600' },
         'T': { text: 'T', color: 'text-blue-600' },
         'VP': { text: 'VP', color: 'text-purple-600' },
+        'KH': { text: 'KH', color: 'text-orange-600' },
     };
     const style = map[status as keyof typeof map] || { text: status, color: 'text-gray-600' };
 
@@ -174,6 +177,7 @@ function StatusBadge({ status }: { status: string }) {
         'V': { text: 'Vắng (V)', bg: 'bg-gray-100', color: 'text-gray-700' },
         'T': { text: 'Trễ (T)', bg: 'bg-blue-100', color: 'text-blue-700' },
         'VP': { text: 'Vi Phạm (VP)', bg: 'bg-purple-100', color: 'text-purple-700' },
+        'KH': { text: 'Khen thưởng (KH)', bg: 'bg-orange-100', color: 'text-orange-700' },
     };
     const style = map[status as keyof typeof map] || { text: status, bg: 'bg-gray-100', color: 'text-gray-600' };
 
