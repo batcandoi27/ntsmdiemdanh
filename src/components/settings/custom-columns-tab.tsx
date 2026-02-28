@@ -7,6 +7,7 @@ import { getStudentsAction } from '@/app/actions/student-actions';
 import { Plus, Trash2, Edit2, Loader2, X, Save, Calendar, Clock, CheckSquare, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Modal } from '@/components/ui/modal';
+import { useAuth } from '@/context/auth-context';
 
 interface Props {
     classIds: string[];
@@ -20,6 +21,7 @@ const FREQUENCY_OPTIONS: { value: ColumnFrequency; label: string; icon: any; des
 ];
 
 export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
+    const { appUser } = useAuth();
     const [columns, setColumns] = useState<Column[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
     const [loading, setLoading] = useState(true);
@@ -59,7 +61,7 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
             // Load data from the first class (template)
             const firstClassId = classIds[0];
             const [cols, studList] = await Promise.all([
-                getCustomColumns(firstClassId),
+                getCustomColumns(firstClassId, appUser?.uid),
                 getStudentsAction(firstClassId)
             ]);
             setColumns(cols);
@@ -264,6 +266,7 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
                     const columnData = {
                         id: newId,
                         classId: cid,
+                        userId: appUser?.uid || 'unknown',
                         scope: 'custom' as const,
                         frequency: formFrequency,
                         allowFreeText: true,

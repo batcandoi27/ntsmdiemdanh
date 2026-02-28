@@ -82,7 +82,7 @@ export default function AttendancePage() {
                 [studentCode]: prev[studentCode] === status ? '' : status
             }));
             // Clear violations if switching away from VP
-            if (attendance[studentCode] === 'VP' && status !== 'VP') {
+            if ((attendance[studentCode] as string) === 'VP' && (status as string) !== 'VP') {
                 const newNotes = { ...notes };
                 delete newNotes[studentCode];
                 setNotes(newNotes);

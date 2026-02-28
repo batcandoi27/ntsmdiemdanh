@@ -39,7 +39,7 @@ export function MobileAttendanceList({ data, grade, onItemClick }: MobileAttenda
                     {/* Class Header */}
                     <div className="flex justify-between items-center bg-gray-100/80 px-4 py-2 rounded-t-xl backdrop-blur-sm sticky top-16 z-10 border-b border-gray-200">
                         <span className="font-black text-lg text-gray-700">{cls.className}</span>
-                        <span className="text-sm font-medium text-gray-500">{cls.totalStudents} HS</span>
+                        <span className="text-sm font-medium text-gray-500">{cls.attendanceCount.Present}/{cls.totalStudents} HS</span>
                     </div>
 
                     {/* Student List - Assuming we have student lists from the BlockItem */}
@@ -88,25 +88,48 @@ export function MobileAttendanceList({ data, grade, onItemClick }: MobileAttenda
                     */}
 
                     {/* For now, just render the class summary cards for selecting a class on mobile */}
-                    <div className="bg-white rounded-b-xl border border-t-0 border-gray-100 p-4 space-y-3">
-                        {/* This part of the plan might need refinement. 
-                             If the user wants to take attendance, they need to tap the class.
-                             Let's visualize the "Block View" on mobile as just a list of classes to Pick.
-                         */}
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="bg-green-50 p-3 rounded-lg border border-green-100 flex flex-col items-center">
-                                <span className="text-xs text-green-600 font-bold uppercase">Hiện diện</span>
-                                <span className="text-2xl font-black text-green-700">{cls.attendanceCount.Present}</span>
+                    {/* Class Summary Card */}
+                    <div className="bg-white rounded-b-xl border border-t-0 border-gray-100 p-4 shadow-sm">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                                <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                                    <User size={20} />
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Sĩ số</p>
+                                    <p className="text-lg font-black text-gray-800">{cls.totalStudents}</p>
+                                </div>
                             </div>
-                            <div className="bg-red-50 p-3 rounded-lg border border-red-100 flex flex-col items-center">
-                                <span className="text-xs text-red-600 font-bold uppercase">Vắng</span>
-                                <span className="text-2xl font-black text-red-700">{cls.attendanceCount.P + cls.attendanceCount.K}</span>
+                            <div className="text-right">
+                                <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Tỷ lệ có mặt</p>
+                                <p className="text-lg font-black text-green-600">
+                                    {cls.totalStudents > 0 ? Math.round((cls.attendanceCount.Present / cls.totalStudents) * 100) : 0}%
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="w-full h-2.5 bg-red-100 rounded-full overflow-hidden mb-4 flex">
+                            <div
+                                className="h-full bg-green-500 transition-all duration-500"
+                                style={{ width: `${cls.totalStudents > 0 ? (cls.attendanceCount.Present / cls.totalStudents) * 100 : 0}%` }}
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div className="bg-green-50/50 p-2.5 rounded-lg border border-green-100/50 flex flex-col items-center">
+                                <span className="text-[10px] text-green-600 font-bold uppercase">Hiện diện</span>
+                                <span className="text-xl font-black text-green-700">{cls.attendanceCount.Present}</span>
+                            </div>
+                            <div className="bg-red-50/50 p-2.5 rounded-lg border border-red-100/50 flex flex-col items-center">
+                                <span className="text-[10px] text-red-600 font-bold uppercase">Vắng (P+K)</span>
+                                <span className="text-xl font-black text-red-700">{cls.attendanceCount.P + cls.attendanceCount.K}</span>
                             </div>
                         </div>
 
                         {/* Exceptions Preview */}
                         {(cls.attendanceCount.P + cls.attendanceCount.K + cls.attendanceCount.T + cls.attendanceCount.VP) > 0 && (
-                            <div className="pt-2 border-t border-gray-100 mt-2 space-y-1">
+                            <div className="pt-2 border-t border-gray-100 mt-2 space-y-1 mb-4">
                                 {cls.studentLists.P.map((s, i) => <TinyStudentPill key={`${i}_${s.stt}`} student={s as any} type="P" />)}
                                 {cls.studentLists.K.map((s, i) => <TinyStudentPill key={`${i}_${s.stt}`} student={s as any} type="K" />)}
                                 {cls.studentLists.T.map((s, i) => <TinyStudentPill key={`${i}_${s.stt}`} student={s as any} type="T" />)}
@@ -118,9 +141,10 @@ export function MobileAttendanceList({ data, grade, onItemClick }: MobileAttenda
                         {/* Action Button */}
                         <button
                             onClick={() => onItemClick(cls.classId, '', '')}
-                            className="w-full mt-2 py-3 bg-blue-600 text-white rounded-lg font-bold text-sm shadow-sm active:scale-95 transition-transform"
+                            className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-[15px] shadow-[0_4px_0_rgb(29,78,216)] active:shadow-none active:translate-y-1 transition-all flex items-center justify-center gap-2 uppercase tracking-wide"
                         >
-                            VÀO ĐIỂM DANH
+                            <FileText size={18} />
+                            Vào Điểm Danh
                         </button>
                     </div>
                 </div>

@@ -4,19 +4,24 @@ import { useState, useEffect, useCallback } from 'react';
 import { Class } from '@/types/models';
 import { getAllClasses } from '@/app/actions/common';
 import { getGradeAttendanceSummary, getClassesAttendanceSummary, BlockAttendanceItem } from '@/app/actions/quick-attendance';
-import { Monitor, BookOpen, LayoutGrid, Zap, ArrowRight, ClipboardList } from 'lucide-react';
+import { Monitor, BookOpen, LayoutGrid, Zap, ArrowRight, ClipboardList, AlertTriangle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useViewMode } from '@/context/view-mode-context';
+import { useAuth } from '@/context/auth-context';
+import { useFeatureFlags } from '@/context/feature-flags-context';
 
 export default function MonitorDashboardPage() {
+    const { appUser } = useAuth();
+    const { flags, loading: flagsLoading } = useFeatureFlags();
+    const isTeacher = appUser?.role === 'teacher';
     const [classes, setClasses] = useState<Class[]>([]);
 
     // Date State - Default to today
     const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
 
     // Shared State
-    const [grade, setGrade] = useState<number>(6); // 6, 7, 8, 9, or -1 for My Classes
+    const [grade, setGrade] = useState<number>(-1); // Default to My Classes to prevent unauthorized viewing briefly
     const [myClassIds, setMyClassIds] = useState<string[]>([]);
     const { viewDevice } = useViewMode();
 
@@ -24,17 +29,26 @@ export default function MonitorDashboardPage() {
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        const saved = localStorage.getItem('myClasses');
+        if (!appUser) return;
+        const saved = localStorage.getItem(`myClasses_${appUser.uid}`) || localStorage.getItem('my-classes');
         if (saved) {
             try {
                 const ids = JSON.parse(saved);
                 setMyClassIds(ids);
             } catch (e) {
-                console.error("Failed to parse myClasses", e);
+                console.error("Failed to parse my-classes", e);
             }
+        } else if (appUser.assignedClassIds && appUser.assignedClassIds.length > 0) {
+            setMyClassIds(appUser.assignedClassIds);
         }
+
+        // Setup initial default grade tab
+        if (appUser.role !== 'teacher') {
+            setGrade(6); // Admins/Supervisors see Grade 6 initially by default if they prefer
+        }
+
         getAllClasses().then(setClasses);
-    }, []);
+    }, [appUser]);
 
     const fetchBlockData = useCallback(async () => {
         setLoading(true);
@@ -68,6 +82,22 @@ export default function MonitorDashboardPage() {
         }
     };
 
+    if (flagsLoading) {
+        return <div className="p-8 text-center text-gray-500 flex justify-center items-center h-[50vh]"><Loader2 className="animate-spin mr-2" /> Đang tải...</div>;
+    }
+
+    if (!flags.monitor) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center animate-in fade-in duration-300">
+                <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-4 ring-8 ring-amber-50/50">
+                    <AlertTriangle size={32} />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900 mb-2">Tính năng đang bảo trì</h2>
+                <p className="text-gray-500 max-w-md">Chức năng Sổ Theo Dõi tạm thời bị vô hiệu hoá bởi Quản trị viên. Vui lòng quay lại sau.</p>
+            </div>
+        );
+    }
+
     return (
         <div className="p-4 md:p-8 min-h-screen bg-gray-50/50 space-y-6">
             <header className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -100,9 +130,10 @@ export default function MonitorDashboardPage() {
                     )}
                 >
                     <BookOpen size={18} />
-                    LỚP CỦA TÔI
+                    LỚP CỦA TÔI {isTeacher && "(CHỈ ĐỊNH)"}
                 </button>
-                {[6, 7, 8, 9].map(g => {
+
+                {!isTeacher && [6, 7, 8, 9].map(g => {
                     const active = grade === g;
                     const colors = {
                         6: active ? 'bg-green-600 text-white shadow-green-200' : 'bg-white text-green-700 hover:bg-green-50',

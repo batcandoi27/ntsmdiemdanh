@@ -4,27 +4,34 @@ import { useState, useEffect, useTransition, useCallback } from 'react';
 import { Class, AttendanceStatus } from '@/types/models';
 import { getAllClasses } from '@/app/actions/common';
 import { getGradeAttendanceSummary, getClassesAttendanceSummary, BlockAttendanceItem } from '@/app/actions/quick-attendance';
+import { SessionType } from '@/types/timetable';
 import { AttendanceSheet } from '@/components/attendance-sheet';
 import { StudentSelectorDialog } from '@/components/quick-attendance/student-selector-dialog';
-import { Monitor, Smartphone, Tablet, Ban, CheckCircle, ChevronRight, UserCheck, ArrowLeft, Loader2, Zap, List, LayoutGrid, BookOpen, Star } from 'lucide-react';
+import { Monitor, Smartphone, Tablet, Ban, CheckCircle, ChevronRight, ChevronLeft, UserCheck, ArrowLeft, Loader2, Zap, List, LayoutGrid, BookOpen, Star, UploadCloud } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { MobileAttendanceList } from '@/components/quick-attendance/mobile-attendance-list';
 import { MobileClassDetail } from '@/components/quick-attendance/mobile-class-detail';
+import { ImportAttendanceDialog } from '@/components/quick-attendance/import-attendance-dialog';
 import { useViewMode } from '@/context/view-mode-context';
 import { useAppSettings } from '@/hooks/use-settings';
 import { Settings, ToggleLeft, ToggleRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { useFeatureFlags } from '@/context/feature-flags-context';
+import { AlertTriangle } from 'lucide-react';
+import { useAuth } from '@/context/auth-context';
 
 export default function QuickAttendancePage() {
+    const { flags, loading: flagsLoading } = useFeatureFlags();
     const [classes, setClasses] = useState<Class[]>([]);
 
     // Modes: 'CLASS' (default) vs 'BLOCK' (new)
     const [mode, setMode] = useState<'CLASS' | 'BLOCK'>('BLOCK');
-    // Date State
+    // Date & Session State
     const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
+    const [session, setSession] = useState<SessionType>('morning');
 
     // Shared State
     const [grade, setGrade] = useState<number>(6); // 6, 7, 8, 9, or -1 for My Classes
@@ -32,8 +39,11 @@ export default function QuickAttendancePage() {
     const { viewDevice } = useViewMode();
     const { settings, toggleDefaultColumn, loaded: settingsLoaded } = useAppSettings();
 
+    const { appUser } = useAuth();
+
     useEffect(() => {
-        const saved = localStorage.getItem('myClasses');
+        if (!appUser) return;
+        const saved = localStorage.getItem(`myClasses_${appUser.uid}`);
         if (saved) {
             try {
                 const ids = JSON.parse(saved);
@@ -42,8 +52,10 @@ export default function QuickAttendancePage() {
             } catch (e) {
                 console.error("Failed to parse myClasses", e);
             }
+        } else if (appUser.assignedClassIds && appUser.assignedClassIds.length > 0) {
+            setMyClassIds(appUser.assignedClassIds);
         }
-    }, []);
+    }, [appUser]);
 
     // Class Mode State
     const [quickClassId, setQuickClassId] = useState<string>('');
@@ -55,6 +67,7 @@ export default function QuickAttendancePage() {
 
     // Dialog State
     const [dialogOpen, setDialogOpen] = useState(false);
+    const [importDialogOpen, setImportDialogOpen] = useState(false);
     const [selectedClass, setSelectedClass] = useState<string | null>(null); // Changed to store classId string
     const [targetStatus, setTargetStatus] = useState<AttendanceStatus>('P');
 
@@ -67,14 +80,25 @@ export default function QuickAttendancePage() {
         return c.grade === grade;
     }).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
-    // Reset Class Mode logic when Grade changes
+    const fetchBlockData = useCallback(async () => {
+        setLoading(true);
+        // Use selected date
+        let data: BlockAttendanceItem[] = [];
+        if (grade === -1) {
+            data = await getClassesAttendanceSummary(myClassIds, date, session);
+        } else {
+            data = await getGradeAttendanceSummary(grade, date, session);
+        }
+        setBlockData(data);
+        setLoading(false);
+    }, [grade, date, myClassIds, session]);
+
+    // Reset Class Mode logic when Grade/Date/Session changes
     useEffect(() => {
         if (mode === 'BLOCK') {
             fetchBlockData();
         }
-    }, [grade, date, mode]);
-
-
+    }, [fetchBlockData, mode]);
 
     // Helper: Grade Color Theme
     const getGradeTheme = (g: number) => {
@@ -88,19 +112,6 @@ export default function QuickAttendancePage() {
         }
     };
 
-    const fetchBlockData = useCallback(async () => {
-        setLoading(true);
-        // Use selected date
-        let data: BlockAttendanceItem[] = [];
-        if (grade === -1) {
-            data = await getClassesAttendanceSummary(myClassIds, date);
-        } else {
-            data = await getGradeAttendanceSummary(grade, date);
-        }
-        setBlockData(data);
-        setLoading(false);
-    }, [grade, date, myClassIds]);
-
     const handleGradeChange = (newGrade: number) => {
         setGrade(newGrade);
         // fetchBlockData will be called by the useEffect when grade changes
@@ -112,33 +123,183 @@ export default function QuickAttendancePage() {
         setDialogOpen(true);
     };
 
+    if (flagsLoading) {
+        return <div className="p-8 text-center text-gray-500 flex justify-center items-center h-[50vh]"><Loader2 className="animate-spin mr-2" /> Đang tải...</div>;
+    }
+
+    if (!flags.quickAttendance) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center animate-in fade-in duration-300">
+                <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-4 ring-8 ring-amber-50/50">
+                    <AlertTriangle size={32} />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900 mb-2">Tính năng đang được phát triển</h2>
+                <p className="text-gray-500 max-w-md">Chức năng Điểm danh nhanh hiện đang được cập nhật hoặc tạm thời vô hiệu hóa bởi Quản trị viên. Vui lòng thử lại sau.</p>
+            </div>
+        );
+    }
+
     return (
         <div className="p-4 md:p-8 min-h-screen bg-gray-50/50 space-y-6">
-            <header className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                        <Zap className="text-yellow-500 fill-yellow-500" size={24} />
-                        Điểm Danh
-                    </h1>
-                    <p className="text-gray-500 text-sm">Quản lý chuyên cần theo Khối / Lớp</p>
+            <header className="mb-6 flex flex-col gap-4">
+                {/* Dòng 1: Tiêu đề và Các icon chức năng */}
+                <div className="flex flex-row items-center justify-between w-full">
+                    <div>
+                        <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                            <Zap className="text-yellow-500 fill-yellow-500" size={24} />
+                            Điểm Danh
+                        </h1>
+                        <p className="text-gray-500 text-sm hidden sm:block">Quản lý chuyên cần theo Khối / Lớp</p>
+                    </div>
+
+                    <div className="flex items-center gap-2 md:gap-3">
+                        <button
+                            onClick={() => setImportDialogOpen(true)}
+                            className="flex items-center justify-center min-w-[40px] min-h-[40px] px-3 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800 font-bold rounded-xl border border-indigo-200 shadow-sm transition-colors text-sm"
+                        >
+                            <UploadCloud size={18} />
+                            <span className="hidden sm:inline line-clamp-1 ml-2">Import JSON</span>
+                        </button>
+
+                        <Dialog>
+                            <DialogTrigger asChild>
+                                <button className="flex items-center justify-center min-w-[40px] min-h-[40px] p-2 bg-white text-gray-400 hover:text-gray-700 rounded-xl border border-gray-100 shadow-sm transition-colors">
+                                    <Settings size={20} />
+                                </button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader>
+                                    <DialogTitle>Cài đặt hiển thị</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4 py-4">
+                                    <h4 className="text-sm font-medium text-gray-500 uppercase">Cột mặc định</h4>
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-8 h-8 rounded-lg bg-yellow-100 text-yellow-700 flex items-center justify-center font-bold text-xs">P</span>
+                                                <Label>Có phép</Label>
+                                            </div>
+                                            <Switch
+                                                checked={settings.visibleDefaultColumns.P}
+                                                onCheckedChange={() => toggleDefaultColumn('P')}
+                                            />
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-8 h-8 rounded-lg bg-red-100 text-red-700 flex items-center justify-center font-bold text-xs">K</span>
+                                                <Label>Không phép</Label>
+                                            </div>
+                                            <Switch
+                                                checked={settings.visibleDefaultColumns.K}
+                                                onCheckedChange={() => toggleDefaultColumn('K')}
+                                            />
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs">T</span>
+                                                <Label>Đi trễ</Label>
+                                            </div>
+                                            <Switch
+                                                checked={settings.visibleDefaultColumns.T}
+                                                onCheckedChange={() => toggleDefaultColumn('T')}
+                                            />
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">VP</span>
+                                                <Label>Vi phạm</Label>
+                                            </div>
+                                            <Switch
+                                                checked={settings.visibleDefaultColumns.VP}
+                                                onCheckedChange={() => toggleDefaultColumn('VP')}
+                                            />
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center font-bold text-xs">KH</span>
+                                                <Label>Khen thưởng</Label>
+                                            </div>
+                                            <Switch
+                                                checked={settings.visibleDefaultColumns.KH}
+                                                onCheckedChange={() => toggleDefaultColumn('KH')}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+                    </div>
                 </div>
 
-
-
-                <div className="flex items-center gap-3 bg-white p-1 rounded-xl shadow-sm border border-gray-100">
-                    <input
-                        type="date"
-                        value={date}
-                        onChange={(e) => setDate(e.target.value)}
-                        className="border-none bg-transparent text-sm font-bold text-gray-700 outline-none px-2 cursor-pointer hover:text-primary transition-colors"
-                        title="Dổi ngày điểm danh"
-                    />
-                    <div className="h-4 w-px bg-gray-200 mx-1"></div>
-                    <div className="flex bg-gray-100 p-1 rounded-lg">
+                {/* Thanh chọn ngày (Dòng 2) */}
+                <div className="flex flex-wrap items-center gap-3 bg-white p-1 rounded-xl shadow-sm border border-gray-100 w-[fit-content]">
+                    <div className="flex items-center gap-1 bg-gray-50/80 rounded-lg p-1">
+                        <button
+                            onClick={() => {
+                                const d = new Date(date);
+                                d.setDate(d.getDate() - 1);
+                                setDate(d.toISOString().slice(0, 10));
+                                setSession('morning');
+                            }}
+                            className="p-1 hover:bg-gray-200 rounded text-gray-500 hover:text-gray-800 transition-colors"
+                        >
+                            <ChevronLeft size={18} />
+                        </button>
+                        <div className="relative flex min-w-[130px] items-center justify-center">
+                            <input
+                                type="date"
+                                value={date}
+                                onChange={(e) => {
+                                    setDate(e.target.value);
+                                    setSession('morning');
+                                }}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                title="Đổi ngày điểm danh"
+                            />
+                            <span className="text-sm font-bold text-gray-700 pointer-events-none select-none tracking-wide">
+                                {(() => {
+                                    const d = new Date(date);
+                                    if (isNaN(d.getTime())) return date;
+                                    const days = ['CN', 'T.Hai', 'T.Ba', 'T.Tư', 'T.Năm', 'T.Sáu', 'T.Bảy'];
+                                    const day = days[d.getDay()];
+                                    const dd = String(d.getDate()).padStart(2, '0');
+                                    const mm = String(d.getMonth() + 1).padStart(2, '0');
+                                    const yyyy = d.getFullYear();
+                                    return `${day}/${dd}/${mm}/${yyyy}`;
+                                })()}
+                            </span>
+                        </div>
+                        <button
+                            onClick={() => {
+                                const d = new Date(date);
+                                d.setDate(d.getDate() + 1);
+                                setDate(d.toISOString().slice(0, 10));
+                                setSession('morning');
+                            }}
+                            className="p-1 hover:bg-gray-200 rounded text-gray-500 hover:text-gray-800 transition-colors"
+                        >
+                            <ChevronRight size={18} />
+                        </button>
+                    </div>
+                    <div className="h-4 w-px bg-gray-200 mx-1 hidden sm:block"></div>
+                    <button
+                        onClick={() => setSession(session === 'morning' ? 'afternoon' : 'morning')}
+                        className={cn(
+                            "px-3 py-1.5 rounded-lg text-sm font-bold transition-all border shadow-sm",
+                            session === 'morning'
+                                ? "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                                : "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100"
+                        )}
+                        title="Bấm để đổi buổi"
+                    >
+                        {session === 'morning' ? '☀️ Buổi Sáng' : '🌙 Buổi Chiều'}
+                    </button>
+                    <div className="h-4 w-px bg-gray-200 mx-1 hidden sm:block"></div>
+                    <div className="flex bg-gray-100 p-1 rounded-lg w-full sm:w-auto mt-2 sm:mt-0">
                         <button
                             onClick={() => setMode('BLOCK')}
                             className={cn(
-                                "px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 flex items-center gap-2",
+                                "flex-1 sm:flex-none px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 flex justify-center items-center gap-2",
                                 mode === 'BLOCK' ? "bg-white text-primary shadow-sm" : "text-gray-500 hover:text-gray-700"
                             )}
                         >
@@ -152,7 +313,7 @@ export default function QuickAttendancePage() {
                                 setShowSheet(false);
                             }}
                             className={cn(
-                                "px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 flex items-center gap-2",
+                                "flex-1 sm:flex-none px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 flex justify-center items-center gap-2",
                                 mode === 'CLASS' ? "bg-white text-primary shadow-sm" : "text-gray-500 hover:text-gray-700"
                             )}
                         >
@@ -161,77 +322,7 @@ export default function QuickAttendancePage() {
                         </button>
                     </div>
                 </div>
-
-                {/* Settings Button */}
-                <Dialog>
-                    <DialogTrigger asChild>
-                        <button className="p-2 bg-white text-gray-400 hover:text-gray-700 rounded-xl border border-gray-100 shadow-sm transition-colors">
-                            <Settings size={20} />
-                        </button>
-                    </DialogTrigger>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Cài đặt hiển thị</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                            <h4 className="text-sm font-medium text-gray-500 uppercase">Cột mặc định</h4>
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <span className="w-8 h-8 rounded-lg bg-yellow-100 text-yellow-700 flex items-center justify-center font-bold text-xs">P</span>
-                                        <Label>Có phép</Label>
-                                    </div>
-                                    <Switch
-                                        checked={settings.visibleDefaultColumns.P}
-                                        onCheckedChange={() => toggleDefaultColumn('P')}
-                                    />
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <span className="w-8 h-8 rounded-lg bg-red-100 text-red-700 flex items-center justify-center font-bold text-xs">K</span>
-                                        <Label>Không phép</Label>
-                                    </div>
-                                    <Switch
-                                        checked={settings.visibleDefaultColumns.K}
-                                        onCheckedChange={() => toggleDefaultColumn('K')}
-                                    />
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <span className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs">T</span>
-                                        <Label>Đi trễ</Label>
-                                    </div>
-                                    <Switch
-                                        checked={settings.visibleDefaultColumns.T}
-                                        onCheckedChange={() => toggleDefaultColumn('T')}
-                                    />
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <span className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">VP</span>
-                                        <Label>Vi phạm</Label>
-                                    </div>
-                                    <Switch
-                                        checked={settings.visibleDefaultColumns.VP}
-                                        onCheckedChange={() => toggleDefaultColumn('VP')}
-                                    />
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <span className="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center font-bold text-xs">KH</span>
-                                        <Label>Khen thưởng</Label>
-                                    </div>
-                                    <Switch
-                                        checked={settings.visibleDefaultColumns.KH}
-                                        onCheckedChange={() => toggleDefaultColumn('KH')}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </DialogContent>
-                </Dialog>
-
-            </header >
+            </header>
 
             {/* Grade Selection */}
             {
@@ -334,7 +425,7 @@ export default function QuickAttendancePage() {
                                     <select
                                         value={quickClassId}
                                         onChange={(e) => { setQuickClassId(e.target.value); setShowSheet(false); }}
-                                        className="w-full bg-white text-gray-900 text-xl font-bold py-4 pl-6 pr-12 rounded-xl appearance-none cursor-pointer focus:ring-4 focus:ring-yellow-400 outline-none shadow-lg group-hover:bg-blue-50 transition-colors"
+                                        className="w-full bg-white text-blue-700 text-xl font-bold py-4 pl-6 pr-12 rounded-xl appearance-none cursor-pointer focus:ring-4 focus:ring-yellow-400 outline-none shadow-lg group-hover:bg-blue-50 transition-colors"
                                     >
                                         {filteredClasses.map(c => (
                                             <option key={c.id} value={c.id}>
@@ -369,7 +460,7 @@ export default function QuickAttendancePage() {
             {
                 mode === 'CLASS' && showSheet && quickClassId && (
                     <div className="animate-in slide-in-from-bottom-8 fade-in duration-500">
-                        <AttendanceSheet classId={quickClassId} />
+                        <AttendanceSheet classId={quickClassId} session={session} dateStr={date} />
                     </div>
                 )
             }
@@ -402,18 +493,14 @@ export default function QuickAttendancePage() {
                                         return (
                                             <tr key={item.classId} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors group">
                                                 <td className="py-4 px-2 align-top sticky left-0 z-10 bg-white group-hover:bg-gray-50 border-r border-gray-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
-                                                    <Link href={`/classes/${item.classId}/monitor`} className="block hover:opacity-80 transition-opacity">
+                                                    <div className="block cursor-default">
                                                         <div className={cn(
-                                                            "px-3 py-2 rounded-lg border font-black text-center shadow-sm text-lg mb-1",
+                                                            "px-3 py-2 rounded-lg border font-black text-center shadow-sm text-lg",
                                                             theme.bg, theme.border, theme.text
                                                         )}>
                                                             {item.className}
                                                         </div>
-                                                        <div className="text-[10px] text-center text-gray-400 font-medium uppercase tracking-wider group-hover:text-blue-500 flex items-center justify-center gap-1">
-                                                            <BookOpen size={10} />
-                                                            Sổ Theo Dõi
-                                                        </div>
-                                                    </Link>
+                                                    </div>
                                                 </td>
                                                 <td className="py-4 px-2 text-center font-bold text-gray-600 align-top pt-5">
                                                     {item.totalStudents}
@@ -543,6 +630,21 @@ export default function QuickAttendancePage() {
                                         );
                                     })}
                                 </tbody>
+                                <tfoot>
+                                    <tr className="bg-gray-100/80 font-black text-gray-800 border-t-2 border-gray-300">
+                                        <td className="py-4 px-2 text-center sticky left-0 z-10 bg-gray-100 border-r border-gray-200">
+                                            TỔNG CỘNG
+                                        </td>
+                                        <td className="py-4 px-2 text-center text-lg">{blockData.reduce((acc, curr) => acc + curr.totalStudents, 0)}</td>
+                                        <td className="py-4 px-2 text-center text-lg text-red-600 bg-red-50/50">{blockData.reduce((acc, curr) => acc + curr.attendanceCount.P + curr.attendanceCount.K, 0)}</td>
+                                        <td className="py-4 px-2 text-center text-xl text-green-600 bg-green-50/50">{blockData.reduce((acc, curr) => acc + curr.attendanceCount.Present, 0)}</td>
+                                        {settings.visibleDefaultColumns.P && <td className="py-4 px-2 text-center text-lg text-yellow-600 bg-yellow-50/30">{blockData.reduce((acc, item) => acc + item.attendanceCount.P, 0)}</td>}
+                                        {settings.visibleDefaultColumns.K && <td className="py-4 px-2 text-center text-lg text-red-600 bg-red-50/30">{blockData.reduce((acc, item) => acc + item.attendanceCount.K, 0)}</td>}
+                                        {settings.visibleDefaultColumns.T && <td className="py-4 px-2 text-center text-lg text-blue-600 bg-blue-50/30">{blockData.reduce((acc, item) => acc + item.attendanceCount.T, 0)}</td>}
+                                        {settings.visibleDefaultColumns.VP && <td className="py-4 px-2 text-center text-lg text-purple-600 bg-purple-50/30">{blockData.reduce((acc, item) => acc + item.attendanceCount.VP, 0)}</td>}
+                                        {settings.visibleDefaultColumns.KH && <td className="py-4 px-2 text-center text-lg text-orange-600 bg-orange-50/30">{blockData.reduce((acc, item) => acc + item.attendanceCount.KH, 0)}</td>}
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
                     </div>
@@ -581,11 +683,21 @@ export default function QuickAttendancePage() {
                         className={blockData.find(c => c.classId === selectedClass)?.className || ''}
                         targetStatus={targetStatus}
                         date={date}
+                        session={session}
                         onDateChange={setDate}
                         onSaved={fetchBlockData}
                     />
                 )
             }
+
+            {/* Import Dialog */}
+            <ImportAttendanceDialog
+                open={importDialogOpen}
+                onOpenChange={setImportDialogOpen}
+                onSuccess={() => {
+                    if (mode === 'BLOCK') fetchBlockData();
+                }}
+            />
 
             {/* Mobile View Integration */}
             {
@@ -610,6 +722,7 @@ export default function QuickAttendancePage() {
                             classId={quickClassId}
                             className={classes.find(c => c.id === quickClassId)?.name || 'Lớp'}
                             date={date}
+                            session={session}
                             onDateChange={setDate}
                             onBack={() => {
                                 setShowSheet(false);

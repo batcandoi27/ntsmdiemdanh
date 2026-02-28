@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAnalytics, isSupported } from "firebase/analytics";
-import { getAuth, signInAnonymously } from "firebase/auth";
+import { getAuth, signInAnonymously, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
@@ -19,6 +19,13 @@ const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 // Initialize Services
 export const auth = getAuth(app);
+
+// Đảm bảo phiên đăng nhập được lưu cục bộ (tối đa/vĩnh viễn cho đến khi logout)
+if (typeof window !== 'undefined') {
+    setPersistence(auth, browserLocalPersistence)
+        .catch((error) => console.error("Firebase persistence error:", error));
+}
+
 export const signInAnon = () => signInAnonymously(auth);
 export const db = getFirestore(app);
 export const storage = getStorage(app);

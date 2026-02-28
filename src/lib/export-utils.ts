@@ -323,6 +323,46 @@ export const exportTermReport = async (reports: TermReportData[], fileName: stri
                 if (i !== 3 && i > 2) cell.alignment = { horizontal: 'center' }; // Center numbers
             }
         });
+
+        // Summary Row at the bottom
+        const summaryRowIdx = 5 + report.students.length;
+        const summaryRow = sheet.getRow(summaryRowIdx);
+
+        sheet.mergeCells(`A${summaryRowIdx}:C${summaryRowIdx}`);
+        const sumLabelCell = summaryRow.getCell(1);
+        sumLabelCell.value = "TỔNG CỘNG LỚP";
+        sumLabelCell.font = { bold: true, size: 12, name: 'Times New Roman', color: { argb: 'FFFFFFFF' } };
+        sumLabelCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        sumLabelCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } }; // Indigo background
+
+        // Calculate Sums
+        let sumP = 0, sumK = 0, sumT = 0, sumVP = 0, sumKH = 0;
+        report.students.forEach(std => {
+            const stdData = report.data[std.id] || { stats: {} };
+            sumP += stdData.stats['P'] || 0;
+            sumK += stdData.stats['K'] || 0;
+            sumT += stdData.stats['T'] || 0;
+            sumVP += stdData.stats['VP'] || 0;
+            sumKH += stdData.stats['KH'] || 0;
+        });
+
+        summaryRow.getCell(4).value = sumP > 0 ? sumP : '';
+        summaryRow.getCell(5).value = sumK > 0 ? sumK : '';
+        summaryRow.getCell(6).value = sumT > 0 ? sumT : '';
+        summaryRow.getCell(7).value = sumVP > 0 ? sumVP : '';
+        summaryRow.getCell(8).value = sumKH > 0 ? sumKH : '';
+
+        // Style summary cells
+        for (let i = 1; i <= 8; i++) {
+            const cell = summaryRow.getCell(i);
+            cell.border = BORDER_STYLE;
+            if (i > 3) {
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                cell.font = { bold: true, name: 'Times New Roman', size: 12 };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } }; // Light gray background
+            }
+        }
+
     });
 
     const buffer = await workbook.xlsx.writeBuffer();
@@ -330,9 +370,8 @@ export const exportTermReport = async (reports: TermReportData[], fileName: stri
     saveAs(blob, `${fileName}.xlsx`);
 };
 
-export const exportToExcel = (data: any[], fileName: string) => {
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "ShortReport");
-    XLSX.writeFile(wb, `${fileName}.xlsx`);
+export const exportToExcel = async (data: ExportData[], fileName: string, isCompact: boolean = false) => {
+    // Simply proxy to exportMonthlyReport because it uses ExcelJS styling 
+    // And is structurally matching our goal for single or multi-class export.
+    await exportMonthlyReport(data, isCompact ? `${fileName}_RutGon` : fileName);
 };

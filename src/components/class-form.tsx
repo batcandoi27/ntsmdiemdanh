@@ -89,7 +89,7 @@ export function ClassForm({ initialData, onSubmit, onCancel }: ClassFormProps) {
                         name="grade"
                         value={formData.grade}
                         onChange={handleChange}
-                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-blue-700 font-bold bg-white focus:ring-2 focus:ring-primary focus:border-primary outline-none hover:bg-blue-50 transition-colors"
                     >
                         {[6, 7, 8, 9, 10, 11, 12].map(g => (
                             <option key={g} value={g}>Khối {g}</option>

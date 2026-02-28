@@ -6,6 +6,8 @@ import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
 import { ViewModeProvider } from '@/context/view-mode-context';
 import { ViewContainer } from '@/components/view-container';
+import { FeatureFlagsProvider } from '@/context/feature-flags-context';
+import { BottomNav } from '@/components/layout/bottom-nav';
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -23,15 +25,18 @@ export default function RootLayout({
     <html lang="vi" suppressHydrationWarning>
       <body className={inter.className} suppressHydrationWarning>
         <AuthProvider>
-          <ViewModeProvider>
-            <div className="flex flex-col min-h-screen">
-              <SiteHeader />
-              <ViewContainer>
-                {children}
-              </ViewContainer>
-              <SiteFooter />
-            </div>
-          </ViewModeProvider>
+          <FeatureFlagsProvider>
+            <ViewModeProvider>
+              <div className="flex flex-col min-h-screen pb-20 md:pb-0">
+                <SiteHeader />
+                <ViewContainer>
+                  {children}
+                </ViewContainer>
+                <SiteFooter />
+                <BottomNav />
+              </div>
+            </ViewModeProvider>
+          </FeatureFlagsProvider>
         </AuthProvider>
       </body>
     </html>

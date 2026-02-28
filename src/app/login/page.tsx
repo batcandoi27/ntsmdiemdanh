@@ -1,177 +1,519 @@
 'use client';
 
-import { useState } from 'react';
-import {
-    signInWithEmailAndPassword,
-    createUserWithEmailAndPassword,
-    signInWithPopup,
-    GoogleAuthProvider
-} from 'firebase/auth';
-import { auth } from '@/lib/firebase';
-import { useRouter } from 'next/navigation';
-import { Lock, Mail, Loader2, AlertCircle, Chrome, UserPlus, LogIn } from 'lucide-react';
+import { useState, useEffect, FormEvent } from 'react';
+import { useAuth } from '@/context/auth-context';
+import { School, LogIn, Eye, EyeOff, AlertCircle, KeySquare, CheckCircle2, BookOpen, UserCheck } from 'lucide-react';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+
+/**
+ * Login Page v4.0
+ *
+ * Hỗ trợ 2 loại đăng nhập:
+ * - Email + password (GV, Admin, Principal, Supervisor)
+ * - Mã HS + password (Ban Cán Sự Lớp)
+ *
+ * Đăng ký Google mới:
+ * - Chọn vai trò
+ * - GVCN: chọn Lớp Chủ nhiệm + chọn nhiều Lớp Bộ môn
+ * - GVBM: chọn nhiều Lớp Bộ môn
+ * - Sau đăng ký: isActive=false, xem app ở chế độ đọc, chờ Admin duyệt
+ */
+
+import { setupRoleWithoutCode } from '@/app/actions/auth-setup';
+
+interface ClassOption {
+    id: string;
+    name: string;
+    grade: number;
+}
 
 export default function LoginPage() {
-    const [isRegister, setIsRegister] = useState(false);
-    const [email, setEmail] = useState('');
+    const { signIn, signInWithGoogle, firebaseUser, needsRoleCode, error: authError, loading } = useAuth();
+    const [emailOrCode, setEmailOrCode] = useState('');
     const [password, setPassword] = useState('');
-    const [confirmPass, setConfirmPass] = useState('');
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
-    const router = useRouter();
+    const [showPassword, setShowPassword] = useState(false);
 
-    const handleAuth = async (e: React.FormEvent) => {
+    // States cho bước thiết lập Role
+    const [requestedRole, setRequestedRole] = useState('teacher');
+    const [step, setStep] = useState<'role' | 'classes'>('role'); // Bước trong form đăng ký
+
+    // States cho chọn lớp
+    const [allClasses, setAllClasses] = useState<ClassOption[]>([]);
+    const [loadingClasses, setLoadingClasses] = useState(false);
+    const [homeroomClassId, setHomeroomClassId] = useState('');          // Lớp CN (GVCN)
+    const [subjectClassIds, setSubjectClassIds] = useState<string[]>([]); // Lớp BM (GVCN + GVBM)
+
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [localError, setLocalError] = useState('');
+    const [successMsg, setSuccessMsg] = useState('');
+
+    // Fetch danh sách lớp khi cần
+    useEffect(() => {
+        if (step === 'classes') {
+            fetchClasses();
+        }
+    }, [step]);
+
+    const fetchClasses = async () => {
+        setLoadingClasses(true);
+        try {
+            // Lấy từ Cấu trúc V3: schools/{schoolId}/years/{year}/classes
+            const q = query(collection(db, 'schools', 'default', 'years', '2025-2026', 'classes'));
+            const snap = await getDocs(q);
+            const list = snap.docs.map(d => ({
+                id: d.id,
+                name: d.data().name as string,
+                grade: d.data().grade as number,
+            }));
+
+            // Sort mảng bằng JavaScript (grade tăng dần, name tăng dần)
+            list.sort((a, b) => {
+                if (a.grade !== b.grade) return a.grade - b.grade;
+                return a.name.localeCompare(b.name);
+            });
+
+            setAllClasses(list);
+        } catch (err) {
+            console.error('Lỗi tải danh sách lớp:', err);
+            setLocalError('Không thể tải danh sách lớp. Vui lòng thử lại.');
+        } finally {
+            setLoadingClasses(false);
+        }
+    };
+
+    const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        setLoading(true);
-        setError('');
+        setLocalError('');
 
-        if (isRegister && password !== confirmPass) {
-            setError('Mật khẩu nhập lại không khớp!');
-            setLoading(false);
+        if (!emailOrCode.trim()) {
+            setLocalError('Vui lòng nhập email hoặc mã học sinh.');
+            return;
+        }
+        if (!password) {
+            setLocalError('Vui lòng nhập mật khẩu.');
             return;
         }
 
+        setIsSubmitting(true);
         try {
-            if (isRegister) {
-                await createUserWithEmailAndPassword(auth, email, password);
-            } else {
-                await signInWithEmailAndPassword(auth, email, password);
-            }
-            router.push('/'); // Redirect dashboard
-        } catch (err: any) {
-            console.error(err);
-            let msg = 'Lỗi xác thực: ' + err.code;
-            if (err.code === 'auth/invalid-credential') msg = 'Thông tin đăng nhập không đúng.';
-            if (err.code === 'auth/email-already-in-use') msg = 'Email này đã được sử dụng.';
-            if (err.code === 'auth/weak-password') msg = 'Mật khẩu quá yếu (tối thiểu 6 ký tự).';
-            setError(msg);
+            await signIn(emailOrCode.trim(), password);
+        } catch {
+            // Error đã được set trong AuthContext
         } finally {
-            setLoading(false);
+            setIsSubmitting(false);
         }
     };
 
     const handleGoogleLogin = async () => {
-        setLoading(true);
-        setError('');
-        const provider = new GoogleAuthProvider();
+        setLocalError('');
         try {
-            await signInWithPopup(auth, provider);
-            router.push('/');
+            await signInWithGoogle();
         } catch (err: any) {
-            console.error(err);
-            setError('Lỗi đăng nhập Google: ' + err.message);
-        } finally {
-            setLoading(false);
+            if (err.code !== 'auth/popup-closed-by-user') {
+                setLocalError('Không thể kết nối với Google.');
+            }
         }
     };
 
+    const handleNextStep = () => {
+        setLocalError('');
+        // Các role không cần chọn lớp → submit thẳng
+        if (!['teacher', 'gvbm'].includes(requestedRole)) {
+            handleSetupRole();
+            return;
+        }
+        setStep('classes');
+    };
+
+    const handleSetupRole = async (e?: FormEvent) => {
+        e?.preventDefault();
+        setLocalError('');
+
+        if (!firebaseUser) {
+            setLocalError('Phiên đăng nhập Google bị mất. Vui lòng tải lại trang.');
+            return;
+        }
+
+        const userEmail = firebaseUser.email || `${firebaseUser.uid}@no-email.local`;
+        const userDisplayName = firebaseUser.displayName || (firebaseUser.email ? firebaseUser.email.split('@')[0] : 'Người dùng');
+
+        // Validate chọn lớp cho GV
+        if (['teacher', 'gvbm'].includes(requestedRole)) {
+            if (requestedRole === 'teacher' && !homeroomClassId) {
+                setLocalError('GVCN phải chọn Lớp Chủ nhiệm.');
+                return;
+            }
+        }
+
+        setIsSubmitting(true);
+        try {
+            // Tổng hợp danh sách lớp
+            const assignedIds = Array.from(new Set([
+                ...(homeroomClassId ? [homeroomClassId] : []),
+                ...subjectClassIds,
+            ]));
+
+            const res = await setupRoleWithoutCode(
+                firebaseUser.uid,
+                userEmail,
+                userDisplayName,
+                requestedRole as any,
+                assignedIds,
+                requestedRole === 'teacher' ? (homeroomClassId || null) : null,
+            );
+
+            if (res.success) {
+                setSuccessMsg(res.message);
+                // Reload sau 1.5s để AuthContext tải lại AppUser Profile
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 1500);
+            } else {
+                setLocalError(res.message);
+            }
+        } catch (error: any) {
+            setLocalError('Đã xảy ra lỗi máy chủ.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const toggleSubjectClass = (classId: string) => {
+        setSubjectClassIds(prev =>
+            prev.includes(classId)
+                ? prev.filter(id => id !== classId)
+                : [...prev, classId]
+        );
+    };
+
+    const displayError = localError || authError;
+
+    // Nhóm lớp theo khối
+    const classesByGrade = allClasses.reduce<Record<number, ClassOption[]>>((acc, cls) => {
+        if (!acc[cls.grade]) acc[cls.grade] = [];
+        acc[cls.grade].push(cls);
+        return acc;
+    }, {});
+
     return (
-        <div className="min-h-screen bg-gradient-to-br from-primary-light/50 to-white flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-md p-8 rounded-2xl shadow-xl border border-gray-100 transition-all">
-                <div className="text-center mb-6">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-light rounded-full mb-4 shadow-sm">
-                        {isRegister ? <UserPlus className="text-primary w-8 h-8" /> : <Lock className="text-primary w-8 h-8" />}
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50 px-4 py-8">
+            <div className="w-full max-w-md">
+                {/* Logo */}
+                <div className="text-center mb-8">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl shadow-lg shadow-blue-600/30 mb-4">
+                        <School size={32} className="text-white" />
                     </div>
-                    <h1 className="text-2xl font-bold text-gray-800">
-                        {isRegister ? 'Đăng Ký Tài Khoản' : 'Đăng Nhập'}
+                    <h1 className="text-2xl font-bold text-gray-900">
+                        {process.env.NEXT_PUBLIC_SCHOOL_NAME || 'Hệ Thống Điểm Danh'}
                     </h1>
-                    <p className="text-gray-500 mt-1">Hệ thống điểm danh THCS Trần Bội Cơ</p>
+                    <p className="text-sm text-gray-500 mt-1">
+                        {needsRoleCode ? 'Thiết lập tài khoản mới' : 'Đăng nhập để tiếp tục'}
+                    </p>
                 </div>
 
-                {error && (
-                    <div className="mb-6 p-4 bg-red-50 text-red-700 rounded-xl flex items-center gap-2 text-sm border border-red-100 animate-in fade-in slide-in-from-top-1">
-                        <AlertCircle size={16} className="shrink-0" />
-                        {error}
-                    </div>
-                )}
+                {/* Form Đăng ký Google (needsRoleCode) */}
+                {needsRoleCode && firebaseUser ? (
+                    <div className="bg-white rounded-2xl shadow-xl shadow-gray-200/50 border border-gray-100 p-6 space-y-5">
 
-                {/* Google Login Button */}
-                <button
-                    type="button"
-                    onClick={handleGoogleLogin}
-                    disabled={loading}
-                    className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-3 rounded-xl mb-6 flex items-center justify-center gap-3 transition-all active:scale-95"
-                >
-                    <Chrome size={20} className="text-blue-500" />
-                    Tiếp tục với Google
-                </button>
+                        {/* Avatar */}
+                        <div className="text-center border-b border-gray-100 pb-4 mb-2">
+                            <div className="w-16 h-16 rounded-full overflow-hidden mx-auto mb-3 bg-gray-100 border-2 border-white shadow-sm ring-2 ring-gray-100">
+                                {firebaseUser.photoURL ? (
+                                    <img src={firebaseUser.photoURL} alt="Avatar" className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-gray-400 font-bold text-xl">
+                                        {firebaseUser.email?.charAt(0).toUpperCase()}
+                                    </div>
+                                )}
+                            </div>
+                            <h3 className="font-semibold text-gray-800">{firebaseUser.displayName}</h3>
+                            <p className="text-sm text-gray-500">{firebaseUser.email}</p>
+                            <span className="inline-block px-3 py-1 bg-amber-50 text-amber-600 text-[10px] font-bold uppercase tracking-wider rounded-full mt-2 border border-amber-200">
+                                Lần Đầu Đăng Nhập
+                            </span>
+                        </div>
 
-                <div className="relative mb-6">
-                    <div className="absolute inset-0 flex items-center">
-                        <div className="w-full border-t border-gray-200"></div>
-                    </div>
-                    <div className="relative flex justify-center text-sm">
-                        <span className="px-2 bg-white text-gray-500">Hoặc dùng Email</span>
-                    </div>
-                </div>
+                        {/* Progress indicator */}
+                        {['teacher', 'gvbm'].includes(requestedRole) && step === 'classes' && (
+                            <div className="flex items-center gap-2 text-xs text-gray-400">
+                                <span className="text-gray-400">Bước 1: Vai trò ✓</span>
+                                <div className="flex-1 h-px bg-gray-200" />
+                                <span className="text-blue-600 font-medium">Bước 2: Chọn lớp</span>
+                            </div>
+                        )}
 
-                <form onSubmit={handleAuth} className="space-y-5">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
-                        <div className="relative">
-                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                        {displayError && (
+                            <div className="flex items-start gap-3 bg-red-50 text-red-700 text-sm px-4 py-3 rounded-xl border border-red-100">
+                                <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                                <span>{displayError}</span>
+                            </div>
+                        )}
+
+                        {successMsg ? (
+                            <div className="flex items-start justify-center gap-3 bg-green-50 text-green-700 font-medium px-4 py-6 rounded-xl border border-green-200 text-center flex-col animate-in fade-in zoom-in">
+                                <CheckCircle2 size={36} className="mx-auto text-green-500" />
+                                <span>{successMsg}</span>
+                                <span className="text-xs text-green-600/70 mt-1">Đang chuyển hướng tự động...</span>
+                            </div>
+                        ) : step === 'role' ? (
+                            /* === BƯỚC 1: CHỌN VAI TRÒ === */
+                            <>
+                                <div>
+                                    <label htmlFor="roleSelect" className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                                        <KeySquare size={16} className="text-blue-600" />
+                                        Vai trò của bạn
+                                    </label>
+                                    <select
+                                        id="roleSelect"
+                                        value={requestedRole}
+                                        onChange={(e) => { setRequestedRole(e.target.value); setHomeroomClassId(''); setSubjectClassIds([]); }}
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-blue-700 font-bold hover:bg-blue-50 bg-white transition-all cursor-pointer"
+                                    >
+                                        <option value="teacher">Giáo viên chủ nhiệm (GVCN)</option>
+                                        <option value="gvbm">Giáo viên bộ môn (GVBM)</option>
+                                        <option value="supervisor">Giám thị</option>
+                                        <option value="principal">Hiệu trưởng / Hiệu phó</option>
+                                        <option value="class_monitor">Lớp trưởng / Ban cán sự</option>
+                                    </select>
+                                    <p className="text-[11px] text-gray-400 mt-2 leading-relaxed">
+                                        Sau khi đăng ký, tài khoản chờ Admin xét duyệt. Bạn vẫn có thể xem dữ liệu trong thời gian chờ.
+                                    </p>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={handleNextStep}
+                                    disabled={isSubmitting}
+                                    className="w-full py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold rounded-xl shadow-lg shadow-blue-600/25 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {['teacher', 'gvbm'].includes(requestedRole) ? (
+                                        <>
+                                            <BookOpen size={20} />
+                                            <span>Tiếp theo: Chọn lớp</span>
+                                        </>
+                                    ) : (
+                                        isSubmitting ? (
+                                            <>
+                                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                <span>Đang xử lý...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <CheckCircle2 size={20} />
+                                                <span>Xác nhận & Hoàn tất</span>
+                                            </>
+                                        )
+                                    )}
+                                </button>
+                            </>
+                        ) : (
+                            /* === BƯỚC 2: CHỌN LỚP === */
+                            <form onSubmit={handleSetupRole}>
+                                {loadingClasses ? (
+                                    <div className="flex items-center justify-center py-8 gap-3 text-gray-400">
+                                        <div className="w-6 h-6 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
+                                        <span className="text-sm">Đang tải danh sách lớp...</span>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-5">
+                                        {/* GVCN: Chọn lớp chủ nhiệm */}
+                                        {requestedRole === 'teacher' && (
+                                            <div>
+                                                <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                                                    <UserCheck size={16} className="text-green-600" />
+                                                    Lớp Chủ Nhiệm <span className="text-red-500">*</span>
+                                                </label>
+                                                <select
+                                                    value={homeroomClassId}
+                                                    onChange={(e) => setHomeroomClassId(e.target.value)}
+                                                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-green-500 focus:ring-2 focus:ring-green-500/20 outline-none text-blue-700 font-bold hover:bg-blue-50 bg-white transition-all cursor-pointer"
+                                                >
+                                                    <option value="">-- Chọn lớp chủ nhiệm --</option>
+                                                    {Object.entries(classesByGrade).map(([grade, classes]) => (
+                                                        <optgroup key={grade} label={`Khối ${grade}`}>
+                                                            {classes.map(cls => (
+                                                                <option key={cls.id} value={cls.id}>{cls.name}</option>
+                                                            ))}
+                                                        </optgroup>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
+
+                                        {/* GVCN + GVBM: Chọn lớp bộ môn (đa chọn) */}
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                                                <BookOpen size={16} className="text-blue-600" />
+                                                Lớp Bộ Môn (lớp của tôi)
+                                                <span className="text-xs font-normal text-gray-400 ml-1">— chọn nhiều lớp</span>
+                                            </label>
+                                            <div className="border border-gray-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
+                                                {allClasses.length === 0 ? (
+                                                    <p className="text-sm text-gray-400 text-center py-4">Chưa có lớp nào trong hệ thống</p>
+                                                ) : (
+                                                    Object.entries(classesByGrade).map(([grade, classes]) => (
+                                                        <div key={grade}>
+                                                            <div className="px-3 py-1.5 bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100">
+                                                                Khối {grade}
+                                                            </div>
+                                                            {classes.map(cls => (
+                                                                <label
+                                                                    key={cls.id}
+                                                                    className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-blue-50 transition-colors border-b border-gray-50 last:border-0 ${subjectClassIds.includes(cls.id) ? 'bg-blue-50' : ''}`}
+                                                                >
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={subjectClassIds.includes(cls.id)}
+                                                                        onChange={() => toggleSubjectClass(cls.id)}
+                                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                                    />
+                                                                    <span className="text-sm text-gray-800">{cls.name}</span>
+                                                                </label>
+                                                            ))}
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                            {subjectClassIds.length > 0 && (
+                                                <p className="text-xs text-blue-600 mt-1.5">
+                                                    Đã chọn {subjectClassIds.length} lớp bộ môn
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="flex gap-3 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setStep('role'); setLocalError(''); }}
+                                        className="px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition-colors text-sm"
+                                    >
+                                        ← Quay lại
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={isSubmitting || loadingClasses}
+                                        className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold rounded-xl shadow-lg shadow-blue-600/25 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    >
+                                        {isSubmitting ? (
+                                            <>
+                                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                <span>Đang lưu...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <CheckCircle2 size={20} />
+                                                <span>Xác nhận & Hoàn tất</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </form>
+                        )}
+                    </div>
+                ) : (
+                    /* Form Login Thường */
+                    <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-xl shadow-gray-200/50 border border-gray-100 p-6 space-y-5">
+
+                        {/* Error */}
+                        {displayError && (
+                            <div className="flex items-start gap-3 bg-red-50 text-red-700 text-sm px-4 py-3 rounded-xl border border-red-100">
+                                <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                                <span>{displayError}</span>
+                            </div>
+                        )}
+
+                        {/* Email or Student Code */}
+                        <div>
+                            <label htmlFor="emailOrCode" className="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Tên đăng nhập (Email / Mã HS)
+                            </label>
                             <input
-                                type="email"
-                                required
-                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent focus:outline-none transition-all"
-                                placeholder="email@example.com"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
+                                id="emailOrCode"
+                                type="text"
+                                value={emailOrCode}
+                                onChange={(e) => setEmailOrCode(e.target.value)}
+                                placeholder="giaovien@email.com hoặc hs8a13_01"
+                                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-gray-900 placeholder:text-gray-400 transition-all"
+                                autoComplete="username"
+                                autoFocus
                             />
                         </div>
-                    </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Mật khẩu</label>
-                        <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                            <input
-                                type="password"
-                                required
-                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent focus:outline-none transition-all"
-                                placeholder="••••••••"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                            />
-                        </div>
-                    </div>
-
-                    {isRegister && (
-                        <div className="animate-in fade-in slide-in-from-top-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-1.5">Nhập lại Mật khẩu</label>
+                        {/* Password */}
+                        <div>
+                            <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-1.5">
+                                Mật khẩu
+                            </label>
                             <div className="relative">
-                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                 <input
-                                    type="password"
-                                    required
-                                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent focus:outline-none transition-all"
+                                    id="password"
+                                    type={showPassword ? 'text' : 'password'}
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
                                     placeholder="••••••••"
-                                    value={confirmPass}
-                                    onChange={(e) => setConfirmPass(e.target.value)}
+                                    className="w-full px-4 py-3 pr-12 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-gray-900 placeholder:text-gray-400 transition-all"
+                                    autoComplete="current-password"
                                 />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                    tabIndex={-1}
+                                >
+                                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                                </button>
                             </div>
                         </div>
-                    )}
 
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full bg-primary hover:bg-primary-dark text-white font-bold py-3 rounded-xl shadow-lg shadow-primary/30 flex items-center justify-center gap-2 transition-all disabled:opacity-70 active:scale-95 translate-y-0"
-                    >
-                        {loading ? <Loader2 className="animate-spin" /> : (
-                            isRegister ? <><UserPlus size={20} /> ĐĂNG KÝ TÀI KHOẢN</> : <><LogIn size={20} /> ĐĂNG NHẬP</>
-                        )}
-                    </button>
-                </form>
+                        {/* Submit */}
+                        <div className="pt-2">
+                            <button
+                                type="submit"
+                                disabled={isSubmitting || loading}
+                                className="w-full py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold rounded-xl shadow-lg shadow-blue-600/25 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                {isSubmitting ? (
+                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                ) : (
+                                    <>
+                                        <LogIn size={20} />
+                                        <span>Đăng nhập</span>
+                                    </>
+                                )}
+                            </button>
 
-                <div className="mt-6 text-center">
-                    <button
-                        onClick={() => { setIsRegister(!isRegister); setError(''); }}
-                        className="text-primary hover:text-primary-dark font-medium text-sm hover:underline transition-all"
-                    >
-                        {isRegister ? 'Đã có tài khoản? Đăng nhập ngay' : 'Chưa có tài khoản? Tạo mới miễn phí'}
-                    </button>
-                </div>
+                            <div className="relative my-6 flex items-center justify-center">
+                                <div className="absolute inset-0 flex items-center">
+                                    <div className="w-full border-t border-gray-200"></div>
+                                </div>
+                                <span className="relative bg-white px-3 text-sm text-gray-400 font-medium">Hoặc</span>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={handleGoogleLogin}
+                                disabled={isSubmitting || loading}
+                                className="w-full py-3 bg-white hover:bg-gray-50 active:bg-gray-100 text-gray-700 font-medium rounded-xl shadow-sm border border-gray-200 transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-3"
+                            >
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                                </svg>
+                                <span>Tiếp tục với Google</span>
+                            </button>
+                        </div>
+                    </form>
+                )}
+
+                {/* Footer */}
+                <p className="text-center text-xs text-gray-400 mt-6">
+                    Lần đầu đăng nhập Google? Chọn vai trò và lớp để Admin xét duyệt.
+                </p>
             </div>
         </div>
     );

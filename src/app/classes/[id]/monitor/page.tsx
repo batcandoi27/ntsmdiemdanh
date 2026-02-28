@@ -7,11 +7,13 @@ import { Column } from '@/types/models';
 import { ArrowLeft, Clock, CheckSquare, ChevronRight, Loader2, Calendar, Archive } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { useAuth } from '@/context/auth-context';
 
 export default function ClassMonitorPage() {
     const params = useParams();
     const router = useRouter();
     const classId = params.id as string;
+    const { appUser } = useAuth();
 
     const [loading, setLoading] = useState(true);
     const [periodColumns, setPeriodColumns] = useState<Column[]>([]);
@@ -20,13 +22,13 @@ export default function ClassMonitorPage() {
 
     useEffect(() => {
         loadData();
-    }, [classId]);
+    }, [classId, appUser]);
 
     const loadData = async () => {
         try {
             const [allColumns, expired] = await Promise.all([
-                getCustomColumns(classId),
-                getExpiredColumns(classId)
+                getCustomColumns(classId, appUser?.uid),
+                getExpiredColumns(classId, appUser?.uid)
             ]);
             setPeriodColumns(allColumns.filter(c => c.frequency === 'period' && !c.archived));
             setOneTimeColumns(allColumns.filter(c => c.frequency === 'one_time' && !c.archived));

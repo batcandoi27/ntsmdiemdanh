@@ -6,8 +6,10 @@ import { FirebaseAdapter } from '@/services/firebase-adapter';
 import { Check, Search, Save, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/auth-context';
 
 export function MyClassesTab() {
+    const { appUser } = useAuth();
     const [classes, setClasses] = useState<Class[]>([]);
     const [myClassIds, setMyClassIds] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
@@ -15,9 +17,13 @@ export function MyClassesTab() {
     const [searchTerm, setSearchTerm] = useState('');
     const router = useRouter();
 
+    const getStorageKey = () => `myClasses_${appUser?.uid || 'guest'}`;
+
     useEffect(() => {
-        loadData();
-    }, []);
+        if (appUser) {
+            loadData();
+        }
+    }, [appUser]);
 
     const loadData = async () => {
         setLoading(true);
@@ -31,9 +37,12 @@ export function MyClassesTab() {
             setClasses(allClasses);
 
             // 2. Load saved preference
-            const saved = localStorage.getItem('myClasses');
+            const saved = localStorage.getItem(getStorageKey());
             if (saved) {
                 setMyClassIds(JSON.parse(saved));
+            } else if (appUser?.assignedClassIds && appUser.assignedClassIds.length > 0) {
+                // Tự động load từ profile trên Firebase nếu lần đầu chưa có
+                setMyClassIds(appUser.assignedClassIds);
             }
         } catch (error) {
             console.error(error);
@@ -55,7 +64,7 @@ export function MyClassesTab() {
     const handleSave = () => {
         setSaving(true);
         try {
-            localStorage.setItem('myClasses', JSON.stringify(myClassIds));
+            localStorage.setItem(getStorageKey(), JSON.stringify(myClassIds));
             // Trigger an event so other components can update if needed
             window.dispatchEvent(new Event('myClassesUpdated'));
 

@@ -205,10 +205,27 @@ export async function deleteRecord(columnId: string, recordId: string): Promise<
 }
 
 /**
- * Get all records for a column (any frequency)
+ * Get records for a column with optional filters
  */
-export async function getAllRecordsForColumn(columnId: string): Promise<(DailyRecord | PeriodRecord | OneTimeRecord)[]> {
+export async function getAllRecordsForColumn(
+    columnId: string,
+    filters?: { startDate?: string; endDate?: string; periodKey?: string }
+): Promise<(DailyRecord | PeriodRecord | OneTimeRecord)[]> {
     const colRef = collection(db, getColumnDataPath(columnId));
-    const snap = await getDocs(colRef);
+    let q = query(colRef);
+
+    if (filters) {
+        if (filters.periodKey) {
+            q = query(q, where('periodKey', '==', filters.periodKey));
+        }
+        if (filters.startDate) {
+            q = query(q, where('date', '>=', filters.startDate));
+        }
+        if (filters.endDate) {
+            q = query(q, where('date', '<=', filters.endDate));
+        }
+    }
+
+    const snap = await getDocs(q);
     return snap.docs.map(d => d.data() as DailyRecord | PeriodRecord | OneTimeRecord);
 }

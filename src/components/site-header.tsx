@@ -3,23 +3,33 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { School, BookOpen, BarChart3, Upload, Menu, X, Home, Smartphone, Tablet, Monitor, Settings, Zap } from 'lucide-react';
+import { School, BookOpen, BarChart3, Upload, Menu, X, Home, Smartphone, Tablet, Monitor, Settings, Zap, LogOut, User } from 'lucide-react';
+import { useAuth } from '@/context/auth-context';
+import { ROLE_DISPLAY, UserRole } from '@/types/models';
 import { useState } from 'react';
 import { useViewMode } from '@/context/view-mode-context';
 
-const navItems = [
-    { href: '/', label: 'Trang Chủ', icon: Home },
-    { href: '/quick-attendance', label: 'Điểm Danh', icon: Zap },
-    { href: '/monitor', label: 'Sổ Theo Dõi', icon: BookOpen },
-    { href: '/classes', label: 'Lớp Học', icon: School },
-    { href: '/reports', label: 'Báo Cáo', icon: BarChart3 },
-    { href: '/settings', label: 'Cài Đặt', icon: Settings },
+const allNavItems = [
+    { href: '/', label: 'Trang Chủ', icon: Home, roles: ['admin', 'principal', 'supervisor', 'teacher', 'class_monitor'] as UserRole[] },
+    { href: '/quick-attendance', label: 'Điểm Danh', icon: Zap, roles: ['admin', 'supervisor', 'teacher', 'class_monitor'] as UserRole[] },
+    { href: '/monitor', label: 'Sổ Theo Dõi', icon: BookOpen, roles: ['admin', 'principal', 'supervisor', 'teacher'] as UserRole[] },
+    { href: '/classes', label: 'Lớp Học', icon: School, roles: ['admin', 'principal', 'supervisor', 'teacher'] as UserRole[] },
+    { href: '/reports', label: 'Báo Cáo', icon: BarChart3, roles: ['admin', 'principal', 'supervisor', 'teacher'] as UserRole[] },
+    { href: '/settings', label: 'Cài Đặt', icon: Settings, roles: ['admin', 'principal'] as UserRole[] },
 ];
 
 export function SiteHeader() {
     const pathname = usePathname();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const { viewDevice, setViewDevice } = useViewMode();
+    const { appUser, signOut } = useAuth();
+
+    // Lọc nav theo role
+    const navItems = appUser
+        ? allNavItems.filter(item => item.roles.includes(appUser.role))
+        : allNavItems;
+
+    const roleInfo = appUser ? ROLE_DISPLAY[appUser.role] : null;
 
     return (
         <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -43,9 +53,33 @@ export function SiteHeader() {
                         </Link>
                     </div>
 
-                    {/* View Mode Toggles - Desktop Center */}
-                    <div className="hidden md:flex items-center justify-center absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-                        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200 shadow-inner">
+                    {/* Desktop Navigation */}
+                    <nav className="hidden lg:flex items-center space-x-1 flex-1 px-4">
+                        {navItems.map((item) => {
+                            const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+                            return (
+                                <Link
+                                    key={item.href}
+                                    href={item.href}
+                                    className={cn(
+                                        "px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all duration-200 whitespace-nowrap",
+                                        isActive
+                                            ? "bg-primary/10 text-primary"
+                                            : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                                    )}
+                                >
+                                    <item.icon size={18} />
+                                    {item.label}
+                                </Link>
+                            );
+                        })}
+                    </nav>
+
+                    {/* Right Side: View Mode + User Info + Mobile Menu */}
+                    <div className="flex items-center gap-2 ml-auto">
+
+                        {/* View Mode Toggles - Desktop / Tablet Right Side */}
+                        <div className="hidden lg:flex items-center gap-1 bg-gray-50 p-1 rounded-lg border border-gray-200/60 shadow-inner mr-2">
                             <button
                                 onClick={() => setViewDevice('mobile')}
                                 className={cn(
@@ -77,35 +111,35 @@ export function SiteHeader() {
                                 <Monitor size={18} />
                             </button>
                         </div>
-                    </div>
 
-                    {/* Desktop Navigation */}
-                    <nav className="hidden md:flex items-center space-x-1">
-                        {navItems.map((item) => {
-                            const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
-                            return (
-                                <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    className={cn(
-                                        "px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all duration-200",
-                                        isActive
-                                            ? "bg-primary/10 text-primary"
-                                            : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                                    )}
+                        {/* User Info (Desktop) */}
+                        {appUser && (
+                            <div className="hidden lg:flex items-center gap-2">
+                                <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg border border-gray-100">
+                                    <span className="text-base">{roleInfo?.badge}</span>
+                                    <div className="flex flex-col leading-none">
+                                        <span className="text-xs font-semibold text-gray-700 truncate max-w-[120px]">
+                                            {appUser.displayName}
+                                        </span>
+                                        <span className={cn('text-[10px] font-medium', roleInfo?.color)}>
+                                            {roleInfo?.label}
+                                        </span>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={signOut}
+                                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Đăng xuất"
                                 >
-                                    <item.icon size={18} />
-                                    {item.label}
-                                </Link>
-                            );
-                        })}
-                    </nav>
+                                    <LogOut size={18} />
+                                </button>
+                            </div>
+                        )}
 
-                    {/* Mobile Menu Button */}
-                    <div className="flex items-center md:hidden">
+                        {/* Mobile Menu Button */}
                         <button
                             onClick={() => setIsMenuOpen(!isMenuOpen)}
-                            className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+                            className="lg:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
                         >
                             {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
                         </button>
@@ -141,6 +175,28 @@ export function SiteHeader() {
                                 </Link>
                             );
                         })}
+
+                        {/* Mobile: User Info + Logout */}
+                        {appUser && (
+                            <div className="mt-2 pt-2 border-t border-gray-100">
+                                <div className="flex items-center justify-between px-4 py-2">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-base">{roleInfo?.badge}</span>
+                                        <div className="flex flex-col leading-none">
+                                            <span className="text-sm font-semibold text-gray-700">{appUser.displayName}</span>
+                                            <span className={cn('text-xs font-medium', roleInfo?.color)}>{roleInfo?.label}</span>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={signOut}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                    >
+                                        <LogOut size={16} />
+                                        Đăng xuất
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

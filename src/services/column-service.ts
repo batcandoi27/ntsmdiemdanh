@@ -15,11 +15,16 @@ const CURRENT_YEAR = '2025-2026';
 /**
  * Get all columns for a class
  */
-export async function getColumns(classId: string): Promise<Column[]> {
+export async function getColumns(classId: string, userId?: string): Promise<Column[]> {
     const colRef = collection(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'columns');
     const q = query(colRef, where('classId', '==', classId));
     const snap = await getDocs(q);
-    const columns = snap.docs.map(d => d.data() as Column);
+    let columns = snap.docs.map(d => d.data() as Column);
+
+    // Filter by userId if requested
+    if (userId) {
+        columns = columns.filter(c => c.userId === 'system' || c.userId === userId);
+    }
 
     // Sort by order, then by createdAt
     return columns.sort((a, b) => {
@@ -31,8 +36,8 @@ export async function getColumns(classId: string): Promise<Column[]> {
 /**
  * Get columns filtered by frequency
  */
-export async function getColumnsByFrequency(classId: string, frequency: ColumnFrequency): Promise<Column[]> {
-    const columns = await getColumns(classId);
+export async function getColumnsByFrequency(classId: string, frequency: ColumnFrequency, userId?: string): Promise<Column[]> {
+    const columns = await getColumns(classId, userId);
     return columns.filter(c => c.frequency === frequency && !c.archived);
 }
 
@@ -171,16 +176,16 @@ export async function initializeFixedColumns(classId: string): Promise<void> {
 /**
  * Get fixed columns for a class
  */
-export async function getFixedColumns(classId: string): Promise<Column[]> {
-    const columns = await getColumns(classId);
+export async function getFixedColumns(classId: string, userId?: string): Promise<Column[]> {
+    const columns = await getColumns(classId, userId);
     return columns.filter(c => c.scope === 'fixed');
 }
 
 /**
  * Get custom columns for a class
  */
-export async function getCustomColumns(classId: string): Promise<Column[]> {
-    const columns = await getColumns(classId);
+export async function getCustomColumns(classId: string, userId?: string): Promise<Column[]> {
+    const columns = await getColumns(classId, userId);
     return columns.filter(c => c.scope === 'custom');
 }
 
@@ -211,8 +216,8 @@ export async function clonePeriodColumn(columnId: string, newPeriodConfig: Colum
 /**
  * Get columns that are candidates for archiving (e.g. expired period)
  */
-export async function getExpiredColumns(classId: string): Promise<Column[]> {
-    const columns = await getColumns(classId);
+export async function getExpiredColumns(classId: string, userId?: string): Promise<Column[]> {
+    const columns = await getColumns(classId, userId);
     const now = new Date();
 
     return columns.filter(c => {

@@ -51,16 +51,12 @@ export const DEFAULT_ATTENDANCE_SUGGESTIONS = [
     'Đi muộn',
 ];
 
-/**
- * Tạo template cho fixed columns của một lớp
- */
 export function createFixedColumnsForClass(classId: string): Omit<Column, 'createdAt' | 'updatedAt'>[] {
-    const now = new Date().toISOString();
-
     return [
         {
             id: `${classId}_${FIXED_COLUMN_IDS.ATTENDANCE}`,
             classId,
+            userId: 'system',
             name: FIXED_COLUMN_NAMES[FIXED_COLUMN_IDS.ATTENDANCE],
             scope: 'fixed',
             frequency: 'daily',
@@ -72,6 +68,7 @@ export function createFixedColumnsForClass(classId: string): Omit<Column, 'creat
         {
             id: `${classId}_${FIXED_COLUMN_IDS.VIOLATION}`,
             classId,
+            userId: 'system',
             name: FIXED_COLUMN_NAMES[FIXED_COLUMN_IDS.VIOLATION],
             scope: 'fixed',
             frequency: 'daily',
@@ -83,6 +80,7 @@ export function createFixedColumnsForClass(classId: string): Omit<Column, 'creat
         {
             id: `${classId}_${FIXED_COLUMN_IDS.REWARD}`,
             classId,
+            userId: 'system',
             name: FIXED_COLUMN_NAMES[FIXED_COLUMN_IDS.REWARD],
             scope: 'fixed',
             frequency: 'daily',

@@ -1,0 +1,37 @@
+src/app/actions/import.ts(81,35): error TS2345: Argument of type '{ code: string; classId: string; order: number; fullName: string; firstName: string; lastName: string; birthday: string; gender: any; status: any; ethnicity: string; govId: string; }' is not assignable to parameter of type 'Student'.
+  Property 'id' is missing in type '{ code: string; classId: string; order: number; fullName: string; firstName: string; lastName: string; birthday: string; gender: any; status: any; ethnicity: string; govId: string; }' but required in type 'Student'.
+src/app/actions/quick-attendance.ts(79,75): error TS2554: Expected 1 arguments, but got 2.
+src/app/actions/quick-attendance.ts(160,46): error TS2554: Expected 1 arguments, but got 2.
+src/app/actions/quick-attendance.ts(190,52): error TS2554: Expected 1 arguments, but got 2.
+src/app/actions/quick-attendance.ts(283,75): error TS2554: Expected 1 arguments, but got 2.
+src/app/actions/quick-attendance.ts(371,54): error TS2339: Property 'isActive' does not exist on type 'Column'.
+src/app/actions/quick-attendance.ts(426,31): error TS2345: Argument of type '{ columnId: string; studentCode: string; date: string; selectedSuggestions: string[]; note: string; }' is not assignable to parameter of type 'Omit<DailyRecord, "id" | "updatedAt">'.
+  Property 'classId' is missing in type '{ columnId: string; studentCode: string; date: string; selectedSuggestions: string[]; note: string; }' but required in type 'Omit<DailyRecord, "id" | "updatedAt">'.
+src/app/actions/report.ts(75,49): error TS2367: This comparison appears to be unintentional because the types '"P" | "K" | "V" | "T" | "VP" | "KH"' and '""' have no overlap.
+src/app/actions/report.ts(197,39): error TS2554: Expected 2 arguments, but got 1.
+src/app/actions/report.ts(214,79): error TS2339: Property 'subPeriodId' does not exist on type 'PeriodRecord'.
+src/app/actions/report.ts(222,25): error TS2322: Type 'string | number | boolean' is not assignable to type 'string'.
+  Type 'number' is not assignable to type 'string'.
+src/app/actions/report.ts(230,42): error TS2551: Property 'completed' does not exist on type 'OneTimeRecord'. Did you mean 'completedAt'?
+src/app/actions/report.ts(230,57): error TS2339: Property 'value' does not exist on type 'OneTimeRecord'.
+src/app/attendance/page.tsx(85,53): error TS2367: This comparison appears to be unintentional because the types '"" | "P" | "K" | "C" | "V" | "T" | "KH"' and '"VP"' have no overlap.
+src/app/classes/[id]/monitor/[columnId]/page.tsx(75,85): error TS2339: Property 'value' does not exist on type 'OneTimeRecord'.
+src/app/classes/[id]/monitor/[columnId]/page.tsx(105,17): error TS2353: Object literal may only specify known properties, and 'value' does not exist in type 'Omit<OneTimeRecord, "id" | "updatedAt">'.
+src/app/reports/page.tsx(60,60): error TS2554: Expected 1 arguments, but got 3.
+src/app/reports/page.tsx(77,39): error TS2345: Argument of type 'AbsenceDetail[]' is not assignable to parameter of type 'ExportData[]'.
+  Type 'AbsenceDetail' is missing the following properties from type 'ExportData': students, year, month
+src/components/attendance-sheet.tsx(29,7): error TS2300: Duplicate identifier 'StatusBtn'.
+src/components/attendance-sheet.tsx(206,26): error TS2304: Cannot find name 'useAppSettings'.
+src/components/attendance-sheet.tsx(373,43): error TS2322: Type '"violation"' is not assignable to type '"" | AttendanceStatusV3'.
+src/components/attendance-sheet.tsx(374,43): error TS2322: Type '"praise"' is not assignable to type '"" | AttendanceStatusV3'.
+src/components/attendance-sheet.tsx(692,10): error TS2300: Duplicate identifier 'StatusBtn'.
+src/components/layout/bottom-nav.tsx(13,13): error TS2339: Property 'isPublicView' does not exist on type 'ViewModeContextType'.
+src/components/quick-attendance/mobile-class-detail.tsx(124,88): error TS2554: Expected 3 arguments, but got 4.
+src/components/quick-attendance/student-selector-dialog.tsx(125,43): error TS2322: Type '"violation"' is not assignable to type '"" | AttendanceStatusV3'.
+src/components/quick-attendance/student-selector-dialog.tsx(126,43): error TS2322: Type '"praise"' is not assignable to type '"" | AttendanceStatusV3'.
+src/components/reports/reports-stats.tsx(9,25): error TS2339: Property 'summary' does not exist on type 'ReportResult'.
+src/components/settings/timetable-tab.tsx(159,34): error TS2304: Cannot find name 'Plus'.
+src/components/settings/year-tab.tsx(36,44): error TS2339: Property 'availableYears' does not exist on type 'AppSettings'.
+src/services/export-v3-service.ts(229,21): error TS2351: This expression is not constructable.
+  Not all constituents of type 'JSZip | { default: JSZip; files: { [key: string]: JSZipObject; }; file(path: string): JSZipObject; file(path: RegExp): JSZipObject[]; file<T extends JSZip.InputType>(path: string, data: InputByType[T] | Promise<...>, options?: JSZipFileOptions): JSZip; file<T extends JSZip.InputType>(path: string, data: null, option...' are constructable.
+    Type '{ default: JSZip; files: { [key: string]: JSZipObject; }; file(path: string): JSZipObject; file(path: RegExp): JSZipObject[]; file<T extends JSZip.InputType>(path: string, data: InputByType[T] | Promise<...>, options?: JSZipFileOptions): JSZip; file<T extends JSZip.InputType>(path: string, data: null, options?: JSZi...' has no construct signatures.

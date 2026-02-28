@@ -33,7 +33,11 @@ export interface StudentAttendanceDetail {
     status: AttendanceStatus;
 }
 
-export async function getGradeAttendanceSummary(grade: number, dateStr: string): Promise<BlockAttendanceItem[]> {
+import { getAttendanceByClasses } from '@/services/attendance-v3-service';
+import { SessionType } from '@/types/timetable';
+import { getEffectiveStatus } from '@/services/student-status-service';
+
+export async function getGradeAttendanceSummary(grade: number, dateStr: string, session: SessionType = 'morning'): Promise<BlockAttendanceItem[]> {
     // 1. Get all classes
     const allClasses = await db.getClasses();
     const gradeClasses = allClasses.filter(c => c.grade === grade)
@@ -43,16 +47,22 @@ export async function getGradeAttendanceSummary(grade: number, dateStr: string):
 
     const classIds = gradeClasses.map(c => c.id);
 
-    // 2. Get Attendance Records for the date
-    // We use getReportData for a single day range
-    const records = await db.getReportData(dateStr, dateStr, classIds);
+    // 2. Get All V3 Attendance Records chỉ cho các lớp trong khối
+    const allRecords = await getAttendanceByClasses(dateStr, classIds, session);
 
-    // Map records by classId for easy lookup
-    const recordMap = new Map(records.map(r => [r.classId, r]));
+    // Lọc theo period (cả buổi)
+    const records = allRecords.filter(r => r.period === null);
+
+    // Map records by classId -> Array of records
+    const recordMap = new Map<string, typeof records>();
+    records.forEach(r => {
+        if (!recordMap.has(r.classId)) recordMap.set(r.classId, []);
+        recordMap.get(r.classId)!.push(r);
+    });
 
     // 3. Build Result
     const result: BlockAttendanceItem[] = await Promise.all(gradeClasses.map(async cls => {
-        const record = recordMap.get(cls.id);
+        const classRecords = recordMap.get(cls.id) || [];
         const counts = {
             P: 0, K: 0, V: 0, T: 0, VP: 0, KH: 0, Present: 0, TotalAbsent: 0
         };
@@ -65,32 +75,45 @@ export async function getGradeAttendanceSummary(grade: number, dateStr: string):
             KH: [] as { name: string; stt: string; note?: string }[]
         };
 
-        // Need student info for names and STT
-        // Optimization: We could fetch all students upfront, but per-class is fine for < 20 classes.
         const students = await db.getStudentsByClass(cls.id);
-        const studentMap = new Map(students.map(s => [s.code, s]));
+        const activeStudents = students.filter(s => getEffectiveStatus(s) !== 'dropped_out');
+
+        const studentMap = new Map(activeStudents.map(s => [s.code, s]));
         const getSTT = (code: string) => {
             const parts = code.split('_');
             return parts.length > 1 ? parts[parts.length - 1] : '';
         };
 
-        if (record && record.absences) {
-            Object.entries(record.absences).forEach(([code, status]) => {
-                const student = studentMap.get(code);
-                const name = student?.fullName || code;
-                const stt = student ? getSTT(student.code) : '';
-                const note = record.notes?.[code] || '';
+        // Exception-only: only process the explicit records
+        classRecords.forEach(record => {
+            const code = record.studentId;
+            const student = studentMap.get(code); // Might be undefined if dropped_out, skip if so?
+            if (!student) return;
 
-                const item = { name, stt, note };
+            const name = student.fullName || code;
+            const stt = getSTT(student.code);
+            const note = record.note || '';
+            const status = record.status;
 
-                if (status === 'P') { counts.P++; lists.P.push(item); }
-                else if (status === 'K') { counts.K++; lists.K.push(item); }
-                else if (status === 'V') { counts.V++; lists.V.push(item); }
-                else if (status === 'T') { counts.T++; lists.T.push(item); }
-                else if (status === 'VP') { counts.VP++; lists.VP.push(item); }
-                else if (status === 'KH') { counts.KH++; lists.KH.push(item); }
-            });
-        }
+            const item = { name, stt, note };
+
+            // V3 status strings might differ slightly from UI (e.g. absent/late/etc), but let's map them
+            // In v3: 'present' | 'absent' | 'late' | 'excused' | 'violation' | 'praise'
+            // Map to old ui status: K (absent), P (excused), V (vắng?), T (late), VP (violation), KH (praise)
+            let uiStatus = '';
+            if (status === 'excused') uiStatus = 'P';
+            else if (status === 'absent') uiStatus = 'K';
+            else if (status === 'late') uiStatus = 'T';
+            else if (status === 'violation') uiStatus = 'VP';
+            else if (status === 'praise') uiStatus = 'KH';
+
+            if (uiStatus === 'P') { counts.P++; lists.P.push(item); }
+            else if (uiStatus === 'K') { counts.K++; lists.K.push(item); }
+            // Assuming V not used extensively in v3, map absent to K usually
+            else if (uiStatus === 'T') { counts.T++; lists.T.push(item); }
+            else if (uiStatus === 'VP') { counts.VP++; lists.VP.push(item); }
+            else if (uiStatus === 'KH') { counts.KH++; lists.KH.push(item); }
+        });
 
         // Sort lists by STT
         const sortFn = (a: { stt: string }, b: { stt: string }) => (parseInt(a.stt) || 0) - (parseInt(b.stt) || 0);
@@ -103,12 +126,12 @@ export async function getGradeAttendanceSummary(grade: number, dateStr: string):
 
         const totalAbsence = counts.P + counts.K + counts.V;
         counts.TotalAbsent = totalAbsence;
-        counts.Present = (cls.totalStudents || 0) - totalAbsence;
+        counts.Present = activeStudents.length - totalAbsence; // calculated present
 
         return {
             classId: cls.id,
             className: cls.name,
-            totalStudents: cls.totalStudents || 0,
+            totalStudents: activeStudents.length, // use active instead of total historical
             attendanceCount: counts,
             studentLists: lists
         };
@@ -121,19 +144,52 @@ export interface StudentAttendanceDetail {
     student: Student;
     status: AttendanceStatus;
     note?: string;
+    effectiveStatus?: string;
 }
 
 // ...
 
-export async function getClassAttendanceDetails(classId: string, dateStr: string): Promise<StudentAttendanceDetail[]> {
-    const students = await db.getStudentsByClass(classId);
-    const attendance = await db.getAttendance(classId, dateStr);
+import { getClassAttendance } from '@/services/attendance-v3-service';
 
-    return students.map(s => ({
-        student: s,
-        status: attendance?.absences?.[s.code] || '',
-        note: attendance?.notes?.[s.code] || ''
-    })).sort((a, b) => a.student.order - b.student.order); // Sort by order
+export async function getClassAttendanceDetails(classId: string, dateStr: string, session: SessionType = 'morning'): Promise<StudentAttendanceDetail[]> {
+    const allStudents = await db.getStudentsByClass(classId);
+
+    // Filter out dropped_out and suspended
+    const targetDate = new Date(dateStr);
+    const students = allStudents.filter(s => {
+        const status = getEffectiveStatus(s);
+        return status !== 'dropped_out' && status !== 'suspended';
+    });
+
+    // V3: Get records (only exceptions exist)
+    const records = await getClassAttendance(classId, dateStr, session);
+
+    // Map records by studentId
+    const recordMap = new Map<string, typeof records[0]>();
+    records.forEach(r => recordMap.set(r.studentId, r));
+
+    return students.map(s => {
+        const record = recordMap.get(s.code);
+        let uiStatus = ''; // Default is present (empty string in old UI)
+        let note = '';
+
+        if (record) {
+            note = record.note || '';
+            const status = record.status;
+            if (status === 'excused') uiStatus = 'P';
+            else if (status === 'absent') uiStatus = 'K';
+            else if (status === 'late') uiStatus = 'T';
+            else if (status === 'violation') uiStatus = 'VP';
+            else if (status === 'praise') uiStatus = 'KH';
+        }
+
+        return {
+            student: s,
+            status: uiStatus as AttendanceStatus,
+            note: note,
+            effectiveStatus: getEffectiveStatus(s)
+        };
+    }).sort((a, b) => a.student.order - b.student.order); // Sort by order
 }
 
 export async function updateBatchAttendance(
@@ -186,7 +242,7 @@ export async function updateBatchAttendance(
     await db.saveAttendance(record);
 }
 
-export async function getClassesAttendanceSummary(classIds: string[], dateStr: string): Promise<BlockAttendanceItem[]> {
+export async function getClassesAttendanceSummary(classIds: string[], dateStr: string, session: SessionType = 'morning'): Promise<BlockAttendanceItem[]> {
     if (classIds.length === 0) return [];
 
     // 1. Get all classes
@@ -196,13 +252,21 @@ export async function getClassesAttendanceSummary(classIds: string[], dateStr: s
 
     if (targetedClasses.length === 0) return [];
 
-    // 2. Get Attendance Records
-    const records = await db.getReportData(dateStr, dateStr, classIds);
-    const recordMap = new Map(records.map(r => [r.classId, r]));
+    // 2. Get All V3 Attendance Records chỉ cho các target classes
+    const allRecords = await getAttendanceByClasses(dateStr, classIds, session);
+
+    // Lọc theo period (cả buổi)
+    const records = allRecords.filter(r => r.period === null);
+
+    const recordMap = new Map<string, typeof records>();
+    records.forEach(r => {
+        if (!recordMap.has(r.classId)) recordMap.set(r.classId, []);
+        recordMap.get(r.classId)!.push(r);
+    });
 
     // 3. Build Result
     const result: BlockAttendanceItem[] = await Promise.all(targetedClasses.map(async cls => {
-        const record = recordMap.get(cls.id);
+        const classRecords = recordMap.get(cls.id) || [];
         const counts = {
             P: 0, K: 0, V: 0, T: 0, VP: 0, KH: 0, Present: 0, TotalAbsent: 0
         };
@@ -216,28 +280,38 @@ export async function getClassesAttendanceSummary(classIds: string[], dateStr: s
         };
 
         const students = await db.getStudentsByClass(cls.id);
-        const studentMap = new Map(students.map(s => [s.code, s]));
+        const activeStudents = students.filter(s => getEffectiveStatus(s) !== 'dropped_out');
+        const studentMap = new Map(activeStudents.map(s => [s.code, s]));
         const getSTT = (code: string) => {
             const parts = code.split('_');
             return parts.length > 1 ? parts[parts.length - 1] : '';
         };
 
-        if (record && record.absences) {
-            Object.entries(record.absences).forEach(([code, status]) => {
-                const student = studentMap.get(code);
-                const name = student?.fullName || code;
-                const stt = student ? getSTT(student.code) : '';
-                const note = record.notes?.[code] || '';
-                const item = { name, stt, note };
+        classRecords.forEach(record => {
+            const code = record.studentId;
+            const student = studentMap.get(code);
+            if (!student) return;
 
-                if (status === 'P') { counts.P++; lists.P.push(item); }
-                else if (status === 'K') { counts.K++; lists.K.push(item); }
-                else if (status === 'V') { counts.V++; lists.V.push(item); }
-                else if (status === 'T') { counts.T++; lists.T.push(item); }
-                else if (status === 'VP') { counts.VP++; lists.VP.push(item); }
-                else if (status === 'KH') { counts.KH++; lists.KH.push(item); }
-            });
-        }
+            const name = student.fullName || code;
+            const stt = getSTT(student.code);
+            const note = record.note || '';
+            const status = record.status;
+
+            const item = { name, stt, note };
+
+            let uiStatus = '';
+            if (status === 'excused') uiStatus = 'P';
+            else if (status === 'absent') uiStatus = 'K';
+            else if (status === 'late') uiStatus = 'T';
+            else if (status === 'violation') uiStatus = 'VP';
+            else if (status === 'praise') uiStatus = 'KH';
+
+            if (uiStatus === 'P') { counts.P++; lists.P.push(item); }
+            else if (uiStatus === 'K') { counts.K++; lists.K.push(item); }
+            else if (uiStatus === 'T') { counts.T++; lists.T.push(item); }
+            else if (uiStatus === 'VP') { counts.VP++; lists.VP.push(item); }
+            else if (uiStatus === 'KH') { counts.KH++; lists.KH.push(item); }
+        });
 
         const sortFn = (a: { stt: string }, b: { stt: string }) => (parseInt(a.stt) || 0) - (parseInt(b.stt) || 0);
         lists.P.sort(sortFn); lists.K.sort(sortFn); lists.V.sort(sortFn);
@@ -245,12 +319,12 @@ export async function getClassesAttendanceSummary(classIds: string[], dateStr: s
 
         const totalAbsence = counts.P + counts.K + counts.V;
         counts.TotalAbsent = totalAbsence;
-        counts.Present = (cls.totalStudents || 0) - totalAbsence;
+        counts.Present = activeStudents.length - totalAbsence;
 
         return {
             classId: cls.id,
             className: cls.name,
-            totalStudents: cls.totalStudents || 0,
+            totalStudents: activeStudents.length,
             attendanceCount: counts,
             studentLists: lists
         };
@@ -273,9 +347,9 @@ export interface DailyAttendanceData {
     studentRecords: Record<string, Record<string, boolean>>; // studentCode -> colId -> hasRecord
 }
 
-export async function getDailyAttendanceData(classId: string, dateStr: string): Promise<DailyAttendanceData> {
+export async function getDailyAttendanceData(classId: string, dateStr: string, session: SessionType = 'morning'): Promise<DailyAttendanceData> {
     // 1. Get Base Students & Attendance
-    const students = await getClassAttendanceDetails(classId, dateStr);
+    const students = await getClassAttendanceDetails(classId, dateStr, session);
 
     // 2. Get Active Daily Columns
     // TODO: Filter by scope if needed (for now fetch all and filter in UI or here)
@@ -294,7 +368,7 @@ export async function getDailyAttendanceData(classId: string, dateStr: string): 
     // - For now, show ALL Daily columns.
 
     // Sort columns by order?
-    const customColumns = allDailyCols.filter(c => c.isActive !== false).sort((a, b) => (1) - (1)); // Todo sort
+    const customColumns = allDailyCols.filter(c => !c.archived).sort((a, b) => (1) - (1)); // Todo sort
 
     // 3. Get Records for these columns
     // We need to fetch records for ALL students in this class for these columns.
@@ -351,6 +425,7 @@ export async function toggleDailyCheck(columnId: string, dateStr: string, studen
 
         await saveDailyRecord({
             columnId,
+            classId: 'unknown', // To be removed or fixed later in column-service if needed, currently dummy
             studentCode,
             date: dateStr,
             selectedSuggestions: ['True'], // Default for boolean toggle

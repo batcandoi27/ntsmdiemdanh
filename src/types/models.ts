@@ -1,3 +1,176 @@
+// ============================================
+// RBAC v3.0 – 5 Roles System
+// ============================================
+
+/**
+ * UserRole – 6 cấp quyền
+ *   admin:         IT toàn quyền
+ *   principal:     Hiệu trưởng / Phó HT
+ *   supervisor:    Giám thị (điểm danh + xem khối)
+ *   teacher:       GVCN (quản lý lớp mình)
+ *   gvbm:          Giáo viên bộ môn (quản lý môn, không sửa status)
+ *   class_monitor: Ban Cán Sự Lớp (điểm danh lớp mình, sửa 30 phút)
+ */
+export type UserRole = 'admin' | 'principal' | 'supervisor' | 'teacher' | 'gvbm' | 'class_monitor';
+
+/**
+ * Flexible permissions per user
+ */
+export interface UserPermissions {
+    canEditAttendance: boolean;
+    canEditStudentStatus: boolean;
+    canCreateAccounts: boolean;
+    canViewAllClasses: boolean;
+    canExportData: boolean;
+    canManageTimetable: boolean;
+    canAccessAPI: boolean;
+}
+
+/**
+ * AppUser – Firestore document: users/{uid}
+ */
+export interface AppUser {
+    uid: string;                    // Firebase Auth UID
+    email?: string;                 // GV dùng email
+    studentCode?: string;           // Ban Cán Sự dùng mã HS (VD: hs8a13_01)
+    displayName: string;            // 'Cô Lan', 'Nguyễn Văn A (LT 8A13)'
+    role: UserRole;
+    assignedClassIds: string[];     // Lớp được phân công (CN + BM)
+    homeroomClassId?: string;       // Lớp chủ nhiệm (chỉ GVCN)
+    assignedGrade?: string;         // Supervisor: 'grade_8' | 'all'
+    permissions: UserPermissions;
+    editWindowMinutes: number;      // class_monitor: 30, teacher: 1440, admin: -1
+    isActive: boolean;
+    createdBy?: string;             // UID người tạo
+    createdAt: string;              // ISO
+    lastLoginAt?: string;           // ISO
+}
+
+/**
+ * Default permissions cho mỗi role
+ */
+export const DEFAULT_PERMISSIONS: Record<UserRole, UserPermissions> = {
+    admin: {
+        canEditAttendance: true,
+        canEditStudentStatus: true,
+        canCreateAccounts: true,
+        canViewAllClasses: true,
+        canExportData: true,
+        canManageTimetable: true,
+        canAccessAPI: true,
+    },
+    principal: {
+        canEditAttendance: false,
+        canEditStudentStatus: true,
+        canCreateAccounts: true,
+        canViewAllClasses: true,
+        canExportData: true,
+        canManageTimetable: true,
+        canAccessAPI: true,
+    },
+    supervisor: {
+        canEditAttendance: true,
+        canEditStudentStatus: false,
+        canCreateAccounts: false,
+        canViewAllClasses: true,
+        canExportData: true,
+        canManageTimetable: false,
+        canAccessAPI: true,
+    },
+    teacher: {
+        canEditAttendance: true,
+        canEditStudentStatus: true, // limited: active ↔ temp_leave only
+        canCreateAccounts: false,
+        canViewAllClasses: false,
+        canExportData: true,
+        canManageTimetable: false,
+        canAccessAPI: false,
+    },
+    gvbm: {
+        canEditAttendance: true,
+        canEditStudentStatus: false,
+        canCreateAccounts: false,
+        canViewAllClasses: false,
+        canExportData: true,
+        canManageTimetable: false,
+        canAccessAPI: false,
+    },
+    class_monitor: {
+        canEditAttendance: true,
+        canEditStudentStatus: false,
+        canCreateAccounts: false,
+        canViewAllClasses: false,
+        canExportData: false,
+        canManageTimetable: false,
+        canAccessAPI: false,
+    },
+};
+
+/**
+ * Default edit window (phút) cho mỗi role
+ */
+export const DEFAULT_EDIT_WINDOW: Record<UserRole, number> = {
+    admin: -1,          // Vô hạn
+    principal: -1,
+    supervisor: 1440,   // 1 ngày
+    teacher: 1440,
+    gvbm: 1440,
+    class_monitor: 30,  // 30 phút
+};
+
+/**
+ * Role display info (badge, color, label)
+ */
+export const ROLE_DISPLAY: Record<UserRole, { label: string; badge: string; color: string }> = {
+    admin: { label: 'Admin', badge: '👑', color: 'text-amber-600' },
+    principal: { label: 'Hiệu trưởng', badge: '⭐', color: 'text-blue-800' },
+    supervisor: { label: 'Giám thị', badge: '👁️', color: 'text-blue-500' },
+    teacher: { label: 'Giáo viên CN', badge: '👨‍🏫', color: 'text-green-600' },
+    gvbm: { label: 'Giáo viên BM', badge: '📘', color: 'text-teal-600' },
+    class_monitor: { label: 'Ban Cán Sự', badge: '📋', color: 'text-purple-600' },
+};
+
+/**
+ * AppSettings – Firestore document: settings/app
+ */
+export interface AppSettings {
+    activeYear: string;             // '2025-2026'
+    schoolName: string;             // 'THCS Nguyễn Trãi'
+    schoolCode?: string;            // 'THCS_NT'
+    periodsPerSession: number;      // 5
+    createdAt: string;
+    updatedAt: string;
+}
+
+// ============================================
+// STUDENT STATUS v3.0
+// ============================================
+
+export type StudentStatus = 'active' | 'temporary_leave' | 'dropped_out' | 'suspended' | 'graduated';
+
+export interface StatusChange {
+    status: StudentStatus;
+    date: string;                   // ISO
+    note: string;
+    changedBy: string;              // UID
+    changedByName: string;
+    changedByRole: UserRole;
+    decisionNumber?: string;        // Số QĐ (cho dropped_out/suspended)
+}
+
+export const STUDENT_STATUS_DISPLAY: Record<StudentStatus, { label: string; icon: string; color: string }> = {
+    active: { label: 'Đang học', icon: '✅', color: 'text-green-600' },
+    temporary_leave: { label: 'Nghỉ tạm thời', icon: '🏥', color: 'text-yellow-600' },
+    dropped_out: { label: 'Thôi học', icon: '⚠️', color: 'text-red-600' },
+    suspended: { label: 'Đình chỉ', icon: '🚫', color: 'text-red-800' },
+    graduated: { label: 'Tốt nghiệp', icon: '🎓', color: 'text-blue-600' },
+};
+
+// ============================================
+// LEGACY TYPES (v2.0 – giữ để backward compat)
+// ============================================
+
+/** @deprecated Use UserRole instead */
 export type Role = 'gvcn' | 'giamthi' | 'bgh';
 
 export interface User {
@@ -19,6 +192,8 @@ export interface Class {
     femaleCount?: number;
     maleCount?: number;
     classType?: string; // BT, TCH...
+    actualStudentCount?: number;    // [v3] Sĩ số thực tế = active + temp_leave
+    sessions?: ('morning' | 'afternoon')[]; // [v3] ['morning'] hoặc ['morning','afternoon']
 }
 
 export interface Student {
@@ -31,9 +206,16 @@ export interface Student {
     lastName: string;
     gender: 'Nam' | 'Nữ';
     birthday: string; // DD/MM/YYYY
+    /** @deprecated Dùng statusV3 thay thế */
     status: 'Đang học' | 'Nghỉ học' | 'Chuyển trường';
     ethnicity?: string; // Dân tộc
     govId?: string; // Mã định danh bộ
+    // === v3 Status Fields ===
+    statusV3?: StudentStatus;          // 'active' | 'temporary_leave' | ...
+    statusNote?: string;               // Lý do
+    statusDate?: string;               // ISO – ngày bắt đầu status hiện tại
+    statusExpectedReturn?: string;     // ISO – dự kiến quay lại (temp_leave)
+    statusHistory?: StatusChange[];    // Lịch sử thay đổi
 }
 
 // Status codes: 
@@ -97,6 +279,7 @@ export interface SubPeriod {
 export interface Column {
     id: string;
     classId: string;
+    userId: string; // [New] Sổ theo dõi tách biệt cho từng giáo viên (người tạo)
     name: string;
     scope: ColumnScope;
     frequency: ColumnFrequency;

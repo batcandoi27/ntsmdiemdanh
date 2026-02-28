@@ -1,22 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    async headers() {
-        return [
-            {
-                source: '/(.*)',
-                headers: [
-                    {
-                        key: 'Cross-Origin-Opener-Policy',
-                        value: 'same-origin-allow-popups',
-                    },
-                    {
-                        key: 'Cross-Origin-Embedder-Policy',
-                        value: 'unsafe-none',
-                    },
-                ],
-            },
-        ];
-    },
+    // Không thêm Cross-Origin-Opener-Policy vì nó chặn Firebase Google Login Popup
 };
 
 export default nextConfig;

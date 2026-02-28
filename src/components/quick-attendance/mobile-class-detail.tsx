@@ -7,16 +7,18 @@ import { getDailyAttendanceData, toggleDailyCheck, updateBatchAttendance, Studen
 import { AttendanceStatus, Column } from "@/types/models";
 import { cn } from "@/lib/utils";
 import { useAppSettings } from "@/hooks/use-settings";
+import { SessionType } from '@/types/timetable';
 
 interface MobileClassDetailProps {
     classId: string;
     className: string;
     date: string;
+    session: SessionType;
     onDateChange: (date: string) => void;
     onBack: () => void;
 }
 
-export function MobileClassDetail({ classId, className, date, onDateChange, onBack }: MobileClassDetailProps) {
+export function MobileClassDetail({ classId, className, date, session, onDateChange, onBack }: MobileClassDetailProps) {
     const { settings } = useAppSettings();
 
     // Data State
@@ -41,7 +43,7 @@ export function MobileClassDetail({ classId, className, date, onDateChange, onBa
     const loadData = async () => {
         setLoading(true);
         try {
-            const data = await getDailyAttendanceData(classId, date);
+            const data = await getDailyAttendanceData(classId, date, session);
             setStudents(data.students);
             setCustomColumns(data.customColumns);
             setInitialRecords(data.studentRecords);
@@ -117,7 +119,6 @@ export function MobileClassDetail({ classId, className, date, onDateChange, onBa
                 }
             });
 
-            // Execute
             await Promise.all([
                 coreUpdates.length > 0 ? updateBatchAttendance(classId, date, coreUpdates) : Promise.resolve(),
                 ...customUpdates

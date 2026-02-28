@@ -2,9 +2,22 @@
 
 import { useState, useEffect, useTransition } from 'react';
 import { Modal } from '@/components/ui/modal';
-import { Search, Loader2, Save } from 'lucide-react';
-import { StudentAttendanceDetail, getClassAttendanceDetails, updateBatchAttendance } from '@/app/actions/quick-attendance';
+import { StudentAttendanceDetail, getClassAttendanceDetails } from '@/app/actions/quick-attendance';
+import { batchMarkAttendance } from '@/services/attendance-v3-service';
+import { AttendanceStatusV3 } from '@/types/attendance-v3';
+import { useAuth } from '@/context/auth-context';
 import { AttendanceStatus } from '@/types/models';
+
+import { SessionType } from '@/types/timetable';
+import { Search, Loader2, Save } from 'lucide-react';
+
+const triggerHapticFeedback = () => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try {
+            navigator.vibrate(50); // Light vibration
+        } catch (e) { }
+    }
+};
 
 interface StudentSelectorDialogProps {
     open: boolean;
@@ -13,6 +26,7 @@ interface StudentSelectorDialogProps {
     className: string;
     targetStatus: AttendanceStatus; // The status we are modifying (e.g. 'P')
     date: string;
+    session: SessionType;
     onDateChange: (date: string) => void;
     onSaved: () => void;
 }
@@ -40,6 +54,7 @@ export function StudentSelectorDialog({
     className,
     targetStatus,
     date,
+    session,
     onDateChange,
     onSaved
 }: StudentSelectorDialogProps) {
@@ -51,6 +66,7 @@ export function StudentSelectorDialog({
     const [loading, setLoading] = useState(false);
     const [isSaving, startSaving] = useTransition();
     const [search, setSearch] = useState('');
+    const { appUser } = useAuth();
 
     const COMMON_VIOLATIONS = [
         "Đồng phục", "Điện thoại", "Chạy giỡn", "Ăn quà vặt", "Nói chuyện riêng", "Không thuộc bài"
@@ -59,7 +75,7 @@ export function StudentSelectorDialog({
     useEffect(() => {
         if (open && classId) {
             setLoading(true);
-            getClassAttendanceDetails(classId, date)
+            getClassAttendanceDetails(classId, date, session)
                 .then(data => {
                     setStudents(data);
                     // Initialize local maps
@@ -75,9 +91,10 @@ export function StudentSelectorDialog({
                 })
                 .finally(() => setLoading(false));
         }
-    }, [open, classId, date]);
+    }, [open, classId, date, session]);
 
     const handleToggle = (studentCode: string) => {
+        triggerHapticFeedback();
         setLocalStatusMap(prev => {
             const currentStatus = prev[studentCode];
             const isTarget = currentStatus === targetStatus;
@@ -98,22 +115,43 @@ export function StudentSelectorDialog({
 
     const handleSave = () => {
         startSaving(async () => {
-            // Send all updates that match targetStatus OR were targetStatus (now cleared/changed)
-            // Actually, we should sync all changes to be safe, but focusing on the current context is better.
-            // Let's send everything in localStatusMap that differs from original?
-            // "updateBatchAttendance" simply updates whatever we send. 
-            // We send the current state of `localStatusMap` for ALL students is safest to ensure consistency,
-            // BUT `localStatusMap` only has what we loaded.
+            const marks: { studentId: string; studentName: string; status: AttendanceStatusV3; note?: string }[] = [];
 
-            const updates = Object.entries(localStatusMap).map(([code, status]) => ({
-                studentCode: code,
-                status,
-                note: localNotesMap[code] || '' // Send the note (or empty if none)
-            }));
+            Object.entries(localStatusMap).forEach(([code, status]) => {
+                let v3Status: AttendanceStatusV3 | '' = '';
+                if (status === 'P') v3Status = 'excused';
+                else if (status === 'K') v3Status = 'absent';
+                else if (status === 'T') v3Status = 'late';
+                else if (status === 'VP') v3Status = 'violation';
+                else if (status === 'KH') v3Status = 'praise';
 
-            await updateBatchAttendance(classId, date, updates);
-            onSaved();
-            onOpenChange(false);
+                if (v3Status !== '') {
+                    marks.push({
+                        studentId: code,
+                        studentName: students.find(s => s.student.code === code)?.student.fullName || code,
+                        status: v3Status as AttendanceStatusV3,
+                        note: localNotesMap[code] || ''
+                    });
+                }
+            });
+
+            if (!appUser) return;
+
+            const allStudentIds = students.map(s => s.student.code);
+
+            try {
+                await batchMarkAttendance(appUser, {
+                    classId,
+                    session,
+                    period: null,
+                    marks
+                }, allStudentIds, new Date(date));
+
+                onSaved();
+                onOpenChange(false);
+            } catch (error: any) {
+                alert(error.message || 'Lỗi lưu điểm danh');
+            }
         });
     };
 
@@ -132,16 +170,16 @@ export function StudentSelectorDialog({
             onClose={() => onOpenChange(false)}
             title={`Điểm danh lớp ${className} - ${targetLabel}`}
         >
-            <div className="flex flex-col h-[70vh]">
-                <div className="flex gap-2 mb-4">
-                    <div className="flex-1 flex items-center gap-2 bg-gray-50 p-2 rounded-lg border">
-                        <Search className="text-gray-400" size={20} />
+            <div className="flex flex-col h-[75vh] sm:h-[70vh]">
+                <div className="flex gap-2 mb-4 shrink-0">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                         <input
                             type="text"
                             placeholder="Tìm học sinh..."
-                            className="flex-1 bg-transparent border-none outline-none text-sm h-full"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
+                            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all bg-gray-50/50"
                         />
                     </div>
                     <input
@@ -152,7 +190,7 @@ export function StudentSelectorDialog({
                     />
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-1">
+                <div className="flex-1 overflow-y-auto px-1 pb-4">
                     {loading ? (
                         <div className="flex justify-center py-8">
                             <Loader2 className="animate-spin text-blue-600" size={32} />
@@ -238,7 +276,7 @@ export function StudentSelectorDialog({
                     )}
                 </div>
 
-                <div className="mt-4 pt-4 border-t flex items-center justify-between bg-white sticky bottom-0">
+                <div className="pt-4 pb-20 sm:pb-4 border-t flex items-center justify-between bg-white shrink-0 shadow-[0_-15px_15px_-15px_rgba(0,0,0,0.1)] z-20 sticky bottom-0">
                     <div className="text-sm text-gray-500">
                         Đã chọn: <span className="font-bold text-gray-800">{Object.values(localStatusMap).filter(s => s === targetStatus).length}</span> em
                     </div>

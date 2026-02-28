@@ -79,6 +79,7 @@ export async function importSchoolData(formData: FormData) {
                 if (stt && studentName) {
                     const studentCode = `${classId}_${stt}`;
                     students.push({
+                        id: studentCode,
                         code: studentCode,
                         classId: classId,
                         order: parseInt(stt) || 0,

@@ -1,142 +1,146 @@
 # 🗺️ BẢN ĐỒ DỰ ÁN KIẾN TRÚC
+📅 Generated: 2026-02-26 14:06
+
+⚠️ Lưu ý: Tài liệu phản ánh code tại thời điểm quét. Nếu codebase thay đổi đáng kể, cần chạy lại scanner.
+
+## 0. 🎯 Mục đích – Bối cảnh – Ràng buộc hệ thống
+**Mục đích cốt lõi**
+Ứng dụng quản lý điểm danh, sổ theo dõi thông minh, tra cứu học sinh và lập báo cáo chi tiết dành cho trường học.
+
+**Bối cảnh dự án**
+❌ Không có mô tả chính thức trong codebase.
+Quan sát trực tiếp từ code: Hệ thống phục vụ đánh giá - theo dõi nội bộ của THCS Trần Bội Cơ, với phân quyền rõ ràng 5 role (ban giám hiệu, giám thị, giáo viên, v.v.).
+
+**Ràng buộc quan trọng**
+- **Công nghệ bắt buộc**: Next.js 14.1.0, React 18, Firebase môi trường client/server.
+- **Business rules**: Quyền hạn và thời gian được sửa điểm danh dựa cứng theo cơ chế RBAC và cấu hình (1440 phút cho giáo viên, 30 phút cho cán sự lớp) được hardcode trong `models.ts` và `auth-guard.ts`.
 
 ## 1. 📁 Directory Structure (Cấu trúc thư mục)
 /
-├── .gitignore               # Cấu hình file/folder bị loại bỏ khỏi Git
-├── package.json             # Khai báo dependencies và scripts
+├── public/                 # Giao diện: Chứa tài nguyên tĩnh tải lên (ảnh, icons)
 ├── src/
-│   ├── app/                 # Next.js App Router (Pages & API Routes)
-│   │   ├── actions/         # Server Actions (Xử lý logic phía server)
-│   │   ├── api/             # API Endpoints
-│   │   ├── attendance/      # Trang điểm danh chi tiết
-│   │   ├── classes/         # Trang quản lý lớp học (kèm sub-routes cho sơ đồ lớp, sổ theo dõi)
-│   │   ├── import/          # Trang nhập liệu từ Excel
-│   │   ├── login/           # Trang đăng nhập
-│   │   ├── monitor/         # [NEW] Dashboard Sổ Theo Dõi lớp học
-│   │   ├── quick-attendance/# Trang điểm danh nhanh (Mobile first)
-│   │   ├── reports/         # Trang báo cáo thống kê
-│   │   └── settings/        # Trang cài đặt hệ thống (v2.0 với Tabs)
-│   ├── components/          # UI Components tái sử dụng
-│   │   ├── auth/            # [NEW] Các component liên quan đến Auth (VD: PasswordGuard)
-│   │   ├── dashboard/       # [NEW] Các component cho màn hình tổng quan
-│   │   ├── settings/        # [NEW] Fixed/Custom columns tabs, My Classes tab
-│   │   ├── ui/              # Shadcn/Base UI components (Button, Modal...)
-│   │   └── ...              # Các component theo feature
-│   ├── context/             # React Context (State toàn cục)
-│   ├── lib/                 # Tiện ích cốt lõi
-│   │   ├── firebase.ts      # Firebase config
-│   │   ├── defaults.ts      # [NEW] Fixed columns defaults
-│   │   ├── archive-checker.ts # [NEW] Auto-archive logic
-│   │   └── utils.ts         # Helper functions
-│   ├── services/            # Service layer (Giao tiếp Database/API)
-│   │   ├── db.ts               # [NEW] Central DB adapter logic (cầu nối Local/Firebase)
-│   │   ├── db-adapter.ts       # [NEW] Interface định nghĩa Database Adapter
-│   │   ├── firebase-adapter.ts # Firebase CRUD Implementation
-│   │   ├── local-adapter.ts    # [NEW] Local CSV CRUD Implementation
-│   │   ├── column-service.ts   # [NEW] Column CRUD (Firebase)
-│   │   ├── preset-service.ts   # [NEW] Report preset CRUD (Firebase)
-│   │   ├── record-service.ts   # [NEW] Record CRUD by frequency
-│   │   └── student-service.ts  # [NEW] Student specific queries
-│   └── types/               # TypeScript definitions
-│       └── models.ts        # User, Class, Student, Column, Records...
-├── public/                  # Static assets (images, icons)
-├── plans/                   # [NEW] Tài liệu kế hoạch và tiến độ các Phase phát triển
-└── data/                    # Thư mục chứa dữ liệu mẫu hoặc file tạm CSV (nếu dùng local adapter)
-```
-**Mô tả:** Dự án theo chuẩn **Next.js 14 App Router**. Code logic được tách biệt rõ ràng: `app` (Routing/Views), `services` (Logic/Data), `lib` (Core Config), `components` (UI).
+│   ├── app/                # Application: Next.js App Router (Định tuyến, Pages, Server Actions)
+│   │   ├── actions/        # API Controller: Các logic server side phân giải yêu cầu
+│   │   ├── api/            # Route Handlers: Các endpoint dùng như API nội bộ
+│   │   ├── attendance/     # Feature: Trang sơ đồ điểm danh
+│   │   ├── classes/        # Feature: Quản lý danh sách lớp và sổ theo dõi (monitor)
+│   │   ├── import/         # Feature: Nhập dữ liệu học sinh hàng loạt từ Excel
+│   │   ├── login/          # Feature: Đăng nhập
+│   │   ├── monitor/        # Feature: Dashboard các cột điểm của lớp
+│   │   ├── quick-attendance/ # Feature: Điểm danh nhanh trên mobile
+│   │   ├── reports/        # Feature: Màn hình báo cáo phân tích
+│   │   └── settings/       # Feature: Cài đặt hệ thống, DB và các cột tuỳ chỉnh
+│   ├── components/         # Giao diện: Component UI tái sử dụng
+│   ├── context/            # Trạng thái: React Context dùng chung (Auth, ViewMode)
+│   ├── hooks/              # Tiện ích: Custom React hooks
+│   ├── lib/                # Cấu hình: Các thiết lập Firebase, utils
+│   ├── services/           # Lớp Data Access: Tương tác với cơ sở dữ liệu (Firestore)
+│   └── types/              # Khai báo: Các interface TypeScript (models)
+├── data/                   # Lưu trữ: File CSV/backup mẫu cục bộ (nếu có dùng local adapter)
+├── docs/                   # Tài liệu: Các hướng dẫn phụ trợ
+├── plans/                  # Quản lý phát triển: File markdown tiến độ
+├── scripts/                # Tiện ích: Script chạy terminal bổ trợ
+├── package.json            # Khai báo cấu hình dự án & dependency
+└── tsconfig.json           # Khai báo cấu hình tsc
 
 ## 2. 🛠️ Tech Stack (Công nghệ sử dụng)
-*   **Framework chính**: Next.js 14.1.0 (App Router), React 18.
-*   **Language**: TypeScript (định kiểu tĩnh chặt chẽ).
-*   **UI/Styling**: Tailwind CSS (Styling), clsx & tailwind-merge (Xử lý class động), Lucide React (Icons).
-*   **Backend/Database**: Firebase v12 (Firestore, Auth, Storage).
-*   **Data Processing**:
-    *   `xlsx`, `exceljs`: Đọc/Ghi file Excel chuyên sâu.
-    *   `papaparse`: Xử lý CSV.
-    *   `date-fns`: Xử lý ngày tháng.
-*   **Visualization**: Recharts (Vẽ biểu đồ báo cáo).
-*   **Utilities**: `vaul` (Drawer component cho mobile), `file-saver` (Lưu file client-side).
+**Framework & Runtime**
+- Next.js @ 14.1.0 - React framework cho frontend & API
+- Node.js - Môi trường chạy script & build (từ typing @types/node)
+
+**UI & Styling**
+- React @ 18
+- Tailwind CSS @ 3.3.0
+- Lucide React @ 0.300.0 (Thư viện SVG Icons)
+- clsx @ 2.1.1 & tailwind-merge @ 2.6.1 (Xử lý hợp nhất CSS class)
+- Radix UI (@radix-ui/react-dialog @ 1.1.15, @radix-ui/react-switch @ 1.2.6) (Primitive component)
+- vaul @ 1.1.2 (Thành phần Drawer mobile)
+
+**State Management**
+- ❌ Không có (Sử dụng React Context `src/context/` để lưu trạng thái phiên và local state)
+
+**Backend & Database**
+- Firebase @ 12.8.0 - Backend-as-a-service chuyên Auth và Firestore real-time NoSQL
+- Server Actions - Tích hợp gọi REST logic từ Client tới Server Next.js
+
+**Authentication & Authorization**
+- Firebase Auth @ 12.8.0
+- RBAC kiểm soát thủ công qua Firestore permissions Object (`users/{uid}`)
+
+**Deployment & Infrastructure**
+- ❌ Không có config tự động deploy cụ thể trong root thư mục.
+
+**Các package quan trọng khác**
+- exceljs @ 4.4.0 - Xuất ra file `.xlsx` cao cấp
+- papaparse @ 5.4.0 - Xử lý chuyển đổi object/chuỗi CSV
+- file-saver @ 2.0.5 - Trigger popup download tự động cho Client
+- date-fns @ 4.1.0 - Format và parse thời gian chuyên biệt
+- recharts @ 3.7.0 - Vẽ biểu đồ tròn/cột phân tích điểm danh
 
 ## 3. 🔄 Data Flow (Luồng dữ liệu)
-1.  **Authentication**:
-    *   User truy cập -> Kiểm tra trạng thái đăng nhập (Firebase Auth / Password Guard).
-    *   Nếu chưa đăng nhập -> Redirect về `/login`.
-    *   Thông tin user được lưu trong Context/Session.
+**Client → Server → Database**
+- Điểm danh (Ví dụ Quick Attendance)
+  → Component: `src/app/quick-attendance/page.tsx`
+  → Client Handler: button/event handler UI
+  → Server Action (API Sync): `src/app/actions/quick-attendance.ts` (Method: updateBatchAttendance)
+  → Service Access: `src/services/attendance-v3-service.ts`
+  → Database Query: Batch Write lưu Firestore data (`schools/.../attendance/`)
+  → State Update: Refresh layout/context nội bộ UI React
 
-2.  **Attendance Process (Điểm danh)**:
-    *   **Client**: User thao tác trên UI (`quick-attendance` hoặc `attendance`) -> Gọi Server Actions hoặc API.
-    *   **Service Layer**: `services/` nhận yêu cầu -> Validate dữ liệu -> Giao tiếp với Firestore.
-    *   **Database**: Firestore lưu trạng thái điểm danh (Có mặt, Vắng, Trễ...).
-    *   **Real-time**: UI cập nhật ngay lập tức (Optimistic UI) hoặc fetch lại data mới nhất.
+**Authentication Flow**
+- Login Form
+  → Component: `src/app/login/page.tsx`
+  → Auth Context Hndler: Hàm `signIn` tại `src/context/auth-context.tsx`
+  → Auth Provider API: `signInWithEmailAndPassword` (Firebase Auth)
+  → Session Check: Fetch `getDoc` lấy object Permissions từ `users/{uid}` trên Firestore
+  → State Update: `firebaseUser` & `appUser` state trong `AuthProvider`
+  → Redirect: Đẩy người dùng về protected route ban đầu (Dashboard)
 
-3.  **Custom Columns & Monitor System (v2.0)**: ⭐ NEW
-    *   **Dashboard Sổ Theo Dõi (`/monitor`)**: Cho phép xem nhanh danh sách lớp và truy cập vào chi tiết từng cột theo dõi.
-    *   **Column Types**: Fixed (Điểm danh, Vi phạm, Khen thưởng) | Custom (do GV tự tạo)
-    *   **Frequency**: `daily` (theo ngày), `period` (theo kỳ), `one_time` (chỉ 1 lần - vd: Nộp hồ sơ)
-    *   **Data Flow**: Settings -> `Column Service` -> DB. Dữ liệu khi nhập -> `Record Service` -> DB.
-    *   **Auto Archive**: Các cột `one_time` tự động ẩn khi 100% học sinh hoàn thành. Cột `period` tự ẩn khi qua ngày kết thúc.
+**Liệt kê routes protection**
+- Protected routes: `/attendance`, `/classes`, `/import`, `/monitor`, `/quick-attendance`, `/reports`, `/settings` (Trạng thái login bắt buộc thông qua React element điều hướng)
+- Public routes: `/login`
+- Role-based routes: Chặn tại Service Level qua `checkClassAccess` / `checkStatusChangePermission` tại `src/services/auth-guard.ts`
 
-4.  **Reporting & Export**:
-    *   **Fetch**: `reports/` page gọi service lấy dữ liệu thô từ DB.
-    *   **Process**: Client tính toán tổng hợp (Số lượng vắng, tỷ lệ %).
-    *   **Visualize**: Recharts render biểu đồ tròn/cột.
-    *   **Export**: `exceljs` tạo file Excel từ data đã xử lý -> `file-saver` tải về máy.
+**WebSocket / File Upload**
+- ❌ Không có.
 
-## 4. ⚡ Logic thực thi của toàn bộ app
-### 4.1. Khởi động & Database Adapter Pattern
-*   App khởi chạy qua `npm run dev` (hoặc start).
-*   `src/app/layout.tsx` bọc toàn bộ ứng dụng, khởi tạo các Provider cần thiết (Toast, Auth Context).
-*   **Database Adapter Pattern**: Toàn bộ app giao tiếp qua interface `DbAdapter` (`src/services/db-adapter.ts`).
-    *   Tùy vào biến môi trường (Environment variables), app sẽ khởi tạo `FirebaseAdapter` (Production) hoặc `LocalCsvAdapter` (Dev offline).
-    *   Mọi service layer (`student-service`, `column-service`...) đều gọi qua file `db.ts` trung gian.
-*   Bảo vệ route: `PasswordGuard` kiểm tra quyền truy cập (mật khẩu dùng chung cho cá nhân).
+## 4. ⚡ Logic thực thi toàn hệ thống
+**4.1 Khởi động ứng dụng**
+- Entry Point: `src/app/layout.tsx`
+  → Setup Providers: 
+    - AuthProvider: `src/context/auth-context.tsx`
+    - ViewModeProvider: `src/context/view-mode-context.tsx`
+  → Mount Root Layout UI: Sidebar, Toolbar
+  → Render ViewContainer: Quấn bọc layout chính, chặn render nếu Loading.
 
-### 4.2. Các Module chính
-1.  **Module Lớp học (`/classes`)**:
-    *   Hiển thị danh sách lớp. Thêm/Sửa/Xóa lớp.
-    *   Quản lý danh sách học sinh bên trong. Sắp xếp lại học sinh.
-    *   Có shortcut truy cập Sơ đồ lớp và Sổ theo dõi.
+**4.2 Authentication & Authorization**
+- Auth provider: Firebase Auth
+- Session storage: Được quản lý default local persist của Firebase Auth.
+- Route Protection: Context Component bọc ngoài sẽ trả ra UI trống (`Loading...`) hoặc redirect về `/login` nếu context state `firebaseUser` là `null`. 
+- Role-based access: Bằng phương thức `hasRole` trong AuthContext cho hiển thị menu UI. Về Data mutation, kiểm tra bảo mật bằng try/catch dựa theo các hàm từ `src/services/auth-guard.ts`.
 
-2.  **Module Nhập liệu (`/import`)**:
-    *   **Input**: Upload file Excel danh sách học sinh.
-    *   **Xử lý**: `xlsx`/`exceljs` parse file -> Validate form -> Map dữ liệu.
-    *   **Output**: Lưu hàng loạt (Batch write) vào Database.
+**4.3 Các Module chính**
+- Kế toán / Sổ Theo Dõi - `src/app/classes/[id]/monitor/[columnId]/page.tsx`
+  - Input: URL Param `columnId` và tương tác Checkbox/Input từ giao diện GV.
+  - Xử lý: Phân loại Frequency (`daily`, `period`, `one_time`), lưu qua logic controller `saveOneTimeRecord` hoặc `saveDailyRecord`. Đánh dấu `archived` trong cấu trúc.
+  - Output: Lưu vào Database Firestore path `columnData/{columnId}/records/`.
+  - Phụ thuộc: `src/services/record-service.ts`, `src/services/column-service.ts`
+ 
+- Báo Cáo Thông Kê - `src/app/reports/page.tsx`
+  - Input: Dropdown chọn Khoảng Thời Gian và Lớp.
+  - Xử lý: React Component thu thập form data gọi `getReports` (`src/app/actions/report.ts`). Truy vấn record absence + columns thành khối BlockData.
+  - Output: Hiển thị bảng grid, rendering biểu đồ bằng Recharts và lưu file qua service `exportToExcel` (dùng `exceljs`).
+  - Phụ thuộc: Đổ về dữ liệu từ `src/services/attendance-v3-service.ts`.
 
-3.  **Module Điểm danh (`/attendance` & `/quick-attendance`)**:
-    *   `/quick-attendance`: Giao diện Grid tối ưu thiết kế để chấm nhanh theo ngày hiển thị cả cột Tuỳ Chỉnh dạng `daily`.
-    *   `/attendance`: Sơ đồ lớp học (Seat map) trực quan (kéo thả đang phát triển).
-    *   **Logic**: Load danh sách lớp đã chọn -> Tick trạng thái -> Optimistic UI -> Delay Save -> Update Database.
+**4.4 Nghiệp vụ đặc biệt**
+- ❌ Không có nghiệp vụ đặc biệt nào được implement (VD: Thanh toán, queue background, email cronjobs, v.v.)
 
-4.  **Module Sổ Theo Dõi (`/monitor` & `/classes/[id]/monitor/[colId]`)**: ⭐ NEW
-    *   Đây là trung tâm quản lý các cột tuỳ chỉnh và cố định mang tính chất đánh giá định kỳ hoặc thu tiền (`period`, `one_time`).
-    *   Hiển thị giao diện danh sách row-by-row thay vì bảng lưới.
-    *   Hỗ trợ nhập text, check hoàn thành, tính tổng,...
-
-5.  **Module Báo cáo (`/reports`)**:
-    *   Quản lý cấu hình lưu trước (Presets) bằng `preset-service`.
-    *   Chọn khoảng thời gian, nhóm lớp -> Tính toán (Aggregate).
-    *   View biểu đồ hoặc Bảng chi tiết + Nút xuất Excel `(XLSX)`.
-
-6.  **Module Cài đặt (`/settings`)**: ⭐ UPDATED v2.0
-    *   **4 Tabs giao diện**:
-        *   📋 **Dữ liệu**: Quản lý DB chung (Tạo dữ liệu giả, Xóa hết điểm danh).
-        *   📚 **Lớp của tôi**: Chọn nhanh các lớp ưu tiên quản lý.
-        *   🔒 **Cột cố định**: Tùy chỉnh Suggestions cho Điểm Danh, Vi Phạm, Khen Thưởng.
-        *   ⚙️ **Cột tùy chỉnh**: Tạo mới, Sửa các cột (Học phí, Theo dõi,...). Có chế độ áp dụng hàng loạt theo "Lớp của tôi".
-
-### 4.3. Quy trình nghiệp vụ đặc biệt
-*   **Offline Mode/Local CSV**: Hỗ trợ xuất dữ liệu ra CSV cục bộ (thư mục `/data`) khi code dev nếu không cấu hình Firebase. Giúp dev không bị block.
-*   **Custom Columns Lifecycle**: Cột tự động phân loại active/archived nhờ hàm `checkAndArchiveColumns`.
-
-## 5. 📊 Firestore Data Structure (v2.0)
-```
-schools/{schoolId}/
-├── years/{year}/
-│   ├── classes/{classId}           # Thông tin lớp
-│   ├── students/{studentId}        # Thông tin học sinh
-│   ├── attendance/{date}/records/  # Điểm danh legacy
-│   ├── columns/{columnId}          # [NEW] Column definitions
-│   ├── columnData/{columnId}/records/{key}  # [NEW] Record data
-│   └── reportPresets/{presetId}    # [NEW] Saved report configs
-```
-
+---
+🔍 KNOWN LIMITATIONS
+File này được tạo tự động. Các giới hạn:
+- Phản ánh code tại thời điểm quét, không theo dõi thay đổi real-time
+- Không mô tả runtime behavior, deployed infrastructure, hay production configuration
+- Không bao gồm code trong node_modules hay third-party libraries
+- Config từ .env chỉ mô tả structure, không bao gồm giá trị thực
+- Không phân tích performance metrics, memory usage, hay load testing results
+- Không mô tả user behavior, analytics, hay business metrics

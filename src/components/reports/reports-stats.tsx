@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 interface ReportsStatsProps {
-    stats: ReportResult['summary'] | { P: 0, K: 0, V: 0, T: 0, VP: 0, KH: 0, Total: 0 };
+    stats: { P?: number, K?: number, V?: number, T?: number, VP?: number, KH?: number, Total?: number };
     loading?: boolean;
 }
 
@@ -29,11 +29,11 @@ export function ReportsStats({ stats, loading }: ReportsStatsProps) {
                 <div className="text-3xl font-black text-gray-800">{stats.Total}</div>
             </div>
 
-            <StatCard label="Phép (P)" value={stats.P} color="yellow" icon={<Clock size={16} />} />
-            <StatCard label="Không (K)" value={stats.K} color="red" icon={<Ban size={16} />} />
-            <StatCard label="Trễ (T)" value={stats.T} color="blue" icon={<AlertTriangle size={16} />} />
-            <StatCard label="Khen (KH)" value={stats.KH || 0} color="orange" icon={<CheckCircle size={16} />} />
-            <StatCard label="Vi Phạm (VP)" value={stats.VP} color="purple" icon={<Ban size={16} />} />
+            <StatCard label="Phép (P)" value={stats.P ?? 0} color="yellow" icon={<Clock size={16} />} />
+            <StatCard label="Không (K)" value={stats.K ?? 0} color="red" icon={<Ban size={16} />} />
+            <StatCard label="Trễ (T)" value={stats.T ?? 0} color="blue" icon={<AlertTriangle size={16} />} />
+            <StatCard label="Khen (KH)" value={stats.KH ?? 0} color="orange" icon={<CheckCircle size={16} />} />
+            <StatCard label="Vi Phạm (VP)" value={stats.VP ?? 0} color="purple" icon={<Ban size={16} />} />
 
             {/* Chart */}
             <div className="bg-white p-2 rounded-xl border border-gray-100 shadow-sm relative h-[100px]">

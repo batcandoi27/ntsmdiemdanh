@@ -9,7 +9,6 @@ import { Plus, Pencil, Trash2, Users, School, ArrowRight, UserCheck, Upload } fr
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useViewMode } from '@/context/view-mode-context';
-import { PasswordModal } from '@/components/auth/password-modal';
 
 interface ClassListProps {
     initialClasses: Class[];
@@ -23,7 +22,6 @@ export function ClassList({ initialClasses }: ClassListProps) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingClass, setEditingClass] = useState<Class | null>(null);
     const [lastUpdated, setLastUpdated] = useState<string>(''); // Hydration fix
-    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false); // Auth Modal State
 
     useEffect(() => {
         setClasses(initialClasses);
@@ -88,12 +86,7 @@ export function ClassList({ initialClasses }: ClassListProps) {
 
     const openCreateModal = () => {
         setEditingClass(null);
-        setIsAuthModalOpen(true); // Open Auth first
-    };
-
-    const handleAuthSuccess = () => {
-        setIsAuthModalOpen(false);
-        setIsModalOpen(true); // Then open form
+        setIsModalOpen(true);
     };
 
     const openEditModal = (cls: Class) => {
@@ -262,13 +255,7 @@ export function ClassList({ initialClasses }: ClassListProps) {
                     onCancel={() => setIsModalOpen(false)}
                 />
             </Modal>
-
-            <PasswordModal
-                isOpen={isAuthModalOpen}
-                onClose={() => setIsAuthModalOpen(false)}
-                onSuccess={handleAuthSuccess}
-                title="Bảo Mật Hệ Thống"
-            />
         </div>
     );
+
 }

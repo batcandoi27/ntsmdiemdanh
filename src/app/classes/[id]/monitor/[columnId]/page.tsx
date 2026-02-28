@@ -72,7 +72,7 @@ export default function MonitorDetailPage() {
                 const records = await getOneTimeRecords(columnId);
                 const map: Record<string, any> = {};
                 records.forEach(r => {
-                    map[r.studentCode] = { completed: r.status === 'done', value: r.value, note: r.note };
+                    map[r.studentCode] = { completed: r.status === 'done', note: r.note };
                 });
                 setOneTimeRecords(map);
             }
@@ -101,8 +101,7 @@ export default function MonitorDetailPage() {
                 classId,
                 studentCode,
                 status: newCompleted ? 'done' : 'pending',
-                note: current.note,
-                value: current.value
+                note: current.note
             });
         } catch (error) {
             console.error(error);

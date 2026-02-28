@@ -4,6 +4,7 @@ import { db, auth, signInAnon } from '@/lib/firebase';
 import {
     collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, writeBatch
 } from 'firebase/firestore';
+import { getCached, setCache, invalidateCachePrefix } from './cache-service';
 
 // Hardcode school ID for single-school MVP
 // Hardcode school ID for single-school MVP
@@ -59,6 +60,10 @@ export class FirebaseAdapter implements DbAdapter {
 
     // --- Classes ---
     async getClasses(): Promise<Class[]> {
+        const CACHE_KEY = `classes_${SCHOOL_ID}_${CURRENT_YEAR}`;
+        const cached = getCached<Class[]>(CACHE_KEY);
+        if (cached) return cached;
+
         await this.ensureAuth();
         // Cấu trúc mới: schools/{schoolId}/years/{year}/classes
         const colRef = collection(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'classes');
@@ -66,10 +71,13 @@ export class FirebaseAdapter implements DbAdapter {
         const list = snap.docs.map(d => d.data() as Class);
 
         // Sắp xếp: Khối tăng dần (6->9) -> Tên lớp (6A1 -> 6A10)
-        return list.sort((a, b) => {
+        const sorted = list.sort((a, b) => {
             if (a.grade !== b.grade) return a.grade - b.grade;
             return a.name.localeCompare(b.name, undefined, { numeric: true });
         });
+
+        setCache(CACHE_KEY, sorted);
+        return sorted;
     }
 
     async getClass(id: string): Promise<Class | null> {
@@ -83,29 +91,40 @@ export class FirebaseAdapter implements DbAdapter {
         await this.ensureAuth();
         const docRef = doc(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'classes', cls.id);
         await setDoc(docRef, cls);
+        invalidateCachePrefix(`classes_${SCHOOL_ID}`);
     }
 
     async updateClass(cls: Class): Promise<void> {
         await this.ensureAuth();
         const docRef = doc(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'classes', cls.id);
         await setDoc(docRef, cls, { merge: true });
+        invalidateCachePrefix(`classes_${SCHOOL_ID}`);
     }
 
     async deleteClass(id: string): Promise<void> {
         await this.ensureAuth();
         const docRef = doc(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'classes', id);
         await deleteDoc(docRef);
+        invalidateCachePrefix(`classes_${SCHOOL_ID}`);
+        invalidateCachePrefix(`students_${SCHOOL_ID}_${CURRENT_YEAR}_${id}`);
     }
 
     // --- Students ---
     async getStudentsByClass(classId: string): Promise<Student[]> {
+        const CACHE_KEY = `students_${SCHOOL_ID}_${CURRENT_YEAR}_${classId}`;
+        const cached = getCached<Student[]>(CACHE_KEY);
+        if (cached) return cached;
+
         await this.ensureAuth();
         // Updated path to match createStudents (years structure)
         const colRef = collection(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'students');
         const q = query(colRef, where('classId', '==', classId));
         const snap = await getDocs(q);
         const list = snap.docs.map(d => d.data() as Student);
-        return list.sort((a, b) => a.order - b.order);
+
+        const sorted = list.sort((a, b) => a.order - b.order);
+        setCache(CACHE_KEY, sorted);
+        return sorted;
     }
 
     async createStudents(students: Student[]): Promise<void> {
@@ -125,24 +144,30 @@ export class FirebaseAdapter implements DbAdapter {
             await batch.commit();
             console.log(`Saved batch ${i / CHUNK_SIZE + 1} (${chunk.length} students)`);
         }
+        invalidateCachePrefix(`students_${SCHOOL_ID}`);
     }
 
     async createStudent(student: Student): Promise<void> {
         await this.ensureAuth();
         const docRef = doc(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'students', student.code);
         await setDoc(docRef, student);
+        invalidateCachePrefix(`students_${SCHOOL_ID}_${CURRENT_YEAR}_${student.classId}`);
     }
 
     async updateStudent(student: Student): Promise<void> {
         await this.ensureAuth();
         const docRef = doc(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'students', student.code);
         await setDoc(docRef, student, { merge: true });
+        invalidateCachePrefix(`students_${SCHOOL_ID}_${CURRENT_YEAR}_${student.classId}`);
     }
 
     async deleteStudent(id: string): Promise<void> {
         await this.ensureAuth();
         const docRef = doc(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'students', id);
+        // Cần tìm ra student để biết thuộc classId nào nhằm invalidate đúng nhưng vì để đơn giản, clear toàn bộ tiền tố cache của học sinh cho an toàn
+        // (Trong app thực tế có thể get trước để biết classId)
         await deleteDoc(docRef);
+        invalidateCachePrefix(`students_${SCHOOL_ID}`);
     }
 
     // --- Teachers ---
@@ -166,29 +191,58 @@ export class FirebaseAdapter implements DbAdapter {
         await setDoc(docRef, record);
     }
 
-    async getMonthlyAttendance(classId: string, month: number, year: number): Promise<AttendanceRecord[]> {
-        // This is tricky with subcollections structure: attendance/{date}/records/{classId}
-        // We would have to query ALL dates in that month? (30 queries?) 
-        // OR create a Collection Group query?
-        // Better Design: attendance_records collection with a 'date' field.
-        // Refactoring to: schools/{schoolId}/attendance_records (collection)
-        // Query where classId == X and date startsWith YYYY-MM
+    async getMonthlyAttendance(classId: string, month: number, year: number): Promise<any[]> {
+        await this.ensureAuth();
+        // Để hỗ trợ cả V1 (1 record = 1 class) và V3 (nhiều record học sinh / class),
+        // ta query Collection records theo classId
 
-        // BUT to keep consistent with PRD structure (if strict), we do parallel fetches.
-        // For MVP 2.0 (Turbo), I will fetch all.
-        // Optimization: Store YearMonth field? No.
-
-        // Let's iterate days. It's only 30-31 reads.
         const promises = [];
         const daysInMonth = new Date(year, month, 0).getDate();
 
-        for (let d = 1; d <= daysInMonth; d++) {
+        // Optimization: Không fetch những ngày ở tương lai
+        const today = new Date();
+        const maxDay = (today.getFullYear() === year && today.getMonth() + 1 === month)
+            ? Math.min(daysInMonth, today.getDate())
+            : daysInMonth;
+
+        const fetchDateRecords = async (dateStr: string) => {
+            const colRef = collection(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'attendance', dateStr, 'records');
+            const q = query(colRef, where('classId', '==', classId));
+            const snap = await getDocs(q);
+
+            // Nếu có 1 doc ID khớp classId -> Có thể đây là V1
+            const v1Doc = snap.docs.find(d => d.id === classId);
+            if (v1Doc) {
+                return v1Doc.data();
+            }
+
+            // Nếu không có, đây là mảng các record V3. 
+            // Ta build ảo lại thành 1 record giả dạng V1 chứa mảng absences để tương thích component.
+            const records = snap.docs.map(d => d.data());
+            if (records.length === 0) return null;
+
+            const absencesMap: Record<string, string> = {};
+            records.forEach((r: any) => {
+                if (r.studentId && r.status) {
+                    absencesMap[r.studentId] = r.status;
+                }
+            });
+
+            return {
+                id: classId,
+                classId: classId,
+                date: dateStr,
+                absences: absencesMap
+            };
+        };
+
+        for (let d = 1; d <= maxDay; d++) {
             const dateStr = `${year}-${month.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
-            promises.push(this.getAttendance(classId, dateStr));
+            promises.push(fetchDateRecords(dateStr));
         }
 
         const results = await Promise.all(promises);
-        return results.filter((r): r is AttendanceRecord => r !== null);
+        return results.filter(r => r !== null);
     }
     async getReportData(startDate: string, endDate: string, classIds?: string[]): Promise<AttendanceRecord[]> {
         await this.ensureAuth();
@@ -209,35 +263,35 @@ export class FirebaseAdapter implements DbAdapter {
         const dates = getDates(startDate, endDate);
 
         // Strategy:
-        // A. If classIds is provided and small (< 5), fetch specific docs for each day.
-        // B. If classIds is empty (all) or large, fetch entire collection for each day.
+        // Cấu trúc V3 mới: Collection `records` chứa danh sách từng điểm danh học sinh (ID dạng class_session_period_student)
+        // chứ không còn là 1 document = 1 lớp như bản V1 cũ. Do đó, ta phải fetch getAllDocuments cho collection
+        // sau đó filter theo classIds ở client, vì Firestore where(in) bị giới hạn 30 item và không hỗ trợ full filter dễ.
 
         const fetchAllForDate = async (date: string) => {
-            const colRef = collection(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'attendance', date, 'records');
-            const snap = await getDocs(colRef);
-            return snap.docs.map(d => d.data() as AttendanceRecord);
-        };
-
-        const fetchSpecificForDate = async (date: string, ids: string[]) => {
-            const promises = ids.map(async (cid) => {
-                const docRef = doc(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'attendance', date, 'records', cid);
-                const s = await getDoc(docRef);
-                return s.exists() ? (s.data() as AttendanceRecord) : null;
-            });
-            const res = await Promise.all(promises);
-            return res.filter((r): r is AttendanceRecord => r !== null);
-        };
-
-        const promises = dates.map(async (date) => {
-            if (classIds && classIds.length > 0 && classIds.length <= 5) {
-                return fetchSpecificForDate(date, classIds);
-            } else {
-                let records = await fetchAllForDate(date);
-                if (classIds && classIds.length > 0) {
-                    records = records.filter(r => classIds.includes(r.classId));
-                }
-                return records;
+            try {
+                const colRef = collection(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'attendance', date, 'records');
+                const snap = await getDocs(colRef);
+                // Ép Kiểu về Any vì Record V3 và V1 có trường khác nhau, 
+                // Inject biến date vào từng record để map ngược sang Report.ts 
+                return snap.docs.map(d => ({ ...d.data(), date }) as any);
+            } catch (e) {
+                console.error("Error fetching report data for date", date, e);
+                return [];
             }
+        };
+
+        // Chạy Promise song song lấy dữ liệu các ngày
+        const promises = dates.map(async (date) => {
+            let records = await fetchAllForDate(date);
+
+            // Lọc theo classIds nếu người dùng chọn cụ thể các lớp
+            if (classIds && classIds.length > 0) {
+                records = records.filter(r => {
+                    // Cả V1 và V3 đều có trường classId
+                    return classIds.includes(r.classId);
+                });
+            }
+            return records;
         });
 
         const dailyResults = await Promise.all(promises);
