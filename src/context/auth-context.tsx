@@ -4,7 +4,8 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import {
     onAuthStateChanged,
     signInWithEmailAndPassword,
-    signInWithPopup,
+    signInWithRedirect,
+    getRedirectResult,
     GoogleAuthProvider,
     signOut as firebaseSignOut,
     User as FirebaseUser,
@@ -125,6 +126,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return () => unsubscribe();
     }, [loadUserProfile]);
 
+    // Xử lý kết quả Google Redirect khi quay về trang
+    useEffect(() => {
+        getRedirectResult(auth).then((result) => {
+            if (result?.user) {
+                // onAuthStateChanged đã xử lý rồi, chỉ cần tắt loading
+                setLoading(false);
+            }
+        }).catch((err) => {
+            const firebaseError = err as { code?: string; message?: string };
+            if (firebaseError.code !== 'auth/popup-closed-by-user') {
+                console.error('Google redirect error:', firebaseError);
+                setError('Lỗi đăng nhập Google: ' + (firebaseError.message || ''));
+            }
+            setLoading(false);
+        });
+    }, []);
+
     // Sign in
     const signIn = useCallback(async (emailOrCode: string, password: string) => {
         setError(null);
@@ -166,29 +184,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     }, []);
 
-    // Sign in with Google
+    // Sign in with Google (Redirect - không hiện popup Firebase domain)
     const signInWithGoogle = useCallback(async () => {
         setError(null);
         setLoading(true);
         try {
             const provider = new GoogleAuthProvider();
-            // Optional: provider.setCustomParameters({ prompt: 'select_account' });
-
-            // Xử lý custom domain Auth (Sửa lỗi popup origin mismatch)
-            // Khi deploy lên miền kgvh.io.vn, phải trỏ authDomain về đúng miền
             provider.setCustomParameters({
                 prompt: 'select_account',
-                auth_type: 'rerequest',
             });
 
-            await signInWithPopup(auth, provider);
-            // onAuthStateChanged sẽ tự động load profile hoặc bật flag needsRoleCode
+            // Dùng redirect thay vì popup — user thấy accounts.google.com
+            // rồi quay về thcstbc.kgvh.io.vn, không thấy domain Firebase
+            await signInWithRedirect(auth, provider);
         } catch (err: unknown) {
             const firebaseError = err as { code?: string; message?: string };
             console.error('Lỗi đăng nhập Google:', firebaseError);
-            if (firebaseError.code !== 'auth/popup-closed-by-user' && firebaseError.code !== 'auth/cancelled-popup-request') {
-                setError('Lỗi đăng nhập Google: ' + (firebaseError.message || 'Không xác định'));
-            }
+            setError('Lỗi đăng nhập Google: ' + (firebaseError.message || 'Không xác định'));
             setLoading(false);
             throw err;
         }
