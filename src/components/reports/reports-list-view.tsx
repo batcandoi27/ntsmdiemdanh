@@ -170,79 +170,132 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                             </div>
 
                             <div className="space-y-2">
-                                {sortedSubKeys.map(subKey => (
-                                    <div key={subKey} className="bg-white border border-gray-100 rounded-lg p-3 grid grid-cols-12 gap-4 items-start shadow-sm hover:shadow-md transition-shadow">
+                                {sortedSubKeys.map(subKey => {
+                                    const subGroupItems = subGroups[subKey];
 
-                                        {/* Left Column: Date or Class */}
-                                        <div className="col-span-12 md:col-span-2 flex items-center h-full">
-                                            {groupBy === 'CLASS' ? (
-                                                <span className="text-sm font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded">
-                                                    {(() => {
-                                                        const d = new Date(subKey);
-                                                        const dayName = d.getDay() === 0 ? 'CN' : `T${d.getDay() + 1}`;
-                                                        return `${dayName} - ${format(d, 'dd/MM/yyyy', { locale: vi })}`;
-                                                    })()}
-                                                </span>
-                                            ) : (
-                                                <div className="flex flex-col gap-1 items-start group">
+                                    // Consolidate students for SC (Sáng Chiều)
+                                    // Map: studentCode -> { name, status, count, id }
+                                    const consolidatedMap: Record<string, { name: string, status: string, count: number, id: string, classId: string, date: string }> = {};
+                                    subGroupItems.forEach(item => {
+                                        if (!consolidatedMap[item.studentCode]) {
+                                            consolidatedMap[item.studentCode] = {
+                                                name: item.studentName,
+                                                status: item.status,
+                                                count: 1,
+                                                id: item.id,
+                                                classId: item.classId,
+                                                date: item.date
+                                            };
+                                        } else {
+                                            consolidatedMap[item.studentCode].count++;
+                                        }
+                                    });
+                                    const consolidatedStudents = Object.entries(consolidatedMap).map(([code, info]) => ({
+                                        code, ...info
+                                    })).sort((a, b) => a.name.localeCompare(b.name));
+
+                                    return (
+                                        <div key={subKey} className="bg-white border border-gray-100 rounded-lg p-3 grid grid-cols-12 gap-4 items-start shadow-sm hover:shadow-md transition-shadow">
+
+                                            {/* Left Column: Date or Class */}
+                                            <div className="col-span-12 md:col-span-2 flex items-center h-full">
+                                                {groupBy === 'CLASS' ? (
                                                     <span className="text-sm font-bold text-gray-700 bg-gray-100 flex items-center rounded overflow-hidden shadow-sm border border-gray-200">
                                                         <span className="px-2 py-1 flex items-center gap-2">
-                                                            {subKey}
                                                             {(() => {
-                                                                // SS and V for 'DATE' group -> Class subGroup
-                                                                const classId = subGroups[subKey][0]?.classId;
-                                                                const ss = classId ? classSizes[classId] : 0;
-                                                                const v = subGroups[subKey].length;
+                                                                const d = new Date(subKey);
+                                                                const dayName = d.getDay() === 0 ? 'CN' : `T${d.getDay() + 1}`;
+                                                                return `${dayName} - ${format(d, 'dd/MM/yyyy', { locale: vi })}`;
+                                                            })()}
+                                                            {(() => {
+                                                                // SS and V for 'CLASS' group -> Date subGroup
+                                                                const classId = items[0]?.classId;
+                                                                const ss = classId ? (classSizes[classId] || 0) : 0;
+                                                                const v = consolidatedStudents.length; // Count unique students
                                                                 return (
-                                                                    <span className="text-[10px] font-medium text-gray-500 bg-white px-1.5 py-0.5 rounded shadow-sm opacity-80 whitespace-nowrap">
-                                                                        SS: {ss || '?'}, V: {v}
+                                                                    <span className="text-[10px] font-bold flex gap-1">
+                                                                        <span className="text-blue-600 bg-blue-50 px-1 rounded border border-blue-100">SS: {ss || '?'}</span>
+                                                                        <span className="text-red-600 bg-red-50 px-1 rounded border border-red-100">V: {v}</span>
                                                                     </span>
                                                                 );
                                                             })()}
                                                         </span>
-                                                        <button
-                                                            onClick={() => setAddModalConfig({ className: subKey, date: key })}
-                                                            className="bg-gray-200 hover:bg-gray-300 transition-colors p-1"
-                                                            title={`Thêm học sinh vắng lớp ${subKey} ngày ${format(new Date(key), 'dd/MM')}`}
-                                                        >
-                                                            <Plus size={14} strokeWidth={3} className="text-gray-600" />
-                                                        </button>
                                                     </span>
-                                                </div>
-                                            )}
-                                        </div>
+                                                ) : (
+                                                    <div className="flex flex-col gap-1 items-start group">
+                                                        <span className="text-sm font-bold text-gray-700 bg-gray-100 flex items-center rounded overflow-hidden shadow-sm border border-gray-200">
+                                                            <span className="px-2 py-1 flex items-center gap-2">
+                                                                {subKey}
+                                                                {(() => {
+                                                                    // SS and V for 'DATE' group -> Class subGroup
+                                                                    const classId = subGroupItems[0]?.classId;
+                                                                    const ss = classId ? classSizes[classId] : 0;
+                                                                    const v = consolidatedStudents.length; // Count unique students
+                                                                    return (
+                                                                        <span className="text-[10px] font-bold flex gap-1 bg-white px-1.5 py-0.5 rounded shadow-sm opacity-90 whitespace-nowrap">
+                                                                            <span className="text-blue-600">SS: {ss || '?'}</span>
+                                                                            <span className="text-red-600">V: {v}</span>
+                                                                        </span>
+                                                                    );
+                                                                })()}
+                                                            </span>
+                                                            <button
+                                                                onClick={() => setAddModalConfig({ className: subKey, date: key })}
+                                                                className="bg-gray-200 hover:bg-gray-300 transition-colors p-1"
+                                                                title={`Thêm học sinh vắng lớp ${subKey} ngày ${format(new Date(key), 'dd/MM')}`}
+                                                            >
+                                                                <Plus size={14} strokeWidth={3} className="text-gray-600" />
+                                                            </button>
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
 
-                                        {/* Right Column: List of Students */}
-                                        <div className="col-span-12 md:col-span-10 flex flex-wrap gap-2">
-                                            {subGroups[subKey].map(student => (
-                                                <div
-                                                    key={student.id}
-                                                    className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 px-2 py-1 rounded-md text-sm text-gray-700 hover:bg-white hover:border-gray-300 transition-colors cursor-pointer hover:shadow-sm"
-                                                    onClick={(e) => {
-                                                        const rect = e.currentTarget.getBoundingClientRect();
-                                                        setEditCell({
-                                                            classId: student.classId,
-                                                            studentCode: student.studentCode,
-                                                            studentName: student.studentName,
-                                                            date: student.date,
-                                                            currentStatus: student.status,
-                                                            rect: { top: rect.bottom + window.scrollY, left: rect.left + window.scrollX }
-                                                        });
-                                                    }}
-                                                >
-                                                    <span className="font-bold text-gray-500 text-xs">{student.studentCode.split('_').pop()}</span>
-                                                    <span className="font-medium">{student.studentName}</span>
-                                                    <CompactStatusBadge status={student.status} />
-                                                </div>
-                                            ))}
+                                            {/* Right Column: List of Students */}
+                                            <div className="col-span-12 md:col-span-10 flex flex-wrap gap-2">
+                                                {consolidatedStudents.map(student => (
+                                                    <div
+                                                        key={student.id}
+                                                        className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 px-2 py-1 rounded-md text-sm text-gray-700 hover:bg-white hover:border-gray-300 transition-colors cursor-pointer hover:shadow-sm"
+                                                        onClick={(e) => {
+                                                            const rect = e.currentTarget.getBoundingClientRect();
+                                                            setEditCell({
+                                                                classId: student.classId,
+                                                                studentCode: student.code,
+                                                                studentName: student.name,
+                                                                date: student.date,
+                                                                currentStatus: student.status,
+                                                                rect: { top: rect.bottom + window.scrollY, left: rect.left + window.scrollX }
+                                                            });
+                                                        }}
+                                                    >
+                                                        <span className="font-bold text-gray-500 text-xs">{student.code.split('_').pop()}</span>
+                                                        <span className="font-medium">
+                                                            {student.name}
+                                                            {student.count > 1 && <span className="text-red-600 font-black ml-1">(SC)</span>}
+                                                        </span>
+                                                        <CompactStatusBadge status={student.status} />
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
                 );
             })}
+
+            {/* Chú thích phía dưới cùng */}
+            <div className="mt-4 p-3 bg-blue-50/50 border border-blue-100 rounded-lg flex items-center gap-3 text-xs text-blue-800">
+                <div className="bg-blue-100 p-1 rounded-full text-blue-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
+                </div>
+                <p>
+                    <span className="font-bold">Ghi chú:</span> Ký hiệu <span className="text-red-600 font-bold">(SC)</span> hiển thị cho các học sinh vắng cả <span className="font-bold">Sáng</span> và <span className="font-bold">Chiều</span> trong cùng một ngày.
+                </p>
+            </div>
 
             {/* Custom Popover Editor */}
             {editCell && (

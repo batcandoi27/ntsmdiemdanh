@@ -9,9 +9,7 @@ import { getColumn } from './column-service';
 import {
     collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, writeBatch
 } from 'firebase/firestore';
-
-const SCHOOL_ID = 'default';
-const CURRENT_YEAR = '2025-2026';
+import { SCHOOL_ID, DEFAULT_YEAR as CURRENT_YEAR } from '@/config/constants';
 
 /**
  * Get the Firestore path for column data

@@ -25,6 +25,7 @@ interface ReportsFilterProps {
     onExportAdvanced?: () => void;
     onGenerateReport: () => void;
     isLoading?: boolean;
+    isExporting?: boolean;
 }
 
 type FilterMode = 'WEEK' | 'MONTH' | 'CUSTOM';
@@ -47,7 +48,8 @@ export function ReportsFilter({
     onExport,
     onExportAdvanced,
     onGenerateReport,
-    isLoading = false
+    isLoading = false,
+    isExporting = false
 }: ReportsFilterProps) {
     const [openClassDropdown, setOpenClassDropdown] = useState(false);
     const [openColumnDropdown, setOpenColumnDropdown] = useState(false);
@@ -55,7 +57,7 @@ export function ReportsFilter({
     const dropdownRef = useRef<HTMLDivElement>(null);
     const columnDropdownRef = useRef<HTMLDivElement>(null);
     const exportDropdownRef = useRef<HTMLDivElement>(null);
-    const [filterMode, setFilterMode] = useState<FilterMode>('MONTH');
+    const [filterMode, setFilterMode] = useState<FilterMode>('WEEK');
 
     // Close dropdowns on click outside
     useEffect(() => {
@@ -196,7 +198,7 @@ export function ReportsFilter({
                         </button>
 
                         <div className="flex items-center gap-2 px-2 text-sm font-black text-black sm:min-w-[130px] justify-center text-center">
-                            {filterMode === 'WEEK' && <span>T.{format(parseISO(dateRange.start), "ww-Mm/yyyy")}</span>}
+                            {filterMode === 'WEEK' && <span>T.02-{format(parseISO(dateRange.start), "dd/MM")}</span>}
                             {filterMode === 'MONTH' && <span>Th.{format(parseISO(dateRange.start), 'MM/yyyy')}</span>}
                             {filterMode === 'CUSTOM' && <span>Tùy Chọn</span>}
                         </div>
@@ -239,7 +241,7 @@ export function ReportsFilter({
                             <div className="flex items-center gap-1.5 text-sm text-black font-bold truncate">
                                 <Filter size={14} className="text-gray-500 stroke-[2.5px] shrink-0 hidden sm:block" />
                                 <span className="truncate">
-                                    {selectedClasses.length === 0 || selectedClasses.length === classes.length ? "Tất cả lớp" : `Xem ${selectedClasses.length} lớp`}
+                                    {selectedClasses.length === 0 ? "Chưa chọn lớp" : selectedClasses.length === classes.length ? "Tất cả lớp" : `Xem ${selectedClasses.length} lớp`}
                                 </span>
                             </div>
                             <ChevronsUpDown size={14} className="text-gray-400 stroke-[2px] shrink-0" />
@@ -321,16 +323,16 @@ export function ReportsFilter({
                     <div className="relative flex-1 md:flex-none flex" ref={exportDropdownRef}>
                         <button
                             onClick={() => onExport(false)}
-                            disabled={isLoading}
+                            disabled={isLoading || isExporting}
                             className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 disabled:cursor-not-allowed text-white px-3 sm:px-4 py-2 rounded-l-lg font-bold text-sm shadow-md flex items-center justify-center gap-1.5 sm:gap-2 transition-all active:scale-95 border border-emerald-700 border-r-emerald-800 whitespace-nowrap"
                         >
-                            {isLoading ? <Loader2 size={16} className="animate-spin" /> : <LayoutGrid size={16} className="stroke-[2.5px]" />}
-                            <span className="hidden sm:inline">Xuất Excel</span>
-                            <span className="sm:hidden">Xuất</span>
+                            {isExporting ? <Loader2 size={16} className="animate-spin" /> : <LayoutGrid size={16} className="stroke-[2.5px]" />}
+                            <span className="hidden sm:inline">{isExporting ? "Đang xuất..." : "Xuất Excel"}</span>
+                            <span className="sm:hidden">{isExporting ? "..." : "Xuất"}</span>
                         </button>
                         <button
                             onClick={() => setOpenExportDropdown(!openExportDropdown)}
-                            disabled={isLoading}
+                            disabled={isLoading || isExporting}
                             className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 disabled:cursor-not-allowed text-white px-1.5 py-2 rounded-r-lg shadow-md flex items-center justify-center transition-all active:scale-95 border border-emerald-700 border-l-0"
                         >
                             <ChevronDown size={18} className="stroke-[2.5px]" />
@@ -338,7 +340,7 @@ export function ReportsFilter({
                         {openExportDropdown && (
                             <div className="absolute top-full mt-2 right-0 w-52 bg-white rounded-xl shadow-xl border border-gray-200 z-50 p-1.5 animate-in fade-in zoom-in-95 duration-150 origin-top-right">
                                 <button
-                                    onClick={() => { setOpenExportDropdown(false); onExport(false); }}
+                                    onClick={() => { setOpenExportDropdown(false); setTimeout(() => onExport(false), 0); }}
                                     className="w-full text-left px-3 py-2 text-sm font-bold text-gray-800 hover:bg-gray-100 rounded-lg flex flex-col transition-colors"
                                 >
                                     <span>Đầy đủ (cả lớp)</span>
@@ -346,7 +348,7 @@ export function ReportsFilter({
                                 </button>
                                 <div className="h-px bg-gray-100 my-1"></div>
                                 <button
-                                    onClick={() => { setOpenExportDropdown(false); onExport(true); }}
+                                    onClick={() => { setOpenExportDropdown(false); setTimeout(() => onExport(true), 0); }}
                                     className="w-full text-left px-3 py-2 text-sm font-bold text-gray-800 hover:bg-gray-100 rounded-lg flex flex-col transition-colors"
                                 >
                                     <span className="text-emerald-700">Rút gọn (HS Vắng)</span>
@@ -356,7 +358,7 @@ export function ReportsFilter({
                                     <>
                                         <div className="h-px bg-gray-200 my-1"></div>
                                         <button
-                                            onClick={() => { setOpenExportDropdown(false); onExportAdvanced(); }}
+                                            onClick={() => { setOpenExportDropdown(false); setTimeout(() => onExportAdvanced(), 0); }}
                                             className="w-full text-left px-3 py-2 text-sm font-bold text-purple-700 hover:bg-purple-50 rounded-lg flex flex-col transition-colors"
                                         >
                                             <span>Báo Cáo Tổng Hợp</span>

@@ -24,7 +24,7 @@ import { AppUser, Student } from '@/types/models';
 import { checkClassEditAccess, checkEditWindow, checkStudentActive } from './auth-guard';
 import { getEffectiveStatus, isStudentAttendable } from './student-status-service';
 
-const ACTIVE_YEAR = '2025-2026';
+import { DEFAULT_YEAR as ACTIVE_YEAR } from '@/config/constants';
 
 // ============================================
 // Mark Attendance (Single Student)

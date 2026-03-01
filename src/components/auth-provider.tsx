@@ -85,7 +85,7 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
     // Loading overlay
     if (loading || !checked) {
         return (
-            <div className={`fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center transition-opacity duration-300 ${showOverlay ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            <div className={`fixed inset-0 bg-white z-40 flex flex-col items-center justify-center transition-opacity duration-300 ${showOverlay ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                 {showOverlay && (
                     <div className="flex flex-col items-center gap-4">
                         <div className="w-12 h-12 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin" />

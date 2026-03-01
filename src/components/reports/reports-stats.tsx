@@ -36,9 +36,9 @@ export function ReportsStats({ stats, loading }: ReportsStatsProps) {
             <StatCard label="Vi Phạm (VP)" value={stats.VP ?? 0} color="purple" icon={<Ban size={16} />} />
 
             {/* Chart */}
-            <div className="bg-white p-2 rounded-xl border border-gray-100 shadow-sm relative h-[100px]">
+            <div className="bg-white p-2 rounded-xl border border-gray-100 shadow-sm relative h-[100px] min-w-0">
                 {chartData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                         <PieChart>
                             <Pie
                                 data={chartData}
@@ -73,6 +73,7 @@ function StatCard({ label, value, color, icon }: any) {
         red: "text-red-600 bg-red-50 border-red-100",
         blue: "text-blue-600 bg-blue-50 border-blue-100",
         purple: "text-purple-600 bg-purple-50 border-purple-100",
+        orange: "text-orange-600 bg-orange-50 border-orange-100",
     };
 
     return (

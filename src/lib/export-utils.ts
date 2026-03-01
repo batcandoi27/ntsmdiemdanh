@@ -1,6 +1,34 @@
 import ExcelJS from 'exceljs';
 import * as XLSX from 'xlsx'; // Giữ lại nếu cần helper phụ, nhưng logic chính sẽ override.
 import { saveAs } from 'file-saver';
+import { format } from 'date-fns';
+
+// --- Chrome-compatible download helper ---
+function triggerDownload(blob: Blob, filename: string) {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.style.display = 'none';
+    link.href = url;
+    link.download = filename;
+    link.setAttribute('data-downloadurl', `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:${filename}:${url}`);
+    document.body.appendChild(link);
+
+    // Dùng MouseEvent thay vì .click() để Chrome nhận diện tốt hơn
+    const event = new MouseEvent('click', {
+        view: window,
+        bubbles: true,
+        cancelable: false
+    });
+    link.dispatchEvent(event);
+
+    // Dọn dẹp sau 60 giây (đủ thời gian cho Chrome xử lý)
+    setTimeout(() => {
+        if (document.body.contains(link)) {
+            document.body.removeChild(link);
+        }
+        window.URL.revokeObjectURL(url);
+    }, 60000);
+}
 
 // --- Types ---
 interface ExportData {
@@ -12,6 +40,8 @@ interface ExportData {
     }[];
     year: number;
     month: number;
+    startDate?: string;
+    endDate?: string;
 }
 
 // --- Helpers ---
@@ -71,7 +101,11 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string) 
 
         sheet.mergeCells('A3:AC3'); // Merge Rộng ra
         const titleMain = sheet.getCell('A3');
-        titleMain.value = `BẢNG ĐIỂM DANH THÁNG ${classData.month} - NĂM ${classData.year} - LỚP ${classData.className}`;
+        if (classData.startDate && classData.endDate) {
+            titleMain.value = `BẢNG ĐIỂM DANH TỪ ${format(new Date(classData.startDate), 'dd/MM/yyyy')} ĐẾN ${format(new Date(classData.endDate), 'dd/MM/yyyy')} - LỚP ${classData.className}`;
+        } else {
+            titleMain.value = `BẢNG ĐIỂM DANH THÁNG ${classData.month} - NĂM ${classData.year} - LỚP ${classData.className}`;
+        }
         titleMain.font = { bold: true, size: 14, name: 'Times New Roman', color: { argb: 'FF0000FF' } }; // Blue Title
         titleMain.alignment = { horizontal: 'center' };
 
@@ -102,12 +136,28 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string) 
         setHeaderStyle(sheet.getCell(`B${subHeaderRowIdx}`));
         setHeaderStyle(sheet.getCell(`C${subHeaderRowIdx}`));
 
-        // Generate Days Columns
-        const daysInMonth = new Date(classData.year, classData.month, 0).getDate();
+        // Generate Days Columns based on date range or full month
         let colIdx = 4; // Start from D
+        const dates: Date[] = [];
 
-        for (let d = 1; d <= daysInMonth; d++) {
-            const date = new Date(classData.year, classData.month - 1, d);
+        if (classData.startDate && classData.endDate) {
+            // Use specific range (e.g. for Weekly or Custom reports)
+            let curr = new Date(classData.startDate);
+            const end = new Date(classData.endDate);
+            while (curr <= end) {
+                dates.push(new Date(curr));
+                curr.setDate(curr.getDate() + 1);
+            }
+        } else {
+            // Default to full month
+            const daysInMonth = new Date(classData.year, classData.month, 0).getDate();
+            for (let d = 1; d <= daysInMonth; d++) {
+                dates.push(new Date(classData.year, classData.month - 1, d));
+            }
+        }
+
+        dates.forEach(date => {
+            const d = date.getDate();
             const dayOfWeek = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][date.getDay()];
             const isWeekend = dayOfWeek === 'CN' || dayOfWeek === 'T7';
 
@@ -130,7 +180,7 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string) 
 
             sheet.getColumn(colIdx).width = 4; // Narrow for days
             colIdx++;
-        }
+        });
 
         // Summary Columns
         const summaryHeaders = ["P", "K", "V", "Tổng"];
@@ -145,6 +195,7 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string) 
 
 
         // --- 3. Data Rows ---
+        console.log(`Bắt đầu ghi dữ liệu Excel cho lớp: ${classData.className}, số lượng HS: ${classData.students.length}`);
         let currentRowIdx = 7;
         classData.students.forEach((s, index) => {
             const row = sheet.getRow(currentRowIdx);
@@ -166,8 +217,8 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string) 
             let dayColIdx = 4;
             let countP = 0, countK = 0, countV = 0;
 
-            for (let d = 1; d <= daysInMonth; d++) {
-                const dateStr = `${classData.year}-${classData.month.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
+            dates.forEach(date => {
+                const dateStr = format(date, 'yyyy-MM-dd');
                 const status = s.absences[dateStr] || '';
                 const cell = row.getCell(dayColIdx);
 
@@ -191,7 +242,6 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string) 
                     cell.font = { ...cell.font, color: { argb: 'FFFFFFFF' } }; // White text
                 } else {
                     // Default weekend color for empty cells?
-                    const date = new Date(classData.year, classData.month - 1, d);
                     const dayOfWeek = date.getDay(); // 0 is Sunday
                     if (dayOfWeek === 0 || dayOfWeek === 6) {
                         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } };
@@ -199,7 +249,7 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string) 
                 }
 
                 dayColIdx++;
-            }
+            });
 
             // Summary Data
             row.getCell(dayColIdx).value = countP > 0 ? countP : '';
@@ -219,12 +269,66 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string) 
             currentRowIdx++;
         });
 
+        // --- 4. Summary Row (Total by Day) ---
+        const summaryRowIdx = currentRowIdx;
+        const summaryRow = sheet.getRow(summaryRowIdx);
+
+        // Merge STT, Name, Code
+        sheet.mergeCells(`A${summaryRowIdx}:C${summaryRowIdx}`);
+        const sumLabelCell = summaryRow.getCell(1);
+        sumLabelCell.value = "TỔNG CỘNG";
+        setHeaderStyle(sumLabelCell, '4F46E5'); // Indigo
+        sumLabelCell.font = { bold: true, size: 11, name: 'Times New Roman', color: { argb: 'FFFFFFFF' } };
+
+        // Calculate sums for each date column
+        colIdx = 4;
+        dates.forEach((date, dIdx) => {
+            const dateStr = format(date, 'yyyy-MM-dd');
+            let dayTotal = 0;
+            classData.students.forEach(s => {
+                const status = s.absences[dateStr];
+                if (status && status !== '' && status !== 'C') {
+                    dayTotal++;
+                }
+            });
+
+            const cell = summaryRow.getCell(colIdx);
+            cell.value = dayTotal > 0 ? dayTotal : '';
+            setHeaderStyle(cell, 'F3F4F6'); // Light Gray
+            cell.font = { bold: true, name: 'Times New Roman', size: 10 };
+            colIdx++;
+        });
+
+        // Total P, K, V, Grand Total sums
+        const grandSums = { P: 0, K: 0, V: 0, Total: 0 };
+        classData.students.forEach(s => {
+            Object.values(s.absences).forEach(status => {
+                if (status === 'P') grandSums.P++;
+                if (status === 'K') grandSums.K++;
+                if (status === 'V') grandSums.V++;
+            });
+        });
+        grandSums.Total = grandSums.P + grandSums.K + grandSums.V;
+
+        [grandSums.P, grandSums.K, grandSums.V, grandSums.Total].forEach(val => {
+            const cell = summaryRow.getCell(colIdx);
+            cell.value = val > 0 ? val : '';
+            setHeaderStyle(cell, 'FEF3C7'); // Light Yellow
+            cell.font = { bold: true, name: 'Times New Roman', size: 10 };
+            colIdx++;
+        });
+
     });
 
     // Write file
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    saveAs(blob, `${fileName}.xlsx`);
+    try {
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        triggerDownload(blob, `${fileName}.xlsx`);
+    } catch (err) {
+        console.error("[exportMonthlyReport] Lỗi:", err);
+        throw err;
+    }
 };
 
 // Simple export fallback (unchanged or updated if needed, but Monthly is priority)
@@ -367,7 +471,7 @@ export const exportTermReport = async (reports: TermReportData[], fileName: stri
 
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    saveAs(blob, `${fileName}.xlsx`);
+    triggerDownload(blob, `${fileName}.xlsx`);
 };
 
 export const exportToExcel = async (data: ExportData[], fileName: string, isCompact: boolean = false) => {

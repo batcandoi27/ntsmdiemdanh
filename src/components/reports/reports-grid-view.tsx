@@ -254,6 +254,52 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                                             </tr>
                                         );
                                     })}
+                                    {/* SUMMARY ROW */}
+                                    <tr className="bg-gray-200 border-t-2 border-gray-800 font-extrabold text-black">
+                                        <td colSpan={2} className="p-2 border border-gray-500 text-right uppercase tracking-wider sticky left-0 z-30 bg-gray-200 shadow-[4px_0_10px_-2px_rgba(0,0,0,0.3)]">
+                                            Tổng cộng
+                                        </td>
+                                        {dates.map(date => {
+                                            const dateStr = format(date, 'yyyy-MM-dd');
+                                            let count = 0;
+                                            students.forEach(s => {
+                                                const status = s.absences[dateStr];
+                                                if (status && (status === 'P' || status === 'K')) {
+                                                    count++;
+                                                }
+                                            });
+                                            return (
+                                                <td key={`total-${dateStr}`} className="p-1 border border-gray-500 text-center text-sm font-black text-red-700 bg-gray-100">
+                                                    {count > 0 ? count : ''}
+                                                </td>
+                                            );
+                                        })}
+                                        {visibleColumns.includes('P') && (
+                                            <td className="p-1 border border-gray-500 text-center text-base bg-yellow-300">
+                                                {students.reduce((sum, s) => sum + Object.values(s.absences || {}).filter(st => st === 'P').length, 0) || ''}
+                                            </td>
+                                        )}
+                                        {visibleColumns.includes('K') && (
+                                            <td className="p-1 border border-gray-500 text-center text-base bg-red-300 text-white">
+                                                {students.reduce((sum, s) => sum + Object.values(s.absences || {}).filter(st => st === 'K').length, 0) || ''}
+                                            </td>
+                                        )}
+                                        {visibleColumns.includes('T') && (
+                                            <td className="p-1 border border-gray-500 text-center text-base bg-blue-300">
+                                                {students.reduce((sum, s) => sum + Object.values(s.absences || {}).filter(st => st === 'T').length, 0) || ''}
+                                            </td>
+                                        )}
+                                        {visibleColumns.includes('VP') && (
+                                            <td className="p-1 border border-gray-500 text-center text-base bg-purple-300 text-white">
+                                                {students.reduce((sum, s) => sum + Object.values(s.absences || {}).filter(st => st === 'VP').length, 0) || ''}
+                                            </td>
+                                        )}
+                                        {visibleColumns.includes('KH') && (
+                                            <td className="p-1 border border-gray-500 text-center text-base bg-pink-300">
+                                                {students.reduce((sum, s) => sum + Object.values(s.absences || {}).filter(st => st === 'KH').length, 0) || ''}
+                                            </td>
+                                        )}
+                                    </tr>
                                 </tbody>
                             </table>
                         </div>

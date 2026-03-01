@@ -262,25 +262,31 @@ export async function getExcelExportData(
 
             // V3 data: record is 1 exception
             classRecords.filter(r => r.studentId === student.code || (r.absences && r.absences[student.code])).forEach(r => {
+                let statusCode = '';
+                let dateStr = '';
+
                 if (r.studentId && r.status) {
                     // It's V3 format
-                    let statusCode = r.status;
+                    statusCode = r.status;
                     if (statusCode === 'absent') statusCode = 'K';
                     if (statusCode === 'excused') statusCode = 'P';
                     if (statusCode === 'late') statusCode = 'T';
                     if (statusCode === 'violation') statusCode = 'VP';
                     if (statusCode === 'praise') statusCode = 'KH';
-
-                    const dateStr = r.date || r.timestamp?.split('T')[0];
-                    if (dateStr) {
-                        absences[dateStr] = statusCode;
-                        if (statusCode && statusCode !== '' && statusCode !== 'C') hasAbsence = true;
-                    }
+                    dateStr = r.date || r.timestamp?.split('T')[0];
                 } else if (r.absences && r.absences[student.code]) {
                     // It's V1 format
-                    const statusCode = r.absences[student.code];
-                    absences[r.date] = statusCode;
-                    if (statusCode && statusCode !== '' && statusCode !== 'C') hasAbsence = true;
+                    statusCode = r.absences[student.code];
+                    dateStr = r.date;
+                }
+
+                if (dateStr && statusCode && statusCode !== 'C') {
+                    // Nếu đã có bản ghi trong ngày (Sáng/Chiều), ưu tiên giữ lại hoặc gộp
+                    // Với Excel, chúng ta chỉ cần biết ngày đó có vắng hay không
+                    // Nếu nghỉ cả 2 buổi, logic ReportsListView sẽ hiện (SC)
+                    // Ở đây absences[dateStr] sẽ lưu trạng thái.
+                    absences[dateStr] = statusCode;
+                    hasAbsence = true;
                 }
             });
 
@@ -300,7 +306,9 @@ export async function getExcelExportData(
                 className: cls.name,
                 year: exportYear,
                 month: exportMonth,
-                students: mappedStudents.map(({ code, name, absences }) => ({ code, name, absences }))
+                startDate: startDate, // Thêm ngày bắt đầu để helper tính toán cột
+                endDate: endDate,     // Thêm ngày kết thúc
+                students: mappedStudents.sort((a, b) => a.name.localeCompare(b.name))
             });
         }
     }

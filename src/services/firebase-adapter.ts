@@ -5,11 +5,23 @@ import {
     collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, writeBatch
 } from 'firebase/firestore';
 import { getCached, setCache, invalidateCachePrefix } from './cache-service';
+import { SCHOOL_ID, DEFAULT_YEAR } from '@/config/constants';
 
-// Hardcode school ID for single-school MVP
-// Hardcode school ID for single-school MVP
-const SCHOOL_ID = 'default';
-const CURRENT_YEAR = '2025-2026'; // Năm học mặc định
+// Dynamic year resolution - cache kết quả từ Firestore
+let _cachedYear: string | null = null;
+async function resolveCurrentYear(): Promise<string> {
+    if (_cachedYear) return _cachedYear;
+    try {
+        const { getActiveYear } = await import('./year-service');
+        _cachedYear = await getActiveYear();
+        setTimeout(() => { _cachedYear = null; }, 5 * 60 * 1000);
+        return _cachedYear;
+    } catch {
+        return DEFAULT_YEAR;
+    }
+}
+// Backward compat: giữ biến CURRENT_YEAR cho các hàm sync
+const CURRENT_YEAR = DEFAULT_YEAR;
 
 export class FirebaseAdapter implements DbAdapter {
 

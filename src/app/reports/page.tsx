@@ -19,6 +19,7 @@ export default function ReportsPage() {
     const { flags, loading: flagsLoading } = useFeatureFlags();
     const { appUser } = useAuth();
     const [loading, setLoading] = useState(false);
+    const [exportLoading, setExportLoading] = useState(false);
     const [result, setResult] = useState<ReportResult | null>(null);
     const [classes, setClasses] = useState<Class[]>([]);
 
@@ -35,6 +36,7 @@ export default function ReportsPage() {
     const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
     const [visibleColumns, setVisibleColumns] = useState<string[]>(['P', 'K', 'T', 'VP', 'KH']); // Default visible columns
     const [isFilterActive, setIsFilterActive] = useState(false); // Track if user has manually triggered report
+    const [filterMode, setFilterMode] = useState<'WEEK' | 'MONTH' | 'CUSTOM'>('WEEK');
 
     // Read initial selected classes from localStorage (Lớp của tôi)
     useEffect(() => {
@@ -76,10 +78,14 @@ export default function ReportsPage() {
     } : { P: 0, K: 0, V: 0, T: 0, VP: 0, KH: 0, Total: 0 };
 
     const handleManualFetch = async () => {
+        if (selectedClasses.length === 0) {
+            alert('Vui lòng chọn ít nhất một lớp để xem báo cáo.');
+            return;
+        }
         setLoading(true);
         setIsFilterActive(true);
         try {
-            const targetClassIds = selectedClasses.length > 0 ? selectedClasses : classes.map(c => c.id);
+            const targetClassIds = selectedClasses;
             const data = await getReports({ startDate: dateRange.start, endDate: dateRange.end, classIds: targetClassIds });
             setResult(data);
         } catch (error) {
@@ -91,44 +97,50 @@ export default function ReportsPage() {
     };
 
     const handleExport = async (isCompact: boolean = false) => {
-        setLoading(true);
+        if (selectedClasses.length === 0) {
+            alert('Vui lòng chọn ít nhất một lớp để xuất báo cáo.');
+            return;
+        }
+        if (exportLoading) return;
+        setExportLoading(true);
         try {
-            const targetClassIds = selectedClasses.length > 0 ? selectedClasses : classes.map(c => c.id);
+            const targetClassIds = selectedClasses;
             const data = await getExcelExportData(dateRange.start, dateRange.end, targetClassIds, isCompact);
-
             if (!data || data.length === 0) {
                 alert('Chưa có dữ liệu để xuất.');
                 return;
             }
-
-            await exportToExcel(data, `BaoCao_${dateRange.start}_${dateRange.end}`, isCompact);
+            const ts = format(new Date(), 'HHmmss');
+            await exportToExcel(data, `BaoCao_${dateRange.start}_${ts}`, isCompact);
         } catch (error) {
-            console.error(error);
-            alert('Lỗi xuất báo cáo');
+            console.error("[handleExport] Lỗi:", error);
+            alert('Lỗi xuất báo cáo: ' + (error as Error).message);
         } finally {
-            setLoading(false);
+            setExportLoading(false);
         }
     };
 
     const handleExportAdvanced = async () => {
-        setLoading(true);
+        if (selectedClasses.length === 0) {
+            alert('Vui lòng chọn ít nhất một lớp để xuất báo cáo.');
+            return;
+        }
+        if (exportLoading) return;
+        setExportLoading(true);
         try {
-            const targetClassIds = selectedClasses.length > 0 ? selectedClasses : classes.map(c => c.id);
-            // Server Action
+            const targetClassIds = selectedClasses;
             const data = await getAdvancedReportData(dateRange.start, dateRange.end, targetClassIds, appUser?.uid);
-
             if (data.length === 0) {
                 alert('Không có dữ liệu để xuất.');
                 return;
             }
-
-            // Export logic (Client)
-            await exportTermReport(data, `BaoCaoTongHop_${dateRange.start}_${dateRange.end}`);
+            const ts = format(new Date(), 'HHmmss');
+            await exportTermReport(data, `BaoCaoTongHop_${ts}`);
         } catch (error) {
-            console.error('Export error:', error);
-            alert('Có lỗi khi xuất báo cáo.');
+            console.error('[handleExportAdvanced] Lỗi:', error);
+            alert('Có lỗi khi xuất báo cáo: ' + (error as Error).message);
         } finally {
-            setLoading(false);
+            setExportLoading(false);
         }
     };
 
@@ -181,6 +193,7 @@ export default function ReportsPage() {
                     onExportAdvanced={handleExportAdvanced}
                     onGenerateReport={handleManualFetch}
                     isLoading={loading}
+                    isExporting={exportLoading}
                 />
 
                 {/* Stats Cards */}

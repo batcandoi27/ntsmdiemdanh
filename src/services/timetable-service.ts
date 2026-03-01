@@ -17,8 +17,9 @@ import {
 } from '@/types/timetable';
 import { AppUser } from '@/types/models';
 import { checkClassAccess } from './auth-guard';
+import { DEFAULT_YEAR } from '@/config/constants';
 
-const YEAR_PATH = 'years/2025-2026';
+const YEAR_PATH = `years/${DEFAULT_YEAR}`;
 
 // ============================================
 // CRUD
