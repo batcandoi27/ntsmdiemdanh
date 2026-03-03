@@ -178,6 +178,7 @@ export default function ReportsPage() {
 
                 {/* Filter Bar */}
                 <ReportsFilter
+                    appUser={appUser}
                     dateRange={dateRange}
                     setDateRange={setDateRange}
                     selectedClasses={selectedClasses}

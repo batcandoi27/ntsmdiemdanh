@@ -194,6 +194,8 @@ export interface Class {
     classType?: string; // BT, TCH...
     actualStudentCount?: number;    // [v3] Sĩ số thực tế = active + temp_leave
     sessions?: ('morning' | 'afternoon')[]; // [v3] ['morning'] hoặc ['morning','afternoon']
+    isPersonal?: boolean; // Đánh dấu lớp do người dùng tự tạo
+    ownerId?: string;     // ID người dùng tạo lớp cá nhân
 }
 
 export interface Student {

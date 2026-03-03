@@ -1,10 +1,11 @@
-import { Class } from "@/types/models";
+import { Class, AppUser } from "@/types/models";
 import { Calendar, Filter, LayoutGrid, List, Check, ChevronsUpDown, ChevronLeft, ChevronRight, Settings2, Loader2, ChevronDown } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, addWeeks, subWeeks, addMonths, subMonths, parseISO, format, isSameDay } from "date-fns";
 
 interface ReportsFilterProps {
+    appUser?: AppUser | null;
     dateRange: { start: string, end: string };
     setDateRange: (range: { start: string, end: string }) => void;
 
@@ -39,6 +40,7 @@ const COLUMNS = [
 ];
 
 export function ReportsFilter({
+    appUser,
     dateRange, setDateRange,
     selectedClasses, setSelectedClasses,
     classes,
@@ -84,11 +86,28 @@ export function ReportsFilter({
         }
     };
 
+    // Xác định ds lớp default của người này
+    // Yêu cầu: Nếu ko có lớp thì phải thông báo là chưa chọn lớp nào, chứ ko dc mặc định là chọn tất cả
+    const defaultClasses = appUser?.assignedClassIds && appUser.assignedClassIds.length > 0
+        ? appUser.assignedClassIds
+        : [];
+
+    // Helper text logic
+    const isSelectingAllDefaults = selectedClasses.length > 0 && defaultClasses.length > 0 && defaultClasses.every(id => selectedClasses.includes(id)) && selectedClasses.every(id => defaultClasses.includes(id));
+    const isSelectingAbsolutelyAll = selectedClasses.length === classes.length && classes.length > 0;
+
     const toggleAllClasses = () => {
-        if (selectedClasses.length === classes.length) {
+        if (isSelectingAllDefaults || isSelectingAbsolutelyAll) {
             setSelectedClasses([]);
         } else {
-            setSelectedClasses(classes.map(c => c.id));
+            // Nút "Chọn tất cả" hoạt động ntn?
+            // Nếu có class default thì ưu tiên chọn default
+            // Nếu không có class default (ko được gán lớp nào), "Chọn tất cả" tức là chọn toàn bộ list `classes`
+            if (defaultClasses.length > 0 && !isSelectingAllDefaults) {
+                setSelectedClasses(defaultClasses);
+            } else {
+                setSelectedClasses(classes.map(c => c.id));
+            }
         }
     };
 
@@ -134,16 +153,20 @@ export function ReportsFilter({
                 end: format(endOfMonth(newStart), 'yyyy-MM-dd')
             });
         } else {
-            // Custom mode: Shift by logic of "Duration" or just default to week shift? 
-            // Let's default to shifting by 1 day or keeping it simple. 
-            // For now, if custom, maybe disable nav or shift by difference.
+            // Custom mode
             const end = parseISO(dateRange.end);
             const diff = end.getTime() - start.getTime();
             const days = Math.round(diff / (1000 * 60 * 60 * 24));
-            // Shift by days + 1
-            const fn = direction === 1 ? addWeeks : subWeeks; // Fallback to week shift if custom is weird, or manual logic.
-            // Actually user expects Week/Month buttons to work properly.
+            const fn = direction === 1 ? addWeeks : subWeeks;
         }
+    };
+
+    const getDropdownText = () => {
+        if (selectedClasses.length === 0) return "Chưa chọn lớp";
+        if (isSelectingAbsolutelyAll && appUser?.role === 'admin') return "Tất cả các lớp";
+        if (isSelectingAllDefaults && appUser?.assignedClassIds?.length) return "Lớp của tôi";
+        if (isSelectingAbsolutelyAll) return "Tất cả lớp";
+        return `Xem ${selectedClasses.length} lớp`;
     };
 
     return (
@@ -241,7 +264,7 @@ export function ReportsFilter({
                             <div className="flex items-center gap-1.5 text-sm text-black font-bold truncate">
                                 <Filter size={14} className="text-gray-500 stroke-[2.5px] shrink-0 hidden sm:block" />
                                 <span className="truncate">
-                                    {selectedClasses.length === 0 ? "Chưa chọn lớp" : selectedClasses.length === classes.length ? "Tất cả lớp" : `Xem ${selectedClasses.length} lớp`}
+                                    {getDropdownText()}
                                 </span>
                             </div>
                             <ChevronsUpDown size={14} className="text-gray-400 stroke-[2px] shrink-0" />
@@ -253,10 +276,10 @@ export function ReportsFilter({
                                     className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded-lg cursor-pointer mb-1 border-b border-gray-100"
                                     onClick={toggleAllClasses}
                                 >
-                                    <div className={cn("w-4 h-4 border rounded flex items-center justify-center", selectedClasses.length === classes.length ? "bg-blue-600 border-blue-600" : "border-gray-400 bg-white")}>
-                                        {selectedClasses.length === classes.length && <Check size={12} className="text-white stroke-[3px]" />}
+                                    <div className={cn("w-4 h-4 border rounded flex items-center justify-center", (isSelectingAllDefaults || isSelectingAbsolutelyAll) ? "bg-blue-600 border-blue-600" : "border-gray-400 bg-white")}>
+                                        {(isSelectingAllDefaults || isSelectingAbsolutelyAll) && <Check size={12} className="text-white stroke-[3px]" />}
                                     </div>
-                                    <span className="text-sm font-bold text-black">Chọn Tất Cả</span>
+                                    <span className="text-sm font-bold text-black">{appUser?.assignedClassIds?.length ? "Chọn Lớp Của Tôi" : "Chọn Tất Cả"}</span>
                                 </div>
                                 {classes.map(cls => (
                                     <div

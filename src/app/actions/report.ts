@@ -36,6 +36,8 @@ export interface ExportData {
     }[];
     year: number;
     month: number;
+    startDate?: string;
+    endDate?: string;
 }
 
 export interface ReportCriteria {

@@ -2,7 +2,7 @@ import { Class, Student, User, AttendanceRecord, AttendanceStatus } from "@/type
 
 export interface DbAdapter {
     // Lớp học
-    getClasses(): Promise<Class[]>;
+    getClasses(options?: { isPersonal?: boolean; ownerId?: string }): Promise<Class[]>;
     getClass(id: string): Promise<Class | null>;
     createClass(cls: Class): Promise<void>;
     updateClass(cls: Class): Promise<void>;

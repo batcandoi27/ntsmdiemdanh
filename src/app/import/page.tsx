@@ -118,11 +118,21 @@ export default function ImportPage() {
                         Smart Import
                     </h1>
 
-                    <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-primary transition-colors bg-gray-50 mb-6">
+                    <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-primary transition-colors bg-gray-50 mb-6 flex flex-col items-center">
                         <FileSpreadsheet className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                        <p className="text-sm text-gray-600 mb-3">
+                        <p className="text-sm text-gray-600 mb-2">
                             Chọn file Excel <strong>.xlsx</strong>
                         </p>
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                const { exportSampleClassTemplate } = await import('@/lib/export-utils');
+                                await exportSampleClassTemplate();
+                            }}
+                            className="text-primary text-sm font-bold underline mb-4 hover:text-primary-dark flex items-center gap-1 transition-all"
+                        >
+                            ⬇️ Tải file Excel Mẫu chuẩn (5 Học Sinh)
+                        </button>
                         <input
                             type="file"
                             accept=".xlsx, .xls"

@@ -479,3 +479,61 @@ export const exportToExcel = async (data: ExportData[], fileName: string, isComp
     // And is structurally matching our goal for single or multi-class export.
     await exportMonthlyReport(data, isCompact ? `${fileName}_RutGon` : fileName);
 };
+
+// --- MẪU EXCEL IMPORT --- 
+export const exportSampleClassTemplate = async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('CSDL');
+
+    const headers = [
+        "STT", "Họ tên", "Ngày sinh", "Giới tính", "Mã dân tộc", "Dân tộc", "Mã tỉnh HSĐ", "Tỉnh HSĐ",
+        "Quận/huyện HSĐ", "Phường/Xã HSĐ", "Thôn/Xóm/Ấp HSĐ", "Mã định danh Bộ GD&ĐT", "Trạng thái HS", "Mã lớp"
+    ];
+
+    const headerRow = sheet.getRow(1);
+    headers.forEach((h, idx) => {
+        const cell = headerRow.getCell(idx + 1);
+        cell.value = h;
+        cell.font = { bold: true };
+        cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFE0E0E0' }
+        };
+        cell.border = BORDER_STYLE;
+        sheet.getColumn(idx + 1).width = Math.max(15, h.length + 5);
+    });
+
+    const sampleClass = "LỚP CỦA TÔI (VD: 6A1)";
+    const sampleData = [
+        [1, "Nguyễn Văn A", "15/05/2012", "Nam", "", "Kinh", "", "", "", "", "", "0123456789", "Đang học", sampleClass],
+        [2, "Trần Thị B", "20/08/2012", "Nữ", "", "Kinh", "", "", "", "", "", "0987654321", "Đang học", sampleClass],
+        [3, "Lê Minh C", "05/11/2012", "Nam", "", "Kinh", "", "", "", "", "", "1122334455", "Đang học", sampleClass],
+        [4, "Phạm Hoàng D", "12/02/2012", "Nam", "", "Kinh", "", "", "", "", "", "6677889900", "Đang học", sampleClass],
+        [5, "Vũ Thanh E", "30/09/2012", "Nữ", "", "Kinh", "", "", "", "", "", "9988776655", "Đang học", sampleClass]
+    ];
+
+    sampleData.forEach((data, idx) => {
+        const row = sheet.getRow(idx + 2);
+        data.forEach((val, cIdx) => {
+            const cell = row.getCell(cIdx + 1);
+            cell.value = val;
+            cell.border = BORDER_STYLE;
+
+            // Highlight Mã lớp để user dễ biết phải sửa chỗ này
+            if (headers[cIdx] === "Mã lớp") {
+                cell.font = { bold: true, color: { argb: 'FF059669' } }; // Green
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+            }
+        });
+    });
+
+    try {
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        triggerDownload(blob, `Mau_Danh_Sach_5_Hoc_Sinh.xlsx`);
+    } catch (err) {
+        console.error("[exportSample] Lỗi:", err);
+        throw err;
+    }
+};

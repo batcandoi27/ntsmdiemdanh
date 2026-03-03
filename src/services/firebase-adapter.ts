@@ -71,16 +71,29 @@ export class FirebaseAdapter implements DbAdapter {
 
 
     // --- Classes ---
-    async getClasses(): Promise<Class[]> {
-        const CACHE_KEY = `classes_${SCHOOL_ID}_${CURRENT_YEAR}`;
+    async getClasses(options?: { isPersonal?: boolean; ownerId?: string }): Promise<Class[]> {
+        const isPersonalReq = options?.isPersonal || false;
+        const CACHE_KEY = `classes_${SCHOOL_ID}_${CURRENT_YEAR}_${isPersonalReq}_${options?.ownerId || 'all'}`;
         const cached = getCached<Class[]>(CACHE_KEY);
         if (cached) return cached;
 
         await this.ensureAuth();
         // Cấu trúc mới: schools/{schoolId}/years/{year}/classes
-        const colRef = collection(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'classes');
+        let colRef: any = collection(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'classes');
+
+        // Optimize using firestore query if needing personal classes
+        if (isPersonalReq && options?.ownerId) {
+            colRef = query(colRef, where('isPersonal', '==', true), where('ownerId', '==', options.ownerId));
+        }
+
         const snap = await getDocs(colRef);
-        const list = snap.docs.map(d => d.data() as Class);
+        let list = snap.docs.map(d => d.data() as Class);
+
+        // Fallback filter: Khi request lấy lớp thường, ta bóc tách các lớp cá nhân ra.
+        // Data cũ không có isPersonal thì được hiểu là false
+        if (!isPersonalReq) {
+            list = list.filter(c => !c.isPersonal);
+        }
 
         // Sắp xếp: Khối tăng dần (6->9) -> Tên lớp (6A1 -> 6A10)
         const sorted = list.sort((a, b) => {
