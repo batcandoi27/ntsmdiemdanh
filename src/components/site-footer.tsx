@@ -47,7 +47,7 @@ export function SiteFooter() {
                             <span className="text-green-700 font-medium">Online</span>
                         </div>
                         <span className="hidden sm:inline text-slate-200">|</span>
-                        <span className="truncate">Phiên bản 02.2026 <span className="hidden lg:inline">(Antigravity AI)</span></span>
+                        <span className="truncate">Phiên bản v2.0 (Mar 2026) <span className="hidden lg:inline">(Antigravity AI)</span></span>
                         <span className="hidden md:inline text-slate-200">|</span>
                         <div className="hidden md:flex gap-4 font-medium">
                             <Link href="#" className="hover:text-slate-800 transition-colors">Privacy</Link>
