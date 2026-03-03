@@ -39,6 +39,7 @@ interface MarkInput {
     status: AttendanceStatusV3;
     subject?: string;
     note?: string;
+    missedPeriods?: number[];
 }
 
 /**
@@ -68,6 +69,7 @@ export async function markAttendance(
         status: input.status,
         subject: input.subject,
         note: input.note,
+        missedPeriods: input.missedPeriods,
         markedBy: user.uid,
         markedByName: user.displayName,
         markedByRole: user.role,
@@ -112,7 +114,7 @@ interface BatchMarkInput {
     session: SessionType;
     period: number | null;
     /** Map studentId → status. Chỉ bao gồm HS vắng/trễ/phép (không cần HS có mặt) */
-    marks: { studentId: string; studentName: string; status: AttendanceStatusV3; note?: string }[];
+    marks: { studentId: string; studentName: string; status: AttendanceStatusV3; note?: string; missedPeriods?: number[] }[];
 }
 
 /**
@@ -150,6 +152,7 @@ export async function batchMarkAttendance(
             period: input.period,
             status: mark.status,
             note: mark.note,
+            missedPeriods: mark.missedPeriods,
             markedBy: user.uid,
             markedByName: user.displayName,
             markedByRole: user.role,

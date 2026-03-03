@@ -60,15 +60,17 @@ interface SwipeableStudentRowProps {
     settings: any;
     customColumns: Column[];
     customRecords: Record<string, Record<string, boolean>>;
+    latePeriods?: number[];
     handleStatusChange: (code: string, st: AttendanceStatus) => void;
     handleCustomChange: (code: string, colId: string, checked: boolean) => void;
+    handleLatePeriodToggle: (code: string, periodNumber: number) => void;
     onOpenViolation: () => void;
     onOpenNote: () => void;
 }
 
 function SwipeableStudentRow({
-    hs, status, violationNote, isLeave, settings, customColumns, customRecords,
-    handleStatusChange, handleCustomChange, onOpenViolation, onOpenNote
+    hs, status, violationNote, isLeave, settings, customColumns, customRecords, latePeriods,
+    handleStatusChange, handleCustomChange, handleLatePeriodToggle, onOpenViolation, onOpenNote
 }: SwipeableStudentRowProps) {
     const [swipeOffset, setSwipeOffset] = useState(0);
 
@@ -178,6 +180,34 @@ function SwipeableStudentRow({
                         )}
                     </div>
                 </div>
+
+                {/* LATE PERIODS ACCORDION */}
+                {status === 'T' && (
+                    <div className="mt-3 pt-3 border-t border-blue-50 relative animate-in slide-in-from-top-2 duration-200">
+                        <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-white px-2 text-[10px] text-gray-500 font-medium whitespace-nowrap">
+                            Đánh dấu tiết vắng <span className="text-gray-400 font-normal">({(!latePeriods || latePeriods.length === 0) ? "Đang chọn: Trễ đầu giờ" : "Vắng/Cúp giữa chừng"})</span>
+                        </div>
+                        <div className="flex gap-2 justify-between mt-1 px-1">
+                            {[1, 2, 3, 4, 5].map(p => {
+                                const isMissed = latePeriods?.includes(p);
+                                return (
+                                    <button
+                                        key={p}
+                                        onClick={() => handleLatePeriodToggle(hs.code, p)}
+                                        className={cn(
+                                            "flex-1 py-1.5 rounded-md text-xs font-bold border transition-all active:scale-95",
+                                            isMissed
+                                                ? "bg-red-50 border-red-200 text-red-600 shadow-sm"
+                                                : "bg-green-50 border-green-200 text-green-600 hover:bg-green-100"
+                                        )}
+                                    >
+                                        T{p}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -199,6 +229,7 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
     // State for Attendance
     const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
     const [notes, setNotes] = useState<Record<string, string>>({});
+    const [latePeriods, setLatePeriods] = useState<Record<string, number[]>>({});
 
     // Custom Columns
     const [customColumns, setCustomColumns] = useState<Column[]>([]);
@@ -266,6 +297,7 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                 const records = allRecords.filter(r => r.period === period);
                 const attMap: Record<string, AttendanceStatus> = {};
                 const noteMap: Record<string, string> = {};
+                const lateMap: Record<string, number[]> = {};
 
                 records.forEach(r => {
                     let uiStatus = '';
@@ -278,11 +310,15 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                     if (uiStatus) {
                         attMap[r.studentId] = uiStatus as AttendanceStatus;
                         if (r.note) noteMap[r.studentId] = r.note;
+                        if (uiStatus === 'T' && r.missedPeriods) {
+                            lateMap[r.studentId] = r.missedPeriods;
+                        }
                     }
                 });
 
                 setAttendance(attMap);
                 setNotes(noteMap);
+                setLatePeriods(lateMap);
             } catch (e) {
                 console.error(e);
                 setMsg({ type: 'error', text: 'Lỗi tải dữ liệu.' });
@@ -356,6 +392,18 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
         }));
     };
 
+    const handleLatePeriodToggle = (studentCode: string, periodNumber: number) => {
+        triggerHapticFeedback();
+        setLatePeriods(prev => {
+            const current = prev[studentCode] || [];
+            if (current.includes(periodNumber)) {
+                return { ...prev, [studentCode]: current.filter(p => p !== periodNumber) };
+            } else {
+                return { ...prev, [studentCode]: [...current, periodNumber].sort() };
+            }
+        });
+    };
+
     const handleSave = () => {
         triggerHapticFeedback();
         startTransition(async () => {
@@ -365,7 +413,7 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
             }
 
             // Generate marks payload for V3 API
-            const marks: { studentId: string; studentName: string; status: AttendanceStatusV3; note?: string }[] = [];
+            const marks: { studentId: string; studentName: string; status: AttendanceStatusV3; note?: string; missedPeriods?: number[] }[] = [];
             Object.entries(attendance).forEach(([code, status]) => {
                 let v3Status: AttendanceStatusV3 | '' = '';
                 if (status === 'P') v3Status = 'excused';
@@ -377,7 +425,8 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                         studentId: code,
                         studentName: students.find(s => s.code === code)?.fullName || code,
                         status: v3Status as AttendanceStatusV3,
-                        note: notes[code] || ''
+                        note: notes[code] || '',
+                        missedPeriods: v3Status === 'late' ? latePeriods[code] : undefined
                     });
                 }
             });
@@ -552,8 +601,10 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                             settings={settings}
                             customColumns={customColumns}
                             customRecords={customRecords}
+                            latePeriods={latePeriods[hs.code]}
                             handleStatusChange={handleStatusChange}
                             handleCustomChange={handleCustomChange}
+                            handleLatePeriodToggle={handleLatePeriodToggle}
                             onOpenViolation={() => {
                                 setViolationInput(notes[hs.code] || '');
                                 setViolationModal({ isOpen: true, studentCode: hs.code });

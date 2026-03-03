@@ -28,6 +28,7 @@ export interface AttendanceRecordV3 {
     status: AttendanceStatusV3;     // 'absent' | 'late' | 'excused'
     subject?: string;               // Chỉ khi period != null
     note?: string;
+    missedPeriods?: number[];       // Dành cho Trễ / Về Sớm theo tiết
     markedBy: string;               // UID
     markedByName: string;
     markedByRole: UserRole;

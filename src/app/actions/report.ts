@@ -185,6 +185,12 @@ export async function getReports(criteria: ReportCriteria): Promise<ReportResult
                 // Do V3 lưu timestamp, extract lại ngày nếu Date không chuẩn
                 const dateKey = record.date || (record.timestamp ? record.timestamp.split('T')[0] : '');
 
+                let finalNote = record.note || undefined;
+                if (status === 'T' && record.missedPeriods && record.missedPeriods.length > 0) {
+                    const missedPeriodsText = `Vắng tiết ${record.missedPeriods.join(', ')}`;
+                    finalNote = finalNote ? `${finalNote} (${missedPeriodsText})` : missedPeriodsText;
+                }
+
                 absences.push({
                     id: record.id || `${dateKey}_${code}`,
                     date: dateKey,
@@ -194,7 +200,7 @@ export async function getReports(criteria: ReportCriteria): Promise<ReportResult
                     studentName: info.name,
                     stt: info.stt,
                     status: status as AttendanceStatus,
-                    notes: record.note || undefined
+                    notes: finalNote
                 });
             }
         });

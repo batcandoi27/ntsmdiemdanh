@@ -129,9 +129,17 @@ export async function buildExcelWorkbook(
             if (!attendanceMap.has(record.studentId)) {
                 attendanceMap.set(record.studentId, new Map());
             }
-            const statusCode = record.status === 'absent' ? 'V' :
-                record.status === 'late' ? 'T' :
-                    record.status === 'excused' ? 'P' : '';
+            let statusCode = '';
+            if (record.status === 'absent') statusCode = 'V';
+            else if (record.status === 'excused') statusCode = 'P';
+            else if (record.status === 'violation') statusCode = 'VP';
+            else if (record.status === 'late') {
+                statusCode = 'T';
+                if (record.missedPeriods && record.missedPeriods.length > 0) {
+                    statusCode = `T (T${record.missedPeriods.join(', ')})`;
+                }
+            }
+
             attendanceMap.get(record.studentId)!.set(date, statusCode);
         }
     }
