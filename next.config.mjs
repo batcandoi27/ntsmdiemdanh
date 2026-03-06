@@ -1,6 +1,19 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    // Không thêm Cross-Origin-Opener-Policy vì nó chặn Firebase Google Login Popup
+    // Cấu hình header để cho phép Firebase Auth Popup hoạt động bình thường
+    async headers() {
+        return [
+            {
+                source: '/(.*)',
+                headers: [
+                    {
+                        key: 'Cross-Origin-Opener-Policy',
+                        value: 'same-origin-allow-popups',
+                    },
+                ],
+            },
+        ];
+    },
 
     // Proxy Firebase Auth handler để custom domain hiện đúng trên Google Login
     async rewrites() {

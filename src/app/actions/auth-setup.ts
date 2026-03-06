@@ -1,7 +1,6 @@
 'use server';
 
-import { getFirestore } from 'firebase-admin/firestore';
-import { getAuth } from 'firebase-admin/auth';
+import { adminDb as db, adminAuth as auth } from '@/lib/firebase-admin';
 import { AppUser, UserRole, DEFAULT_PERMISSIONS, DEFAULT_EDIT_WINDOW } from '@/types/models';
 
 export async function setupRoleWithoutCode(
@@ -13,8 +12,7 @@ export async function setupRoleWithoutCode(
     homeroomClassId: string | null = null  // Lớp chủ nhiệm (chỉ GVCN)
 ) {
     try {
-        const db = getFirestore();
-        const auth = getAuth();
+        // Sử dụng db và auth đã được khởi tạo từ @/lib/firebase-admin
 
         // 1. Verify user exists in Firebase Auth to prevent unauthorized calls
         try {
