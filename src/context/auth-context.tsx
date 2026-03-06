@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import {
     onAuthStateChanged,
     signInWithEmailAndPassword,
-    signInWithRedirect,
+    signInWithPopup,
     getRedirectResult,
     GoogleAuthProvider,
     signOut as firebaseSignOut,
@@ -194,13 +194,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 prompt: 'select_account',
             });
 
-            // Dùng redirect thay vì popup — user thấy accounts.google.com
-            // rồi quay về thcstbc.kgvh.io.vn, không thấy domain Firebase
-            await signInWithRedirect(auth, provider);
+            // Dùng Popup thay vì Redirect để tránh các vấn đề về chặn cookie/redirect ở trình duyệt hiện đại
+            await signInWithPopup(auth, provider);
         } catch (err: unknown) {
             const firebaseError = err as { code?: string; message?: string };
-            console.error('Lỗi đăng nhập Google:', firebaseError);
-            setError('Lỗi đăng nhập Google: ' + (firebaseError.message || 'Không xác định'));
+            if (firebaseError.code !== 'auth/popup-closed-by-user') {
+                console.error('Lỗi đăng nhập Google:', firebaseError);
+                setError('Lỗi đăng nhập Google: ' + (firebaseError.message || 'Không xác định'));
+            }
             setLoading(false);
             throw err;
         }
