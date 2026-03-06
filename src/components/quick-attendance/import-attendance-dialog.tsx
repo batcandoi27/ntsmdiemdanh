@@ -24,6 +24,7 @@ type MatchedStudent = {
     status: AttendanceStatusV3;
     note: string;
     isMatched: boolean;
+    suggestedMatches?: any[];
 };
 
 type ProcessedClass = {
@@ -49,36 +50,148 @@ interface ImportAttendanceDialogProps {
 
 // Simple fuzzy search helper for Vietnamese names
 function normalizeVietnamese(str: string) {
+    if (!str) return "";
     return str.toLowerCase()
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
         .replace(/đ/g, "d").replace(/Đ/g, "D")
-        .replace(/[^a-z0-9 ]/g, "")
+        .replace(/\./g, " ")
+        .replace(/[^a-z0-9 ]/g, " ")
+        .replace(/\s+/g, " ")
         .trim();
 }
 
 function computeMatchScore(query: string, targetName: string) {
-    const qParts = normalizeVietnamese(query).split(" ");
-    const tParts = normalizeVietnamese(targetName).split(" ");
+    const normQ = normalizeVietnamese(query);
+    const normT = normalizeVietnamese(targetName);
+    const qParts = normQ.split(" ").filter(Boolean);
+    const tParts = normT.split(" ").filter(Boolean);
+
     if (qParts.length === 0 || tParts.length === 0) return 0;
 
-    // Check if query is exact substring of target
-    if (normalizeVietnamese(targetName).includes(normalizeVietnamese(query))) {
-        return 100;
-    }
+    const qStr = qParts.join(" ");
+    const tStr = tParts.join(" ");
 
-    // Match word by word backwards (usually names match by given name)
+    // 1. Exact Name String Match (e.g. JSON: "Huynh Thuc Uyen", DB: "Huynh Thuc Uyen")
+    if (qStr === tStr) return 100;
+
     let score = 0;
-    const lastQ = qParts[qParts.length - 1];
+
+    // We treat the LAST word in query as the primary "Name" 
+    // unless it gets absorbed into abbreviation logic
+    let lastQ = qParts[qParts.length - 1];
     const lastT = tParts[tParts.length - 1];
 
-    if (lastQ === lastT) score += 50;
+    let queryWordsToMatchByValue = [...qParts];
 
-    let matchedWords = 0;
-    for (const q of qParts) {
-        if (tParts.includes(q)) matchedWords++;
+    // 2. Exact Last Word Match (Extremely important in Vietnamese names)
+    if (lastQ === lastT) {
+        score += 50;
+    } else {
+        // Weak match if substring
+        if (lastT.includes(lastQ) || lastQ.includes(lastT)) {
+            score += 20;
+        }
     }
-    score += (matchedWords / Math.max(qParts.length, tParts.length)) * 50;
+
+    // 3. Advanced Abbreviation Logic ("P.Linh", "H. Ha", "T. G. Han", "Ng. Han")
+    // We look at all query parts BEFORE the last name.
+    // If they look like initials (length 1 or 2), we try to align them with target's middle/first names.
+    let isAbbrMatched = false;
+    let initialScoreBoost = 0;
+
+    if (qParts.length > 1 && lastQ === lastT) {
+        const initials = qParts.slice(0, -1);
+        let targetPrefixes = tParts.slice(0, -1);
+
+        let allInitialsMatched = true;
+        let tIndex = 0;
+
+        for (const init of initials) {
+            let foundMatch = false;
+            // E.g: init="ng", we look for "nguyen" "ngo" "ngoc"
+            for (let i = tIndex; i < targetPrefixes.length; i++) {
+                if (targetPrefixes[i].startsWith(init)) {
+                    foundMatch = true;
+                    tIndex = i + 1; // Move forward, preserve order
+
+                    // Boost based on proximity to the end name
+                    // e.g. target is [A, B, C, D] (length 4). C is closest to D (index 2).
+                    // If targetPrefixes.length is 3, index 2 is max.
+                    if (i === targetPrefixes.length - 1) {
+                        initialScoreBoost += 40; // Immediate neighbor
+                    } else if (i === targetPrefixes.length - 2) {
+                        initialScoreBoost += 20; // 1 step away
+                    } else {
+                        initialScoreBoost += 10; // further away
+                    }
+                    break;
+                }
+            }
+            if (!foundMatch) {
+                allInitialsMatched = false;
+                break;
+            }
+        }
+
+        if (allInitialsMatched) {
+            isAbbrMatched = true;
+            score += initialScoreBoost;
+            queryWordsToMatchByValue = [lastQ]; // Consume the initials, don't word-match them later
+        }
+    }
+
+    // 3b. Concatenated Initials Fallback (e.g. "mtien" -> "minh tien")
+    if (!isAbbrMatched && qParts.length === 1 && lastQ.length > 2 && lastQ.endsWith(lastT) && lastQ.length <= lastT.length + 2) {
+        let potentialPrefix = lastQ.slice(0, lastQ.length - lastT.length);
+        if (potentialPrefix.length <= 2) { // 1 or 2 letters like 'm' or 'ng'
+            for (let i = 0; i < tParts.length - 1; i++) {
+                if (tParts[i].startsWith(potentialPrefix)) {
+                    isAbbrMatched = true;
+                    // Retroactively add 50 points because lastQ ends with lastT meaning the name matched
+                    score += 50;
+                    const distanceScore = (i === tParts.length - 2) ? 40 : 20;
+                    score += distanceScore;
+                    queryWordsToMatchByValue = []; // Consumed
+                    break;
+                }
+            }
+        }
+    }
+
+    // 4. Word-by-Word Component Match (For non-consumed parts)
+    // Works perfectly for things like "Ho Bao" -> "Nguyen Ho Gia Bao"
+    if (!isAbbrMatched && queryWordsToMatchByValue.length > 0) {
+        let matchedWords = 0;
+        let orderedMatchMatches = 0;
+
+        let lastMatchedIndex = -1;
+
+        for (const q of queryWordsToMatchByValue) {
+            const foundIdx = tParts.indexOf(q);
+            if (foundIdx !== -1) {
+                matchedWords++;
+                if (foundIdx > lastMatchedIndex) {
+                    orderedMatchMatches++;
+                    lastMatchedIndex = foundIdx;
+                }
+            }
+        }
+
+        // Exact Sub-array Match (e.g. "thuc uyen" in "huynh thuc uyen")
+        if (tStr.includes(qStr) && queryWordsToMatchByValue.length > 1) {
+            score += 40;
+        } else {
+            // Proportional match based on ordered matched words
+            score += (orderedMatchMatches / Math.max(queryWordsToMatchByValue.length, tParts.length)) * 40;
+        }
+
+        // Boost if ALL query words exist exactly in the target (e.g. "Ho Bao" in "Nguyen Ho Gia Bao")
+        if (queryWordsToMatchByValue.length < tParts.length && matchedWords === queryWordsToMatchByValue.length) {
+            let baseBoost = 50; // High boost to guarantee threshold
+            score += baseBoost;
+        }
+    }
 
     return Math.min(score, 100);
 }
@@ -137,17 +250,54 @@ export function ImportAttendanceDialog({ open, onOpenChange, onSuccess }: Import
                     const classStudentsDb = dbData[cls.className] || [];
 
                     const matchedStudents: MatchedStudent[] = cls.students.map(s => {
-                        let bestMatch: any = null;
-                        let highestScore = 0;
+                        let theCandidates: { dbS: any, score: number }[] = [];
 
                         // Fuzzy Search
                         classStudentsDb.forEach(dbS => {
                             const score = computeMatchScore(s.name, dbS.fullName);
-                            if (score > highestScore && score > 40) { // Threshold
-                                highestScore = score;
-                                bestMatch = dbS;
+                            if (score >= 30) { // Lower base Threshold to collect more potential candidates
+                                theCandidates.push({ dbS, score });
                             }
                         });
+
+                        theCandidates.sort((a, b) => b.score - a.score);
+
+                        let bestMatch: any = null;
+                        let isMatched = false;
+
+                        if (theCandidates.length > 0) {
+                            if (theCandidates.length === 1) {
+                                // If there's only 1 candidate over threshold, accept if it's decently scored
+                                if (theCandidates[0].score >= 40) {
+                                    bestMatch = theCandidates[0].dbS;
+                                    isMatched = true;
+                                }
+                            } else {
+                                // Multiple candidates: Check if the top one is significantly better
+                                // or if the top one is an almost perfect match (e.g >= 80)
+                                const topScore = theCandidates[0].score;
+                                const secondScore = theCandidates[1].score;
+
+                                if (topScore >= 80 && topScore > secondScore) {
+                                    // Extremely high confidence, accept even if close
+                                    bestMatch = theCandidates[0].dbS;
+                                    isMatched = true;
+                                } else if (topScore >= 40 && topScore >= secondScore + 10) {
+                                    // Good confidence, clear winner
+                                    bestMatch = theCandidates[0].dbS;
+                                    isMatched = true;
+                                } else {
+                                    bestMatch = null; // Ambiguous, fallback to suggestions
+                                    isMatched = false;
+                                }
+                            }
+                        }
+
+                        // Generate suggestions up to 3 options
+                        let suggestedMatches: any[] = [];
+                        if (!isMatched) {
+                            suggestedMatches = theCandidates.slice(0, 3).map(c => c.dbS);
+                        }
 
                         return {
                             id: Math.random().toString(36).substring(7),
@@ -156,7 +306,8 @@ export function ImportAttendanceDialog({ open, onOpenChange, onSuccess }: Import
                             originalNameStr: s.name,
                             status: s.status,
                             note: s.note,
-                            isMatched: !!bestMatch
+                            isMatched,
+                            suggestedMatches
                         };
                     });
 
@@ -173,7 +324,8 @@ export function ImportAttendanceDialog({ open, onOpenChange, onSuccess }: Import
                                 originalNameStr: "??????????",
                                 status: "absent",
                                 note: "",
-                                isMatched: false
+                                isMatched: false,
+                                suggestedMatches: []
                             });
                         }
                     }
@@ -294,7 +446,8 @@ export function ImportAttendanceDialog({ open, onOpenChange, onSuccess }: Import
             originalNameStr: "Thêm thủ công",
             status: "absent",
             note: "",
-            isMatched: false
+            isMatched: false,
+            suggestedMatches: []
         });
         setProcessedData(newData);
     };
@@ -472,28 +625,46 @@ export function ImportAttendanceDialog({ open, onOpenChange, onSuccess }: Import
                                                         ) : (
                                                             <div className="space-y-2">
                                                                 {cls.matchedStudents.map((s, sIdx) => (
-                                                                    <div key={s.id} className={`flex items-center gap-3 p-2.5 rounded-lg border ${s.isMatched ? 'bg-white border-gray-200' : 'bg-red-50 border-red-200'}`}>
+                                                                    <div key={s.id} className={`flex ${!s.isMatched ? 'items-start pt-3' : 'items-center'} gap-3 p-2.5 rounded-lg border ${s.isMatched ? 'bg-white border-gray-200' : 'bg-red-50 border-red-200'}`}>
                                                                         {!s.isMatched ? (
-                                                                            <div className="flex-1 flex items-center gap-2">
-                                                                                <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                                                                                <span className="text-sm font-bold text-red-700 w-1/4 truncate" title="Tên từ ảnh">
-                                                                                    "{s.originalNameStr}"
-                                                                                </span>
-                                                                                <div className="flex-1 relative">
-                                                                                    <select
-                                                                                        className="w-full h-8 px-3 text-sm font-bold border border-red-200 rounded-md bg-white text-blue-700 hover:text-blue-800 focus:ring-blue-500 focus:border-blue-500 cursor-pointer appearance-none outline-none hover:bg-blue-50 transition-colors shadow-sm"
-                                                                                        value=""
-                                                                                        onChange={(e) => resolveStudent(rIdx, cIdx, s.id, e.target.value)}
-                                                                                    >
-                                                                                        <option value="" disabled>-- Chọn tên HS --</option>
-                                                                                        {cls.allClassStudents.map(dbs => (
-                                                                                            <option key={dbs.code} value={dbs.code} className="text-gray-900 font-medium bg-white">{dbs.fullName}</option>
-                                                                                        ))}
-                                                                                    </select>
-                                                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-red-400">
-                                                                                        <PlusCircle className="w-4 h-4" />
+                                                                            <div className="flex-1 flex flex-col gap-2">
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                                                                                    <span className="text-sm font-bold text-red-700 w-1/4 truncate" title="Tên từ ảnh">
+                                                                                        "{s.originalNameStr}"
+                                                                                    </span>
+                                                                                    <div className="flex-1 relative">
+                                                                                        <select
+                                                                                            className="w-full h-8 px-3 text-sm font-bold border border-red-200 rounded-md bg-white text-blue-700 hover:text-blue-800 focus:ring-blue-500 focus:border-blue-500 cursor-pointer appearance-none outline-none hover:bg-blue-50 transition-colors shadow-sm"
+                                                                                            value=""
+                                                                                            onChange={(e) => resolveStudent(rIdx, cIdx, s.id, e.target.value)}
+                                                                                        >
+                                                                                            <option value="" disabled>-- Chọn tên HS --</option>
+                                                                                            {cls.allClassStudents.map(dbs => (
+                                                                                                <option key={dbs.code} value={dbs.code} className="text-gray-900 font-medium bg-white">{dbs.fullName}</option>
+                                                                                            ))}
+                                                                                        </select>
+                                                                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-red-400">
+                                                                                            <PlusCircle className="w-4 h-4" />
+                                                                                        </div>
                                                                                     </div>
                                                                                 </div>
+                                                                                {s.suggestedMatches && s.suggestedMatches.length > 0 && (
+                                                                                    <div className="flex items-start gap-2 pl-6 pb-1">
+                                                                                        <span className="text-xs text-red-500/70 font-semibold mt-1 flex-shrink-0">Gợi ý:</span>
+                                                                                        <div className="flex gap-2 flex-wrap">
+                                                                                            {s.suggestedMatches.map((sug: any) => (
+                                                                                                <button
+                                                                                                    key={sug.code}
+                                                                                                    onClick={() => resolveStudent(rIdx, cIdx, s.id, sug.code)}
+                                                                                                    className="px-2.5 py-1 text-xs font-bold bg-white text-blue-700 border border-blue-300 rounded-md hover:bg-blue-50 hover:border-blue-500 transition-colors shadow-sm"
+                                                                                                >
+                                                                                                    {sug.fullName}
+                                                                                                </button>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                )}
                                                                             </div>
                                                                         ) : (
                                                                             <div className="flex-1 flex items-center gap-2">
