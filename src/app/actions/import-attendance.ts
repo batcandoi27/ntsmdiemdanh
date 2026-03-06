@@ -3,7 +3,7 @@
 import { adminDb } from '@/lib/firebase-admin';
 import { SessionType } from '@/types/timetable';
 import { AttendanceStatusV3, AttendanceRecordV3, buildRecordId, getAttendancePath, formatDateKey } from '@/types/attendance-v3';
-import { AppUser } from '@/types/models';
+import { AppUser, Student } from '@/types/models';
 import { getEffectiveStatus } from '@/services/student-status-service';
 import { db } from '@/services/db';
 import { DEFAULT_YEAR } from '@/config/constants';
@@ -40,18 +40,36 @@ const mockAdminUser: AppUser = {
     createdAt: new Date().toISOString()
 };
 
+function parseVietnameseDate(dateStr: string): Date {
+    if (!dateStr) return new Date();
+    if (dateStr.includes('-')) return new Date(dateStr);
+    if (dateStr.includes('/')) {
+        const parts = dateStr.split('/');
+        if (parts.length === 3) {
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1;
+            let year = parseInt(parts[2], 10);
+            // Handle 2-digit years just in case
+            if (year < 100) year += 2000;
+            return new Date(year, month, day);
+        }
+    }
+    return new Date(dateStr);
+}
+
 export async function processImportedAttendance(records: ImportAttendanceRecord[]) {
     try {
         let totalWritten = 0;
         let totalDeleted = 0;
 
         for (const record of records) {
-            // Get all students for the class to support deleting records if they are now present
-            const classStudents = await db.getStudentsByClass(record.classId);
+            // Get all students for the class using adminDb (Bypassing rules)
+            const studentsSnap = await adminDb.collection(`schools/default/years/${DEFAULT_YEAR}/classes/${record.classId}/students`).get();
+            const classStudents = studentsSnap.docs.map(d => d.data() as Student);
             const activeStudents = classStudents.filter(s => getEffectiveStatus(s) !== 'dropped_out' && getEffectiveStatus(s) !== 'suspended');
             const allStudentIds = activeStudents.map(s => s.code);
 
-            const attendanceDateKey = formatDateKey(new Date(record.date));
+            const attendanceDateKey = formatDateKey(parseVietnameseDate(record.date));
             const path = getAttendancePath(DEFAULT_YEAR, attendanceDateKey);
             const batch = adminDb.batch();
 

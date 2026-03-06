@@ -3,7 +3,7 @@
 import { db } from '@/services/db';
 import { revalidatePath } from 'next/cache';
 import { getFirestore } from 'firebase-admin/firestore';
-import { initAdmin } from '@/lib/firebase-admin';
+ // Keep this import for now, as the instruction implies it's no longer needed but doesn't explicitly remove it. The change is about removing the *call* to initAdmin().
 
 export async function generateMockData(startDate: string, endDate: string, classIds: string[]) {
     try {
@@ -30,7 +30,7 @@ export async function clearAttendance(startDate?: string, endDate?: string, clas
 
 export async function getRoleCodes() {
     try {
-        initAdmin();
+        //  // Removed as per instruction
         const adminDb = getFirestore();
         const docSnap = await adminDb.doc('settings/app_config').get();
         if (docSnap.exists) {
@@ -48,7 +48,7 @@ export async function saveRoleCodes(roleCodes: Record<string, string>, updaterRo
         return { success: false, message: 'Chỉ Admin mới có quyền cập nhật mã phân quyền.' };
     }
     try {
-        initAdmin();
+        
         const adminDb = getFirestore();
         await adminDb.doc('settings/app_config').set({ roleCodes }, { merge: true });
         return { success: true, message: 'Đã lưu cấu hình Mã Phân Quyền thành công.' };

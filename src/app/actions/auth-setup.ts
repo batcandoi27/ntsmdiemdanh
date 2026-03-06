@@ -2,7 +2,6 @@
 
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
-import { initAdmin } from '@/lib/firebase-admin';
 import { AppUser, UserRole, DEFAULT_PERMISSIONS, DEFAULT_EDIT_WINDOW } from '@/types/models';
 
 export async function setupRoleWithoutCode(
@@ -14,7 +13,6 @@ export async function setupRoleWithoutCode(
     homeroomClassId: string | null = null  // Lớp chủ nhiệm (chỉ GVCN)
 ) {
     try {
-        initAdmin();
         const db = getFirestore();
         const auth = getAuth();
 
