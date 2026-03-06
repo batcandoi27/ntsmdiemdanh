@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { AppUser, UserRole, ROLE_DISPLAY } from '@/types/models';
 import { deactivateUser, activateUser, getUsersPaginated } from '@/services/user-service';
+import { deleteUserAccount } from '@/app/actions/admin-users';
 import { useAuth } from '@/context/auth-context';
-import { Users, Search, Plus, UserCheck, UserX, Edit, MoreVertical, Shield } from 'lucide-react';
+import { Users, Search, Plus, UserCheck, UserX, Edit, MoreVertical, Shield, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Class } from '@/types/models';
 import { FirebaseAdapter } from '@/services/firebase-adapter';
@@ -80,6 +81,29 @@ export function UserManagementTab() {
         } catch (error) {
             alert('Lỗi khi cập nhật trạng thái');
             console.error(error);
+        }
+    };
+
+    const handleDeleteUser = async (user: AppUser) => {
+        const confirmMsg = `CẢNH BÁO NGUY HIỂM!\n\nBạn sắp xoá VĨNH VIỄN tài khoản của "${user.displayName}" (${user.email || user.studentCode}).\n\nHành động này không thể khôi phục. Bạn có chắc chắn muốn tiếp tục không?`;
+
+        if (!confirm(confirmMsg)) return;
+
+        try {
+            setLoading(true);
+            const res = await deleteUserAccount(user.uid);
+            if (res.success) {
+                alert(res.message);
+                // Cập nhật local state bằng cách lọc bỏ user đã xoá
+                setUsers(prev => prev.filter(u => u.uid !== user.uid));
+            } else {
+                alert('Lỗi: ' + res.message);
+            }
+        } catch (error: any) {
+            alert('Lỗi khi xoá tài khoản: ' + error.message);
+            console.error(error);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -272,28 +296,38 @@ export function UserManagementTab() {
                                                 )}
                                             </td>
                                             <td className="px-5 py-4 text-right">
-                                                <div className="flex justify-end gap-2">
+                                                <div className="flex justify-end items-center gap-2">
                                                     <button
                                                         onClick={() => openEditModal(user)}
-                                                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                                         title="Chỉnh sửa"
                                                     >
-                                                        <Edit size={16} />
+                                                        <Edit size={18} />
                                                     </button>
 
                                                     {user.uid !== appUser?.uid && (
-                                                        <button
-                                                            onClick={() => handleToggleStatus(user)}
-                                                            className={cn(
-                                                                "p-1.5 rounded-lg transition-colors",
-                                                                user.isActive
-                                                                    ? "text-gray-400 hover:text-rose-600 hover:bg-rose-50"
-                                                                    : "text-gray-400 hover:text-emerald-600 hover:bg-emerald-50"
-                                                            )}
-                                                            title={user.isActive ? "Vô hiệu hoá" : "Kích hoạt"}
-                                                        >
-                                                            <Shield size={16} />
-                                                        </button>
+                                                        <>
+                                                            <button
+                                                                onClick={() => handleToggleStatus(user)}
+                                                                className={cn(
+                                                                    "p-2 rounded-lg transition-colors",
+                                                                    user.isActive
+                                                                        ? "text-gray-400 hover:text-rose-600 hover:bg-rose-50"
+                                                                        : "text-gray-400 hover:text-emerald-600 hover:bg-emerald-50"
+                                                                )}
+                                                                title={user.isActive ? "Vô hiệu hoá" : "Kích hoạt"}
+                                                            >
+                                                                <Shield size={18} />
+                                                            </button>
+
+                                                            <button
+                                                                onClick={() => handleDeleteUser(user)}
+                                                                className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+                                                                title="Xoá vĩnh viễn"
+                                                            >
+                                                                <Trash2 size={18} />
+                                                            </button>
+                                                        </>
                                                     )}
                                                 </div>
                                             </td>
