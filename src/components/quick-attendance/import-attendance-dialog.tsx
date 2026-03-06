@@ -420,335 +420,320 @@ export function ImportAttendanceDialog({ open, onOpenChange, onSuccess }: Import
         setProcessedData(newData);
     };
 
-    const resolveStudent = (recordIdx: number, classIdx: number, matchedStudentId: string, dbStudentStrCode: string) => {
-        const newData = [...processedData];
-        const cls = newData[recordIdx].classes[classIdx];
-        const studentIndex = cls.matchedStudents.findIndex(s => s.id === matchedStudentId);
-        if (studentIndex > -1) {
-            const dbStudent = cls.allClassStudents.find(s => s.code === dbStudentStrCode);
-            if (dbStudent) {
-                cls.matchedStudents[studentIndex].studentId = dbStudent.code;
-                cls.matchedStudents[studentIndex].studentName = dbStudent.fullName;
-                cls.matchedStudents[studentIndex].isMatched = true;
-                setProcessedData(newData);
-            }
-        }
-    };
+const addNewStudent = (recordIdx: number, classIdx: number) => {
+    // Just add an empty unmatched slot
+    const newData = [...processedData];
+    const cls = newData[recordIdx].classes[classIdx];
+    cls.matchedStudents.push({
+        id: Math.random().toString(36).substring(7),
+        studentId: "",
+        studentName: "Chọn từ danh sách",
+        originalNameStr: "Thêm thủ công",
+        status: "absent",
+        note: "",
+        isMatched: false,
+        suggestedMatches: []
+    });
+    setProcessedData(newData);
+};
 
-    const addNewStudent = (recordIdx: number, classIdx: number) => {
-        // Just add an empty unmatched slot
-        const newData = [...processedData];
-        const cls = newData[recordIdx].classes[classIdx];
-        cls.matchedStudents.push({
-            id: Math.random().toString(36).substring(7),
-            studentId: "",
-            studentName: "Chọn từ danh sách",
-            originalNameStr: "Thêm thủ công",
-            status: "absent",
-            note: "",
-            isMatched: false,
-            suggestedMatches: []
+// Calculate total validation warnings
+let totalWarnings = 0;
+const classesWithIssues: Array<{ recordIdx: number, classIdx: number }> = [];
+const warningClasses: string[] = [];
+if (step === "review") {
+    processedData.forEach((r, rIdx) => r.classes.forEach((c, cIdx) => {
+        let classWarns = 0;
+        // Only check if there's any unmatched student in the UI
+        c.matchedStudents.forEach(s => {
+            if (!s.isMatched) classWarns++;
         });
-        setProcessedData(newData);
-    };
+        if (classWarns > 0) {
+            totalWarnings += classWarns;
+            classesWithIssues.push({ recordIdx: rIdx, classIdx: cIdx });
+            if (!warningClasses.includes(c.className)) warningClasses.push(c.className);
+        }
+    }));
+}
 
-    // Calculate total validation warnings
-    let totalWarnings = 0;
-    const classesWithIssues: Array<{ recordIdx: number, classIdx: number }> = [];
-    const warningClasses: string[] = [];
-    if (step === "review") {
-        processedData.forEach((r, rIdx) => r.classes.forEach((c, cIdx) => {
-            let classWarns = 0;
-            // Only check if there's any unmatched student in the UI
-            c.matchedStudents.forEach(s => {
-                if (!s.isMatched) classWarns++;
-            });
-            if (classWarns > 0) {
-                totalWarnings += classWarns;
-                classesWithIssues.push({ recordIdx: rIdx, classIdx: cIdx });
-                if (!warningClasses.includes(c.className)) warningClasses.push(c.className);
-            }
-        }));
-    }
+return (
+    <Dialog open={open} onOpenChange={(v) => {
+        if (step === "saving") return;
+        onOpenChange(v);
+    }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-1 overflow-hidden bg-gray-50/95 border-gray-200">
+            <div className="bg-white px-6 py-4 border-b border-gray-100 flex-shrink-0">
+                <DialogHeader>
+                    <DialogTitle className="text-xl flex items-center gap-2 text-indigo-900 border-none font-black tracking-tight">
+                        <FileJson className="w-5 h-5 text-indigo-500" />
+                        Import JSON Điểm Danh (Từ AI)
+                    </DialogTitle>
+                    <DialogDescription className="text-gray-500 font-medium pt-1">
+                        Tự động đọc file JSON, đối chiếu danh sách lớp và gợi ý dữ liệu.
+                        Có thể tinh chỉnh thủ công trước khi chốt lưu.
+                    </DialogDescription>
+                </DialogHeader>
+            </div>
 
-    return (
-        <Dialog open={open} onOpenChange={(v) => {
-            if (step === "saving") return;
-            onOpenChange(v);
-        }}>
-            <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-1 overflow-hidden bg-gray-50/95 border-gray-200">
-                <div className="bg-white px-6 py-4 border-b border-gray-100 flex-shrink-0">
-                    <DialogHeader>
-                        <DialogTitle className="text-xl flex items-center gap-2 text-indigo-900 border-none font-black tracking-tight">
-                            <FileJson className="w-5 h-5 text-indigo-500" />
-                            Import JSON Điểm Danh (Từ AI)
-                        </DialogTitle>
-                        <DialogDescription className="text-gray-500 font-medium pt-1">
-                            Tự động đọc file JSON, đối chiếu danh sách lớp và gợi ý dữ liệu.
-                            Có thể tinh chỉnh thủ công trước khi chốt lưu.
-                        </DialogDescription>
-                    </DialogHeader>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
-                    {step === "upload" && (
-                        <div
-                            className="border-2 border-dashed border-indigo-200 rounded-2xl bg-indigo-50/50 hover:bg-indigo-50 transition-colors p-12 flex flex-col items-center justify-center gap-4 cursor-pointer min-h-[400px]"
-                            onClick={() => fileInputRef.current?.click()}
-                        >
-                            <div className="p-4 bg-white rounded-full shadow-sm">
-                                <UploadCloud className="w-10 h-10 text-indigo-500" />
-                            </div>
-                            <div className="text-center">
-                                <p className="font-bold text-gray-800 text-lg mb-1">Click để tải lên file .json</p>
-                                <p className="text-sm text-gray-500 font-medium">Hoặc kéo thả file vào khu vực này</p>
-                            </div>
-                            <input
-                                type="file"
-                                accept=".json"
-                                className="hidden"
-                                ref={fileInputRef}
-                                onChange={handleFileChange}
-                            />
+            <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
+                {step === "upload" && (
+                    <div
+                        className="border-2 border-dashed border-indigo-200 rounded-2xl bg-indigo-50/50 hover:bg-indigo-50 transition-colors p-12 flex flex-col items-center justify-center gap-4 cursor-pointer min-h-[400px]"
+                        onClick={() => fileInputRef.current?.click()}
+                    >
+                        <div className="p-4 bg-white rounded-full shadow-sm">
+                            <UploadCloud className="w-10 h-10 text-indigo-500" />
                         </div>
-                    )}
-
-                    {step === "processing" && (
-                        <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-4">
-                            <Loader2 className="w-12 h-12 text-indigo-500 animate-spin" />
-                            <p className="text-indigo-900 font-bold">Đang xử lý file và khớp đối tượng...</p>
+                        <div className="text-center">
+                            <p className="font-bold text-gray-800 text-lg mb-1">Click để tải lên file .json</p>
+                            <p className="text-sm text-gray-500 font-medium">Hoặc kéo thả file vào khu vực này</p>
                         </div>
-                    )}
+                        <input
+                            type="file"
+                            accept=".json"
+                            className="hidden"
+                            ref={fileInputRef}
+                            onChange={handleFileChange}
+                        />
+                    </div>
+                )}
 
-                    {step === "review" && (
-                        <div className="space-y-6 pb-10">
-                            <div className="flex p-1 bg-gray-100/80 rounded-xl border border-gray-200 shadow-inner">
-                                <button
-                                    onClick={() => setActiveTab("issues")}
-                                    className={`flex-1 py-3 px-4 font-bold text-sm lg:text-base rounded-lg flex items-center justify-center gap-2 transition-all duration-200 ${activeTab === "issues" ? 'bg-white text-red-600 shadow-sm border border-gray-100' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
-                                        }`}
-                                >
-                                    <AlertTriangle className="w-4 h-4" />
-                                    Cần Xử Lý ({classesWithIssues.length})
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab("resolved")}
-                                    className={`flex-1 py-3 px-4 font-bold text-sm lg:text-base rounded-lg flex items-center justify-center gap-2 transition-all duration-200 ${activeTab === "resolved" ? 'bg-white text-green-600 shadow-sm border border-gray-100' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
-                                        }`}
-                                >
-                                    <CheckCircle2 className="w-4 h-4" />
-                                    Đã Hoàn Tất ({processedData.reduce((acc, r) => acc + r.classes.length, 0) - classesWithIssues.length})
-                                </button>
+                {step === "processing" && (
+                    <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-4">
+                        <Loader2 className="w-12 h-12 text-indigo-500 animate-spin" />
+                        <p className="text-indigo-900 font-bold">Đang xử lý file và khớp đối tượng...</p>
+                    </div>
+                )}
+
+                {step === "review" && (
+                    <div className="space-y-6 pb-10">
+                        <div className="flex p-1 bg-gray-100/80 rounded-xl border border-gray-200 shadow-inner">
+                            <button
+                                onClick={() => setActiveTab("issues")}
+                                className={`flex-1 py-3 px-4 font-bold text-sm lg:text-base rounded-lg flex items-center justify-center gap-2 transition-all duration-200 ${activeTab === "issues" ? 'bg-white text-red-600 shadow-sm border border-gray-100' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+                                    }`}
+                            >
+                                <AlertTriangle className="w-4 h-4" />
+                                Cần Xử Lý ({classesWithIssues.length})
+                            </button>
+                            <button
+                                onClick={() => setActiveTab("resolved")}
+                                className={`flex-1 py-3 px-4 font-bold text-sm lg:text-base rounded-lg flex items-center justify-center gap-2 transition-all duration-200 ${activeTab === "resolved" ? 'bg-white text-green-600 shadow-sm border border-gray-100' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+                                    }`}
+                            >
+                                <CheckCircle2 className="w-4 h-4" />
+                                Đã Hoàn Tất ({processedData.reduce((acc, r) => acc + r.classes.length, 0) - classesWithIssues.length})
+                            </button>
+                        </div>
+
+                        {totalWarnings === 0 && (
+                            <div className="bg-green-50 border border-green-200 rounded-xl p-6 md:p-8 flex flex-col items-center justify-center text-center gap-2 shadow-sm relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-8 opacity-5">
+                                    <CheckCircle2 className="w-48 h-48 text-green-800" />
+                                </div>
+                                <CheckCircle2 className="w-16 h-16 text-green-500 mb-2 relative z-10 animate-bounce" />
+                                <h4 className="font-black text-green-800 text-2xl relative z-10">Tuyệt vời! Tất cả đã khớp</h4>
+                                <p className="text-green-700 font-medium max-w-lg mt-2 relative z-10 text-base">
+                                    Không còn dữ liệu lỗi. Hệ thống điểm danh đã sẵn sàng, bạn hoàn toàn có thể nhấn nút Đồng ý & Lưu để import thẳng bộ dữ liệu nguyên bản này.
+                                </p>
                             </div>
+                        )}
 
-                            {totalWarnings === 0 && (
-                                <div className="bg-green-50 border border-green-200 rounded-xl p-6 md:p-8 flex flex-col items-center justify-center text-center gap-2 shadow-sm relative overflow-hidden">
-                                    <div className="absolute top-0 right-0 p-8 opacity-5">
-                                        <CheckCircle2 className="w-48 h-48 text-green-800" />
-                                    </div>
-                                    <CheckCircle2 className="w-16 h-16 text-green-500 mb-2 relative z-10 animate-bounce" />
-                                    <h4 className="font-black text-green-800 text-2xl relative z-10">Tuyệt vời! Tất cả đã khớp</h4>
-                                    <p className="text-green-700 font-medium max-w-lg mt-2 relative z-10 text-base">
-                                        Không còn dữ liệu lỗi. Hệ thống điểm danh đã sẵn sàng, bạn hoàn toàn có thể nhấn nút Đồng ý & Lưu để import thẳng bộ dữ liệu nguyên bản này.
+                        {totalWarnings > 0 && activeTab === "issues" && (
+                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3 shadow-sm">
+                                <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
+                                <div>
+                                    <h4 className="font-bold text-amber-800">Lỗi: Tên hoặc Số lượng không khớp</h4>
+                                    <p className="text-sm text-amber-700 font-medium mt-1">
+                                        Có <span className="font-bold">{totalWarnings}</span> điểm nghi ngờ tại các lớp: <span className="font-bold text-amber-900">{warningClasses.join(", ")}</span>. Dữ liệu sẽ không thể Import cho tới khi bạn xử lý xong!
                                     </p>
                                 </div>
-                            )}
+                            </div>
+                        )}
 
-                            {totalWarnings > 0 && activeTab === "issues" && (
-                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3 shadow-sm">
-                                    <AlertTriangle className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
-                                    <div>
-                                        <h4 className="font-bold text-amber-800">Lỗi: Tên hoặc Số lượng không khớp</h4>
-                                        <p className="text-sm text-amber-700 font-medium mt-1">
-                                            Có <span className="font-bold">{totalWarnings}</span> điểm nghi ngờ tại các lớp: <span className="font-bold text-amber-900">{warningClasses.join(", ")}</span>. Dữ liệu sẽ không thể Import cho tới khi bạn xử lý xong!
-                                        </p>
+                        {activeTab === "issues" && totalWarnings === 0 && classesWithIssues.length === 0 && (
+                            <div className="text-center py-10 opacity-70">
+                                <p className="font-bold text-gray-500">Mọi thứ đã xong ở Tab "Cần xử lý". Bấm chuyển tab!</p>
+                            </div>
+                        )}
+
+                        {processedData.map((record, rIdx) => {
+                            const filteredClasses = record.classes.filter((c, cIdx) => {
+                                const hasIssue = classesWithIssues.some(iss => iss.recordIdx === rIdx && iss.classIdx === cIdx);
+                                return activeTab === "issues" ? hasIssue : !hasIssue;
+                            });
+
+                            if (filteredClasses.length === 0) return null;
+
+                            return (
+                                <div key={rIdx} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+                                    <div className="bg-slate-50 border-b border-gray-200 px-5 py-3 flex items-center justify-between">
+                                        <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                                            <span className="w-2 h-2 rounded-full bg-slate-400" />
+                                            {format(new Date(record.date), 'EEEE, dd/MM/yyyy', { locale: vi })}
+                                            <span className="text-sm font-semibold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full ml-2">
+                                                Ca {record.session === 'morning' ? 'Sáng' : 'Chiều'}
+                                            </span>
+                                        </h3>
                                     </div>
-                                </div>
-                            )}
 
-                            {activeTab === "issues" && totalWarnings === 0 && classesWithIssues.length === 0 && (
-                                <div className="text-center py-10 opacity-70">
-                                    <p className="font-bold text-gray-500">Mọi thứ đã xong ở Tab "Cần xử lý". Bấm chuyển tab!</p>
-                                </div>
-                            )}
-
-                            {processedData.map((record, rIdx) => {
-                                const filteredClasses = record.classes.filter((c, cIdx) => {
-                                    const hasIssue = classesWithIssues.some(iss => iss.recordIdx === rIdx && iss.classIdx === cIdx);
-                                    return activeTab === "issues" ? hasIssue : !hasIssue;
-                                });
-
-                                if (filteredClasses.length === 0) return null;
-
-                                return (
-                                    <div key={rIdx} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
-                                        <div className="bg-slate-50 border-b border-gray-200 px-5 py-3 flex items-center justify-between">
-                                            <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-slate-400" />
-                                                {format(new Date(record.date), 'EEEE, dd/MM/yyyy', { locale: vi })}
-                                                <span className="text-sm font-semibold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full ml-2">
-                                                    Ca {record.session === 'morning' ? 'Sáng' : 'Chiều'}
-                                                </span>
-                                            </h3>
-                                        </div>
-
-                                        <div className="p-5 space-y-5">
-                                            {filteredClasses.map((cls) => {
-                                                const cIdx = record.classes.findIndex(c => c.classId === cls.classId);
-                                                const isCountMismatch = cls.jsonAbsentCount !== cls.matchedStudents.length;
-                                                return (
-                                                    <div key={cIdx} className="border border-gray-100 rounded-xl p-4 bg-gray-50/50">
-                                                        <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="font-black text-lg text-indigo-900 bg-indigo-50 px-3 py-1 rounded-lg">
-                                                                    {cls.className}
-                                                                </div>
-                                                                <div className="flex gap-2 text-sm font-semibold">
-                                                                    <span className="px-2 py-1 bg-white border border-gray-200 rounded-md text-gray-600">
-                                                                        JSON báo vắng: <span className="text-gray-900">{cls.jsonAbsentCount}</span>
-                                                                    </span>
-                                                                    <span className={`px-2 py-1 border rounded-md ${isCountMismatch ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-green-50 border-green-200 text-green-700'}`}>
-                                                                        Thực nhận: <span>{cls.matchedStudents.length}</span>
-                                                                    </span>
-                                                                </div>
+                                    <div className="p-5 space-y-5">
+                                        {filteredClasses.map((cls) => {
+                                            const cIdx = record.classes.findIndex(c => c.classId === cls.classId);
+                                            const isCountMismatch = cls.jsonAbsentCount !== cls.matchedStudents.length;
+                                            return (
+                                                <div key={cIdx} className="border border-gray-100 rounded-xl p-4 bg-gray-50/50">
+                                                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="font-black text-lg text-indigo-900 bg-indigo-50 px-3 py-1 rounded-lg">
+                                                                {cls.className}
                                                             </div>
-                                                            <button onClick={() => addNewStudent(rIdx, cIdx)} className="flex items-center px-3 rounded-md border h-8 font-bold text-indigo-600 border-indigo-200 hover:bg-indigo-50">
-                                                                <PlusCircle className="w-4 h-4 mr-1.5" />
-                                                                Thêm Học Sinh
-                                                            </button>
+                                                            <div className="flex gap-2 text-sm font-semibold">
+                                                                <span className="px-2 py-1 bg-white border border-gray-200 rounded-md text-gray-600">
+                                                                    JSON báo vắng: <span className="text-gray-900">{cls.jsonAbsentCount}</span>
+                                                                </span>
+                                                                <span className={`px-2 py-1 border rounded-md ${isCountMismatch ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-green-50 border-green-200 text-green-700'}`}>
+                                                                    Thực nhận: <span>{cls.matchedStudents.length}</span>
+                                                                </span>
+                                                            </div>
                                                         </div>
+                                                        <button onClick={() => addNewStudent(rIdx, cIdx)} className="flex items-center px-3 rounded-md border h-8 font-bold text-indigo-600 border-indigo-200 hover:bg-indigo-50">
+                                                            <PlusCircle className="w-4 h-4 mr-1.5" />
+                                                            Thêm Học Sinh
+                                                        </button>
+                                                    </div>
 
-                                                        {cls.matchedStudents.length === 0 ? (
-                                                            <div className="text-center py-4 text-sm font-medium text-gray-500">
-                                                                Lớp không có học sinh vắng trong biên bản ảnh.
-                                                            </div>
-                                                        ) : (
-                                                            <div className="space-y-2">
-                                                                {cls.matchedStudents.map((s, sIdx) => (
-                                                                    <div key={s.id} className={`flex ${!s.isMatched ? 'items-start pt-3' : 'items-center'} gap-3 p-2.5 rounded-lg border ${s.isMatched ? 'bg-white border-gray-200' : 'bg-red-50 border-red-200'}`}>
-                                                                        {!s.isMatched ? (
-                                                                            <div className="flex-1 flex flex-col gap-2">
-                                                                                <div className="flex items-center gap-2">
-                                                                                    <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                                                                                    <span className="text-sm font-bold text-red-700 w-1/4 truncate" title="Tên từ ảnh">
-                                                                                        "{s.originalNameStr}"
-                                                                                    </span>
-                                                                                    <div className="flex-1 relative">
-                                                                                        <select
-                                                                                            className="w-full h-8 px-3 text-sm font-bold border border-red-200 rounded-md bg-white text-blue-700 hover:text-blue-800 focus:ring-blue-500 focus:border-blue-500 cursor-pointer appearance-none outline-none hover:bg-blue-50 transition-colors shadow-sm"
-                                                                                            value=""
-                                                                                            onChange={(e) => resolveStudent(rIdx, cIdx, s.id, e.target.value)}
-                                                                                        >
-                                                                                            <option value="" disabled>-- Chọn tên HS --</option>
-                                                                                            {cls.allClassStudents.map(dbs => (
-                                                                                                <option key={dbs.code} value={dbs.code} className="text-gray-900 font-medium bg-white">{dbs.fullName}</option>
-                                                                                            ))}
-                                                                                        </select>
-                                                                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-red-400">
-                                                                                            <PlusCircle className="w-4 h-4" />
-                                                                                        </div>
+                                                    {cls.matchedStudents.length === 0 ? (
+                                                        <div className="text-center py-4 text-sm font-medium text-gray-500">
+                                                            Lớp không có học sinh vắng trong biên bản ảnh.
+                                                        </div>
+                                                    ) : (
+                                                        <div className="space-y-2">
+                                                            {cls.matchedStudents.map((s, sIdx) => (
+                                                                <div key={s.id} className={`flex ${!s.isMatched ? 'items-start pt-3' : 'items-center'} gap-3 p-2.5 rounded-lg border ${s.isMatched ? 'bg-white border-gray-200' : 'bg-red-50 border-red-200'}`}>
+                                                                    {!s.isMatched ? (
+                                                                        <div className="flex-1 flex flex-col gap-2">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                                                                                <span className="text-sm font-bold text-red-700 w-1/4 truncate" title="Tên từ ảnh">
+                                                                                    "{s.originalNameStr}"
+                                                                                </span>
+                                                                                <div className="flex-1 relative">
+                                                                                    <select
+                                                                                        className="w-full h-8 px-3 text-sm font-bold border border-red-200 rounded-md bg-white text-blue-700 hover:text-blue-800 focus:ring-blue-500 focus:border-blue-500 cursor-pointer appearance-none outline-none hover:bg-blue-50 transition-colors shadow-sm"
+                                                                                        value=""
+                                                                                        onChange={(e) => resolveStudent(rIdx, cIdx, s.id, e.target.value)}
+                                                                                    >
+                                                                                        <option value="" disabled>-- Chọn tên HS --</option>
+                                                                                        {cls.allClassStudents.map(dbs => (
+                                                                                            <option key={dbs.code} value={dbs.code} className="text-gray-900 font-medium bg-white">{dbs.fullName}</option>
+                                                                                        ))}
+                                                                                    </select>
+                                                                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-red-400">
+                                                                                        <PlusCircle className="w-4 h-4" />
                                                                                     </div>
                                                                                 </div>
-                                                                                {s.suggestedMatches && s.suggestedMatches.length > 0 && (
-                                                                                    <div className="flex items-start gap-2 pl-6 pb-1">
-                                                                                        <span className="text-xs text-red-500/70 font-semibold mt-1 flex-shrink-0">Gợi ý:</span>
-                                                                                        <div className="flex gap-2 flex-wrap">
-                                                                                            {s.suggestedMatches.map((sug: any) => (
-                                                                                                <button
-                                                                                                    key={sug.code}
-                                                                                                    onClick={() => resolveStudent(rIdx, cIdx, s.id, sug.code)}
-                                                                                                    className="px-2.5 py-1 text-xs font-bold bg-white text-blue-700 border border-blue-300 rounded-md hover:bg-blue-50 hover:border-blue-500 transition-colors shadow-sm"
-                                                                                                >
-                                                                                                    {sug.fullName}
-                                                                                                </button>
-                                                                                            ))}
-                                                                                        </div>
+                                                                            </div>
+                                                                            {s.suggestedMatches && s.suggestedMatches.length > 0 && (
+                                                                                <div className="flex items-start gap-2 pl-6 pb-1">
+                                                                                    <span className="text-xs text-red-500/70 font-semibold mt-1 flex-shrink-0">Gợi ý:</span>
+                                                                                    <div className="flex gap-2 flex-wrap">
+                                                                                        {s.suggestedMatches.map((sug: any) => (
+                                                                                            <button
+                                                                                                key={sug.code}
+                                                                                                onClick={() => resolveStudent(rIdx, cIdx, s.id, sug.code)}
+                                                                                                className="px-2.5 py-1 text-xs font-bold bg-white text-blue-700 border border-blue-300 rounded-md hover:bg-blue-50 hover:border-blue-500 transition-colors shadow-sm"
+                                                                                            >
+                                                                                                {sug.fullName}
+                                                                                            </button>
+                                                                                        ))}
                                                                                     </div>
-                                                                                )}
-                                                                            </div>
-                                                                        ) : (
-                                                                            <div className="flex-1 flex items-center gap-2">
-                                                                                <CheckCircle2 className="w-4 h-4 text-green-500" />
-                                                                                <span className="text-sm font-black text-gray-800 flex-1">{s.studentName}</span>
-                                                                            </div>
-                                                                        )}
-
-                                                                        <div className="w-32">
-                                                                            <select
-                                                                                className="w-full h-8 px-2 text-xs font-bold rounded-md bg-white text-blue-700 border border-gray-200 hover:bg-blue-50 transition-colors cursor-pointer"
-                                                                                value={s.status}
-                                                                                onChange={(e) => {
-                                                                                    const newData = [...processedData];
-                                                                                    newData[rIdx].classes[cIdx].matchedStudents[sIdx].status = e.target.value as any;
-                                                                                    setProcessedData(newData);
-                                                                                }}
-                                                                            >
-                                                                                <option value="absent">Không Phép</option>
-                                                                                <option value="excused">Có Phép</option>
-                                                                                <option value="late">Trễ</option>
-                                                                                <option value="violation">Vi Phạm</option>
-                                                                            </select>
+                                                                                </div>
+                                                                            )}
                                                                         </div>
-
-                                                                        <div className="w-40">
-                                                                            <input
-                                                                                type="text"
-                                                                                className="w-full h-8 px-2 text-xs font-medium rounded-md bg-gray-50 border border-gray-200"
-                                                                                placeholder="Ghi chú (nhà có tang...)"
-                                                                                value={s.note}
-                                                                                onChange={(e) => {
-                                                                                    const newData = [...processedData];
-                                                                                    newData[rIdx].classes[cIdx].matchedStudents[sIdx].note = e.target.value;
-                                                                                    setProcessedData(newData);
-                                                                                }}
-                                                                            />
+                                                                    ) : (
+                                                                        <div className="flex-1 flex items-center gap-2">
+                                                                            <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                                                            <span className="text-sm font-black text-gray-800 flex-1">{s.studentName}</span>
                                                                         </div>
+                                                                    )}
 
-                                                                        <button
-                                                                            className="flex items-center justify-center rounded-md h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                                                            onClick={() => removeStudent(rIdx, cIdx, s.id)}
-                                                                            title="Xóa"
+                                                                    <div className="w-32">
+                                                                        <select
+                                                                            className="w-full h-8 px-2 text-xs font-bold rounded-md bg-white text-blue-700 border border-gray-200 hover:bg-blue-50 transition-colors cursor-pointer"
+                                                                            value={s.status}
+                                                                            onChange={(e) => {
+                                                                                const newData = [...processedData];
+                                                                                newData[rIdx].classes[cIdx].matchedStudents[sIdx].status = e.target.value as any;
+                                                                                setProcessedData(newData);
+                                                                            }}
                                                                         >
-                                                                            <Trash2 className="w-4 h-4" />
-                                                                        </button>
+                                                                            <option value="absent">Không Phép</option>
+                                                                            <option value="excused">Có Phép</option>
+                                                                            <option value="late">Trễ</option>
+                                                                            <option value="violation">Vi Phạm</option>
+                                                                        </select>
                                                                     </div>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
+
+                                                                    <div className="w-40">
+                                                                        <input
+                                                                            type="text"
+                                                                            className="w-full h-8 px-2 text-xs font-medium rounded-md bg-gray-50 border border-gray-200"
+                                                                            placeholder="Ghi chú (nhà có tang...)"
+                                                                            value={s.note}
+                                                                            onChange={(e) => {
+                                                                                const newData = [...processedData];
+                                                                                newData[rIdx].classes[cIdx].matchedStudents[sIdx].note = e.target.value;
+                                                                                setProcessedData(newData);
+                                                                            }}
+                                                                        />
+                                                                    </div>
+
+                                                                    <button
+                                                                        className="flex items-center justify-center rounded-md h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                                                        onClick={() => removeStudent(rIdx, cIdx, s.id)}
+                                                                        title="Xóa"
+                                                                    >
+                                                                        <Trash2 className="w-4 h-4" />
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
-                                );
-                            })}
-                        </div>
-                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
 
-                    {step === "saving" && (
-                        <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-4">
-                            <Loader2 className="w-12 h-12 text-indigo-500 animate-spin" />
-                            <p className="text-indigo-900 font-bold">Đang cập nhật Cơ sở dữ liệu khối/trường...</p>
-                        </div>
-                    )}
-                </div>
+                {step === "saving" && (
+                    <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-4">
+                        <Loader2 className="w-12 h-12 text-indigo-500 animate-spin" />
+                        <p className="text-indigo-900 font-bold">Đang cập nhật Cơ sở dữ liệu khối/trường...</p>
+                    </div>
+                )}
+            </div>
 
-                <div className="bg-white border-t border-gray-200 px-6 py-4 flex-shrink-0 flex items-center justify-between">
-                    <button onClick={() => onOpenChange(false)} className="px-4 py-2 rounded-md hover:bg-gray-100 font-bold text-gray-500 transition-colors" disabled={step === "saving"}>
-                        {step === 'processing' ? 'Hủy' : 'Đóng'}
+            <div className="bg-white border-t border-gray-200 px-6 py-4 flex-shrink-0 flex items-center justify-between">
+                <button onClick={() => onOpenChange(false)} className="px-4 py-2 rounded-md hover:bg-gray-100 font-bold text-gray-500 transition-colors" disabled={step === "saving"}>
+                    {step === 'processing' ? 'Hủy' : 'Đóng'}
+                </button>
+
+                {step === "review" && (
+                    <button
+                        onClick={handleSave}
+                        disabled={totalWarnings > 0}
+                        className={`px-6 py-2 rounded-lg font-black uppercase tracking-wide shadow-[0_4px_0_rgb(0,0,0,0.1)] transition-all ${totalWarnings > 0 ? 'bg-gray-300 pointer-events-none text-gray-500 border-none' : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-[0_4px_0_rgb(67,56,202)] active:shadow-none active:translate-y-1'}`}
+                    >
+                        Đồng ý & Lưu (Tương đương Điểm danh tay)
                     </button>
-
-                    {step === "review" && (
-                        <button
-                            onClick={handleSave}
-                            disabled={totalWarnings > 0}
-                            className={`px-6 py-2 rounded-lg font-black uppercase tracking-wide shadow-[0_4px_0_rgb(0,0,0,0.1)] transition-all ${totalWarnings > 0 ? 'bg-gray-300 pointer-events-none text-gray-500 border-none' : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-[0_4px_0_rgb(67,56,202)] active:shadow-none active:translate-y-1'}`}
-                        >
-                            Đồng ý & Lưu (Tương đương Điểm danh tay)
-                        </button>
-                    )}
-                </div>
-            </DialogContent>
-        </Dialog>
-    );
+                )}
+            </div>
+        </DialogContent>
+    </Dialog>
+);
 }
