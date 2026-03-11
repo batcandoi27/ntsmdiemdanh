@@ -268,6 +268,7 @@ export function StudentSelectorDialog({
                                                     )}
                                                     {targetStatus === 'T' && LATE_PERIODS.map(p => {
                                                         // Note string format e.g. "Vắng T1, T2" (Old version used "Trễ T1, T2")
+                                                        const currentNote = localNotesMap[item.student.code] || '';
                                                         const normalizedNote = currentNote.replace('Trễ ', 'Vắng ');
                                                         
                                                         // Ngược lại, nếu được click có nghĩa là CÓ ĐI HỌC, KHÔNG click là vắng.
