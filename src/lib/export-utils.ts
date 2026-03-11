@@ -86,7 +86,7 @@ const STATUS_TEXT_COLORS: Record<string, string> = {
 
 // --- Main Export Function ---
 
-export const exportMonthlyReport = async (data: ExportData[], fileName: string) => {
+export const exportMonthlyReport = async (data: ExportData[], fileName: string, visibleColumns: string[] = ['P', 'K', 'V']) => {
     const workbook = new ExcelJS.Workbook();
 
     data.forEach(classData => {
@@ -182,16 +182,33 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string) 
             colIdx++;
         });
 
-        // Summary Columns
-        const summaryHeaders = ["P", "K", "V", "Tổng"];
-        summaryHeaders.forEach(h => {
+        // Summary Columns (Lọc theo visibleColumns)
+        const allSummaryHeaders = [
+            { id: 'P', label: 'P' },
+            { id: 'K', label: 'K' },
+            { id: 'V', label: 'V' },
+            { id: 'T', label: 'T' },
+            { id: 'VP', label: 'VP' },
+            { id: 'KH', label: 'KH' }
+        ];
+        const activeSummaryHeaders = allSummaryHeaders.filter(h => visibleColumns.includes(h.id));
+        
+        activeSummaryHeaders.forEach(h => {
             const cell = sheet.getRow(headerRowIdx).getCell(colIdx);
-            cell.value = h;
+            cell.value = h.label;
             sheet.mergeCells(headerRowIdx, colIdx, subHeaderRowIdx, colIdx);
             setHeaderStyle(cell, 'FEF3C7'); // Light Yellow
             sheet.getColumn(colIdx).width = 5;
             colIdx++;
         });
+
+        // Cột Tổng cộng luôn hiện
+        const totalCell = sheet.getRow(headerRowIdx).getCell(colIdx);
+        totalCell.value = "Tổng";
+        sheet.mergeCells(headerRowIdx, colIdx, subHeaderRowIdx, colIdx);
+        setHeaderStyle(totalCell, 'FEF3C7');
+        sheet.getColumn(colIdx).width = 6;
+        colIdx++;
 
 
         // --- 3. Data Rows ---
@@ -251,20 +268,32 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string) 
                 dayColIdx++;
             });
 
-            // Summary Data
-            row.getCell(dayColIdx).value = countP > 0 ? countP : '';
-            row.getCell(dayColIdx + 1).value = countK > 0 ? countK : '';
-            row.getCell(dayColIdx + 2).value = countV > 0 ? countV : '';
-            const total = countP + countK + countV;
-            row.getCell(dayColIdx + 3).value = total > 0 ? total : '';
-
-            // Style Summary
-            [0, 1, 2, 3].forEach(offset => {
-                const cell = row.getCell(dayColIdx + offset);
+            // Summary Data (Lọc theo visibleColumns)
+            let rowTotal = 0;
+            activeSummaryHeaders.forEach(h => {
+                let val = 0;
+                if (h.id === 'P') val = countP;
+                else if (h.id === 'K') val = countK;
+                else if (h.id === 'V') val = countV;
+                else if (h.id === 'T') val = Object.values(s.absences).filter(v => v === 'T' || v.startsWith('T ')).length;
+                else if (h.id === 'VP') val = Object.values(s.absences).filter(v => v === 'VP').length;
+                else if (h.id === 'KH') val = Object.values(s.absences).filter(v => v === 'KH').length;
+                
+                row.getCell(dayColIdx).value = val > 0 ? val : '';
+                rowTotal += val;
+                
+                const cell = row.getCell(dayColIdx);
                 cell.border = BORDER_STYLE;
                 cell.alignment = { horizontal: 'center' };
-                cell.font = { bold: true };
+                cell.font = { bold: true, name: 'Times New Roman' };
+                dayColIdx++;
             });
+
+            const totalCell = row.getCell(dayColIdx);
+            totalCell.value = rowTotal > 0 ? rowTotal : '';
+            totalCell.border = BORDER_STYLE;
+            totalCell.alignment = { horizontal: 'center' };
+            totalCell.font = { bold: true, name: 'Times New Roman' };
 
             currentRowIdx++;
         });
@@ -299,24 +328,31 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string) 
             colIdx++;
         });
 
-        // Total P, K, V, Grand Total sums
-        const grandSums = { P: 0, K: 0, V: 0, Total: 0 };
-        classData.students.forEach(s => {
-            Object.values(s.absences).forEach(status => {
-                if (status === 'P') grandSums.P++;
-                if (status === 'K') grandSums.K++;
-                if (status === 'V') grandSums.V++;
+        // Total active columns sums
+        let grandTotal = 0;
+        activeSummaryHeaders.forEach(h => {
+            let hSum = 0;
+            classData.students.forEach(s => {
+                if (h.id === 'P') hSum += Object.values(s.absences).filter(v => v === 'P').length;
+                else if (h.id === 'K') hSum += Object.values(s.absences).filter(v => v === 'K').length;
+                else if (h.id === 'V') hSum += Object.values(s.absences).filter(v => v === 'V').length;
+                else if (h.id === 'T') hSum += Object.values(s.absences).filter(v => v === 'T' || v.startsWith('T ')).length;
+                else if (h.id === 'VP') hSum += Object.values(s.absences).filter(v => v === 'VP').length;
+                else if (h.id === 'KH') hSum += Object.values(s.absences).filter(v => v === 'KH').length;
             });
-        });
-        grandSums.Total = grandSums.P + grandSums.K + grandSums.V;
-
-        [grandSums.P, grandSums.K, grandSums.V, grandSums.Total].forEach(val => {
+            
             const cell = summaryRow.getCell(colIdx);
-            cell.value = val > 0 ? val : '';
-            setHeaderStyle(cell, 'FEF3C7'); // Light Yellow
+            cell.value = hSum > 0 ? hSum : '';
+            setHeaderStyle(cell, 'FEF3C7');
             cell.font = { bold: true, name: 'Times New Roman', size: 10 };
+            grandTotal += hSum;
             colIdx++;
         });
+
+        const gTotalCell = summaryRow.getCell(colIdx);
+        gTotalCell.value = grandTotal > 0 ? grandTotal : '';
+        setHeaderStyle(gTotalCell, 'FEF3C7');
+        gTotalCell.font = { bold: true, name: 'Times New Roman', size: 10 };
 
     });
 
@@ -354,7 +390,7 @@ export interface TermReportData {
     timeRange: string;
 }
 
-export const exportTermReport = async (reports: TermReportData[], fileName: string) => {
+export const exportTermReport = async (reports: TermReportData[], fileName: string, visibleColumns: string[] = ['P', 'K', 'T', 'VP', 'KH']) => {
     const workbook = new ExcelJS.Workbook();
 
     reports.forEach(report => {
@@ -376,13 +412,25 @@ export const exportTermReport = async (reports: TermReportData[], fileName: stri
         let colIdx = 1;
         const headerRow = sheet.getRow(4);
 
-        // Fixed Info
-        const fixedHeaders = ["STT", "Mã HS", "Họ và Tên", "Có phép (P)", "Không phép (K)", "Đi trễ (T)", "Vi phạm", "Khen thưởng"];
-        fixedHeaders.forEach(h => {
+        // Fixed Info (Lọc theo visibleColumns)
+        const fixedHeadersConfig = [
+            { id: 'fixed1', label: "STT" },
+            { id: 'fixed2', label: "Mã HS" },
+            { id: 'fixed3', label: "Họ và Tên" },
+            { id: 'P', label: "Có phép (P)" },
+            { id: 'K', label: "Không phép (K)" },
+            { id: 'T', label: "Đi trễ (T)" },
+            { id: 'VP', label: "Vi phạm" },
+            { id: 'KH', label: "Khen thưởng" }
+        ];
+
+        const activeFixedHeaders = fixedHeadersConfig.filter(h => h.id.startsWith('fixed') || visibleColumns.includes(h.id));
+
+        activeFixedHeaders.forEach(h => {
             const cell = headerRow.getCell(colIdx);
-            cell.value = h;
+            cell.value = h.label;
             setHeaderStyle(cell, 'E0E0E0');
-            sheet.getColumn(colIdx).width = colIdx === 3 ? 25 : 10;
+            sheet.getColumn(colIdx).width = h.label === "Họ và Tên" ? 25 : 10;
             colIdx++;
         });
 
@@ -406,12 +454,11 @@ export const exportTermReport = async (reports: TermReportData[], fileName: stri
             row.getCell(c++).value = std.code;
             row.getCell(c++).value = std.name;
 
-            // Stats
-            row.getCell(c++).value = stdData.stats['P'] || 0;
-            row.getCell(c++).value = stdData.stats['K'] || 0;
-            row.getCell(c++).value = stdData.stats['T'] || 0;
-            row.getCell(c++).value = stdData.stats['VP'] || 0;
-            row.getCell(c++).value = stdData.stats['KH'] || 0;
+            // Stats (Lọc theo visibleColumns)
+            activeFixedHeaders.filter(h => !h.id.startsWith('fixed')).forEach(h => {
+                const val = stdData.stats[h.id] || 0;
+                row.getCell(c++).value = val > 0 ? val : '';
+            });
 
             // Custom Data
             report.columns.forEach(col => {
@@ -439,25 +486,20 @@ export const exportTermReport = async (reports: TermReportData[], fileName: stri
         sumLabelCell.alignment = { horizontal: 'center', vertical: 'middle' };
         sumLabelCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } }; // Indigo background
 
-        // Calculate Sums
-        let sumP = 0, sumK = 0, sumT = 0, sumVP = 0, sumKH = 0;
-        report.students.forEach(std => {
-            const stdData = report.data[std.id] || { stats: {} };
-            sumP += stdData.stats['P'] || 0;
-            sumK += stdData.stats['K'] || 0;
-            sumT += stdData.stats['T'] || 0;
-            sumVP += stdData.stats['VP'] || 0;
-            sumKH += stdData.stats['KH'] || 0;
+        // Calculate and Set Sums (Lọc theo visibleColumns)
+        let sumColIdx = 4;
+        activeFixedHeaders.filter(h => !h.id.startsWith('fixed')).forEach(h => {
+            let sumValue = 0;
+            report.students.forEach(std => {
+                const stdData = report.data[std.id] || { stats: {} };
+                sumValue += stdData.stats[h.id] || 0;
+            });
+            const cell = summaryRow.getCell(sumColIdx++);
+            cell.value = sumValue > 0 ? sumValue : '';
         });
 
-        summaryRow.getCell(4).value = sumP > 0 ? sumP : '';
-        summaryRow.getCell(5).value = sumK > 0 ? sumK : '';
-        summaryRow.getCell(6).value = sumT > 0 ? sumT : '';
-        summaryRow.getCell(7).value = sumVP > 0 ? sumVP : '';
-        summaryRow.getCell(8).value = sumKH > 0 ? sumKH : '';
-
         // Style summary cells
-        for (let i = 1; i <= 8; i++) {
+        for (let i = 1; i < sumColIdx; i++) {
             const cell = summaryRow.getCell(i);
             cell.border = BORDER_STYLE;
             if (i > 3) {
@@ -474,14 +516,14 @@ export const exportTermReport = async (reports: TermReportData[], fileName: stri
     triggerDownload(blob, `${fileName}.xlsx`);
 };
 
-export const exportToExcel = async (data: ExportData[], fileName: string, isCompact: boolean = false) => {
+export const exportToExcel = async (data: ExportData[], fileName: string, isCompact: boolean = false, visibleColumns: string[] = ['P', 'K', 'V']) => {
     // Simply proxy to exportMonthlyReport because it uses ExcelJS styling 
     // And is structurally matching our goal for single or multi-class export.
-    await exportMonthlyReport(data, isCompact ? `${fileName}_RutGon` : fileName);
+    await exportMonthlyReport(data, isCompact ? `${fileName}_RutGon` : fileName, visibleColumns);
 };
 
 // --- Grade Report Export (Lưới theo Khối) ---
-export const exportGradeReport = async (data: ExportData[], fileName: string) => {
+export const exportGradeReport = async (data: ExportData[], fileName: string, visibleColumns: string[] = ['P', 'K', 'T', 'VP', 'KH']) => {
     const workbook = new ExcelJS.Workbook();
 
     // 1. Phân loại lớp theo Khối (Dựa vào chữ số đầu tiên của Tên Lớp)
@@ -517,7 +559,8 @@ export const exportGradeReport = async (data: ExportData[], fileName: string) =>
             }
         }
 
-        const totalCols = 2 + dates.length + 5; 
+        // Calculate total columns based on visibleColumns
+        const totalCols = 2 + dates.length + activeSummaryHeaders.length; 
         const lastColChar = getColumnLabel(totalCols);
 
         // --- 0. TIÊU ĐỀ CHUNG CỦA SHEET ---
@@ -560,6 +603,16 @@ export const exportGradeReport = async (data: ExportData[], fileName: string) =>
         let gradeSumP = 0, gradeSumK = 0, gradeSumT = 0, gradeSumVP = 0, gradeSumKH = 0;
         let gradeTotalStudents = 0;
         let gradeIssueStudents = 0;
+
+        // Summary Columns (P, K, T, VP, KH) - Lọc theo visibleColumns
+        const allSumConfig = [
+            { id: 'P', label: 'P', color: 'FEF08A' },
+            { id: 'K', label: 'K', color: 'FECACA' },
+            { id: 'T', label: 'T', color: 'BFDBFE' },
+            { id: 'VP', label: 'VP', color: 'E9D5FF' },
+            { id: 'KH', label: 'KH', color: 'FBCFE8' }
+        ];
+        const activeSumConfigs = allSumConfig.filter(h => visibleColumns.includes(h.id));
 
         // Vẽ từng Lớp trong Sheet (Sắp xếp tự nhiên 9A1, 9A2... 9A10)
         classes.sort((a, b) => a.className.localeCompare(b.className, undefined, { numeric: true, sensitivity: 'base' }))
@@ -632,15 +685,11 @@ export const exportGradeReport = async (data: ExportData[], fileName: string) =>
                 colIdx++;
             });
 
-            // Summary Columns (P, K, T, VP, KH)
-            const sumHeaders = ['P', 'K', 'T', 'VP', 'KH'];
-            const sumBgColors = ['FEF08A', 'FECACA', 'BFDBFE', 'E9D5FF', 'FBCFE8'];
-
-            sumHeaders.forEach((h, idx) => {
+            activeSumConfigs.forEach((h) => {
                 const hCell = sheet.getRow(headerRowIdx).getCell(colIdx);
-                hCell.value = h;
+                hCell.value = h.label;
                 sheet.mergeCells(headerRowIdx, colIdx, subHeaderRowIdx, colIdx);
-                setHeaderStyle(hCell, sumBgColors[idx]);
+                setHeaderStyle(hCell, h.color);
                 sheet.getColumn(colIdx).width = 6;
                 colIdx++;
             });
@@ -704,52 +753,56 @@ export const exportGradeReport = async (data: ExportData[], fileName: string) =>
                         cIdx++;
                     });
 
-                    const statsArr = [sP, sK, sT, sVP, sKH];
-                    statsArr.forEach((v, vIdx) => {
+                    // Summary Stats (Lọc theo visibleColumns)
+                    activeSumConfigs.forEach(h => {
+                        let val = 0;
+                        if (h.id === 'P') val = sP;
+                        else if (h.id === 'K') val = sK;
+                        else if (h.id === 'T') val = sT;
+                        else if (h.id === 'VP') val = sVP;
+                        else if (h.id === 'KH') val = sKH;
+
                         const cell = row.getCell(cIdx++);
-                        cell.value = v > 0 ? v : '';
+                        cell.value = val > 0 ? val : '';
                         cell.border = BORDER_STYLE;
                         cell.alignment = { horizontal: 'center' };
-                        cell.font = { bold: true, name: 'Times New Roman' };
-                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${sumBgColors[vIdx]}` } };
+                        cell.font = { name: 'Times New Roman' };
                     });
 
                     classSumP += sP; classSumK += sK; classSumT += sT; classSumVP += sVP; classSumKH += sKH;
                     currentRowIdx++;
                 });
 
-                // --- Dòng Tổng Cộng của Lớp ---
-                const sumRow = sheet.getRow(currentRowIdx);
+                // --- Dòng Tổng cộng Lớp (Lọc theo số cột đang hiện)
                 sheet.mergeCells(`A${currentRowIdx}:B${currentRowIdx}`);
-                const sumLabel = sumRow.getCell(1);
-                sumLabel.value = "TỔNG CỘNG LỚP";
-                
-                // Sửa yêu cầu 2: Cho màu nền dòng Tổng Cộng Lớp khác biệt
-                setHeaderStyle(sumLabel, 'E2E8F0'); // Light Blue/Gray
-                sumLabel.font = { bold: true, name: 'Times New Roman', color: { argb: 'FF1F2937' } };
-                sumLabel.alignment = { horizontal: 'right' };
-                sumRow.getCell(2).border = BORDER_STYLE;
-                sumRow.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+                const classSumLabelCell = sheet.getRow(currentRowIdx).getCell(1);
+                classSumLabelCell.value = `TỔNG CỘNG LỚP ${classData.className}`;
+                setHeaderStyle(classSumLabelCell, 'FEE2E2'); // Light Red
+                classSumLabelCell.font = { bold: true, size: 11, name: 'Times New Roman', color: { argb: 'FF991B1B' } };
+                classSumLabelCell.alignment = { horizontal: 'center' };
 
-                let cIdx = 3;
+                let footerCIdx = 3;
                 dates.forEach(date => {
                     const dateStr = format(date, 'yyyy-MM-dd');
-                    const cell = sumRow.getCell(cIdx++);
-                    cell.value = classDaySums[dateStr] || '';
-                    cell.font = { bold: true, color: { argb: 'FFFF0000' } };
-                    cell.alignment = { horizontal: 'center' };
-                    cell.border = BORDER_STYLE;
-                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+                    const val = classDaySums[dateStr] || 0;
+                    const cell = sheet.getRow(currentRowIdx).getCell(footerCIdx++);
+                    cell.value = val > 0 ? val : '';
+                    setHeaderStyle(cell, 'F3F4F6');
+                    cell.font = { bold: true, name: 'Times New Roman' };
                 });
 
-                const cStatsArr = [classSumP, classSumK, classSumT, classSumVP, classSumKH];
-                cStatsArr.forEach((v, vIdx) => {
-                    const cell = sumRow.getCell(cIdx++);
-                    cell.value = v > 0 ? v : '';
-                    cell.border = BORDER_STYLE;
-                    cell.alignment = { horizontal: 'center' };
-                    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEF4444' } }; // Red
+                activeSumConfigs.forEach(h => {
+                    let val = 0;
+                    if (h.id === 'P') val = classSumP;
+                    else if (h.id === 'K') val = classSumK;
+                    else if (h.id === 'T') val = classSumT;
+                    else if (h.id === 'VP') val = classSumVP;
+                    else if (h.id === 'KH') val = classSumKH;
+
+                    const cell = sheet.getRow(currentRowIdx).getCell(footerCIdx++);
+                    cell.value = val > 0 ? val : '';
+                    setHeaderStyle(cell, h.color);
+                    cell.font = { bold: true, name: 'Times New Roman' };
                 });
                 currentRowIdx++;
             }
@@ -777,17 +830,12 @@ export const exportGradeReport = async (data: ExportData[], fileName: string) =>
         sheet.getRow(currentRowIdx).height = 30;
         currentRowIdx++;
 
-        const summaryData = [
+        const fixedSummaryData = [
             { label: 'Tổng số học sinh trong khối:', value: gradeTotalStudents, unit: 'HS', color: 'FF1E3A8A' },
             { label: 'Số học sinh có phát sinh nghỉ/trễ:', value: gradeIssueStudents, unit: 'HS', color: 'FFB91C1C' },
-            { label: 'Tổng số lượt Nghỉ Có Phép (P):', value: gradeSumP, unit: 'Lượt', color: 'FF92400E' },
-            { label: 'Tổng số lượt Nghỉ Không Phép (K):', value: gradeSumK, unit: 'Lượt', color: 'FFB91C1C' },
-            { label: 'Tổng số lượt Đi Trễ (T):', value: gradeSumT, unit: 'Lượt', color: 'FF1E40AF' },
-            { label: 'Tổng số lượt Vi Phạm (VP):', value: gradeSumVP, unit: 'Lượt', color: 'FF6D28D9' },
-            { label: 'Tổng số lượt Khen Thưởng (KH):', value: gradeSumKH, unit: 'Lượt', color: 'FFBE185D' },
         ];
 
-        summaryData.forEach((item, idx) => {
+        fixedSummaryData.forEach((item, idx) => {
             const row = sheet.getRow(currentRowIdx);
             row.height = 25;
             

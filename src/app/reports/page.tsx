@@ -111,7 +111,7 @@ export default function ReportsPage() {
                 return;
             }
             const ts = format(new Date(), 'HHmmss');
-            await exportToExcel(data, `BaoCao_${dateRange.start}_${ts}`, isCompact);
+            await exportToExcel(data, `BaoCao_${dateRange.start}_${ts}`, isCompact, visibleColumns);
         } catch (error) {
             console.error("[handleExport] Lỗi:", error);
             alert('Lỗi xuất báo cáo: ' + (error as Error).message);
@@ -135,7 +135,7 @@ export default function ReportsPage() {
                 return;
             }
             const ts = format(new Date(), 'HHmmss');
-            await exportTermReport(data, `BaoCaoTongHop_${ts}`);
+            await exportTermReport(data, `BaoCaoTongHop_${ts}`, visibleColumns);
         } catch (error) {
             console.error('[handleExportAdvanced] Lỗi:', error);
             alert('Có lỗi khi xuất báo cáo: ' + (error as Error).message);
@@ -161,7 +161,7 @@ export default function ReportsPage() {
             const rangeStr = dateRange.start === dateRange.end 
                 ? format(new Date(dateRange.start), 'dd-MM-yyyy')
                 : `${format(new Date(dateRange.start), 'dd-MM-yyyy')}_den_${format(new Date(dateRange.end), 'dd-MM-yyyy')}`;
-            await exportGradeReport(data, `BaoCao_DiemDanh_TheoKhoi_${rangeStr}`);
+            await exportGradeReport(data, `BaoCao_DiemDanh_TheoKhoi_${rangeStr}`, visibleColumns);
         } catch (error) {
             console.error("[handleExportGrid] Lỗi:", error);
             alert('Lỗi xuất báo cáo: ' + (error as Error).message);
