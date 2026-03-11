@@ -261,27 +261,41 @@ export function StudentSelectorDialog({
                                                             {v}
                                                         </button>
                                                     ))}
+                                                    {targetStatus === 'T' && (
+                                                        <div className="flex items-center gap-2 mb-1 w-full">
+                                                            <div className="text-[10px] text-gray-400 font-medium">Đánh dấu các tiết <strong className="text-blue-500">CÓ HỌC</strong>:</div>
+                                                        </div>
+                                                    )}
                                                     {targetStatus === 'T' && LATE_PERIODS.map(p => {
-                                                        const currentNote = localNotesMap[item.student.code] || '';
-                                                        // Cho phép chọn nhiều Tiết (VD: "Trễ T1, T2")
-                                                        const isSelected = currentNote.includes(p);
+                                                        // Note string format e.g. "Vắng T1, T2" (Old version used "Trễ T1, T2")
+                                                        const normalizedNote = currentNote.replace('Trễ ', 'Vắng ');
+                                                        
+                                                        // Ngược lại, nếu được click có nghĩa là CÓ ĐI HỌC, KHÔNG click là vắng.
+                                                        // Ta lưu các tiết VẮNG vào `currentNote`.
+                                                        const isMissed = normalizedNote.includes(p) || false;
+                                                        
+                                                        // Nút sáng (Xanh) = CÓ ĐI HỌC = !isMissed
+                                                        const isSelected = !isMissed;
                                                         
                                                         const togglePeriod = (e: React.MouseEvent) => {
                                                             e.stopPropagation();
                                                             let newNote = '';
                                                             if (isSelected) {
-                                                                // Xoá tiết khỏi chuỗi Note (VD: "Trễ T1, T2" -> "Trễ T2")
-                                                                newNote = currentNote.replace(new RegExp(`(Trễ )?${p}(, )?`), '').trim();
-                                                                // Clean up comma at start/end
-                                                                newNote = newNote.replace(/^, /, '').replace(/,$/, '').trim();
-                                                            } else {
-                                                                // Thêm tiết vào chuỗi note mới
-                                                                const base = currentNote.replace(/^Trễ /, '');
+                                                                // Đang HỌC -> Bấm vào để VẮNG -> Thêm p vào danh sách Vắng
+                                                                const base = normalizedNote.replace(/^Vắng /, '');
                                                                 const parts = base ? base.split(', ').filter(Boolean) : [];
-                                                                parts.push(p);
-                                                                // Sort to keep order "T1", "T2" 
-                                                                parts.sort();
-                                                                newNote = `Trễ ${parts.join(', ')}`;
+                                                                if (!parts.includes(p)) parts.push(p);
+                                                                parts.sort(); // T1, T2, T3...
+                                                                newNote = `Vắng ${parts.join(', ')}`;
+                                                            } else {
+                                                                // Đang VẮNG -> Bấm vào để HỌC -> Xoá p khỏi danh sách Vắng
+                                                                newNote = normalizedNote.replace(new RegExp(`(Vắng )?${p}(, )?`), '').trim();
+                                                                newNote = newNote.replace(/^, /, '').replace(/,$/, '').trim(); // Clean up commas
+                                                                if (newNote && !newNote.startsWith('Vắng ')) {
+                                                                    newNote = `Vắng ${newNote}`;
+                                                                }
+                                                                // Nếu xoá hết không còn tiết vắng nào:
+                                                                if (newNote === 'Vắng' || newNote === 'Vắng ') newNote = '';
                                                             }
                                                             handleNoteChange(item.student.code, newNote);
                                                         };
