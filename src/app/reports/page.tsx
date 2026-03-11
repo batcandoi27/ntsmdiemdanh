@@ -5,7 +5,7 @@ import { getReports, getMonthlyReportData, getAdvancedReportData, getExcelExport
 import { getAllClasses, getClassAndStudents } from '@/app/actions/common';
 import { Class, Student } from '@/types/models';
 import { FileBarChart, Plus, X, Loader2, AlertTriangle } from 'lucide-react';
-import { exportToExcel, exportTermReport } from '@/lib/export-utils';
+import { exportToExcel, exportTermReport, exportGradeReport } from '@/lib/export-utils';
 import { ReportsStats } from '@/components/reports/reports-stats';
 import { ReportsFilter } from '@/components/reports/reports-filter';
 import { ReportsListView } from '@/components/reports/reports-list-view';
@@ -144,6 +144,30 @@ export default function ReportsPage() {
         }
     };
 
+    const handleExportGrid = async () => {
+        if (selectedClasses.length === 0) {
+            alert('Vui lòng chọn ít nhất một lớp để xuất báo cáo.');
+            return;
+        }
+        if (exportLoading) return;
+        setExportLoading(true);
+        try {
+            const targetClassIds = selectedClasses;
+            const data = await getExcelExportData(dateRange.start, dateRange.end, targetClassIds);
+            if (!data || data.length === 0) {
+                alert('Chưa có dữ liệu để xuất.');
+                return;
+            }
+            const ts = format(new Date(), 'HHmmss');
+            await exportGradeReport(data, `BaoCaoTheoKhoi_${ts}`);
+        } catch (error) {
+            console.error("[handleExportGrid] Lỗi:", error);
+            alert('Lỗi xuất báo cáo: ' + (error as Error).message);
+        } finally {
+            setExportLoading(false);
+        }
+    };
+
     if (flagsLoading) {
         return <div className="p-8 text-center text-gray-500 flex justify-center items-center h-[50vh]"><Loader2 className="animate-spin mr-2" /> Đang tải...</div>;
     }
@@ -192,6 +216,7 @@ export default function ReportsPage() {
                     setGroupBy={setGroupBy}
                     onExport={handleExport}
                     onExportAdvanced={handleExportAdvanced}
+                    onExportGrid={handleExportGrid}
                     onGenerateReport={handleManualFetch}
                     isLoading={loading}
                     isExporting={exportLoading}

@@ -27,7 +27,7 @@
     "react-dom": "^18",
     "react-hot-toast": "^2.6.0",
     "react-swipeable": "^7.0.2",
-    "recharts": "^3.7.0",
+    "recharts": "^3.8.0",
     "tailwind-merge": "^2.6.1",
     "vaul": "^1.1.2",
     "xlsx": "^0.18.5"

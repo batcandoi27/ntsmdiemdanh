@@ -24,6 +24,7 @@ interface ReportsFilterProps {
 
     onExport: (isCompact: boolean) => void;
     onExportAdvanced?: () => void;
+    onExportGrid?: () => void;
     onGenerateReport: () => void;
     isLoading?: boolean;
     isExporting?: boolean;
@@ -49,6 +50,7 @@ export function ReportsFilter({
     groupBy, setGroupBy,
     onExport,
     onExportAdvanced,
+    onExportGrid,
     onGenerateReport,
     isLoading = false,
     isExporting = false
@@ -377,6 +379,18 @@ export function ReportsFilter({
                                     <span className="text-emerald-700">Rút gọn (HS Vắng)</span>
                                     <span className="text-[11px] text-gray-500 font-normal">Chỉ người vi phạm</span>
                                 </button>
+                                {onExportGrid && (
+                                    <>
+                                        <div className="h-px bg-gray-200 my-1"></div>
+                                        <button
+                                            onClick={() => { setOpenExportDropdown(false); setTimeout(() => onExportGrid(), 0); }}
+                                            className="w-full text-left px-3 py-2 text-sm font-bold text-teal-700 hover:bg-teal-50 rounded-lg flex flex-col transition-colors"
+                                        >
+                                            <span>Dạng lưới (Theo Khối)</span>
+                                            <span className="text-[11px] text-teal-600 font-normal">Mô phỏng giao diện lưới</span>
+                                        </button>
+                                    </>
+                                )}
                                 {onExportAdvanced && (
                                     <>
                                         <div className="h-px bg-gray-200 my-1"></div>
