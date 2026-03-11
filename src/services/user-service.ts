@@ -147,6 +147,17 @@ export async function getUsersForClass(classId: string): Promise<AppUser[]> {
 export async function updateUser(uid: string, data: Partial<AppUser>): Promise<void> {
     // Không cho phép thay đổi uid
     const { uid: _uid, ...updateData } = data;
+
+    // Fix bug Phân quyền: Nếu role bị thay đổi, lập tức cập nhật lại bộ Quyền hạn (permissions) tương ứng.
+    if (updateData.role) {
+        if (!updateData.permissions) {
+            updateData.permissions = { ...DEFAULT_PERMISSIONS[updateData.role] };
+        }
+        if (updateData.editWindowMinutes === undefined) {
+            updateData.editWindowMinutes = DEFAULT_EDIT_WINDOW[updateData.role];
+        }
+    }
+
     await updateDoc(doc(db, 'users', uid), updateData);
 }
 

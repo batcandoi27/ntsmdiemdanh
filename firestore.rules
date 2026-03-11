@@ -121,7 +121,7 @@ service cloud.firestore {
         allow read: if isSignedIn();
         allow create: if isSignedIn() && canEditAttendance(request.resource.data.classId);
         allow update: if isSignedIn() && canEditAttendance(resource.data.classId);
-        allow delete: if isAdmin() || (isSignedIn() && canEditAttendance(resource.data.classId));
+        allow delete: if isAdmin() || resource == null || (isSignedIn() && canEditAttendance(resource.data.classId));
       }
 
       // Columns (custom columns system)
