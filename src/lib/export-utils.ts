@@ -559,8 +559,19 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
             }
         }
 
-        // Calculate total columns based on visibleColumns
-        const totalCols = 2 + dates.length + activeSummaryHeaders.length; 
+        // Summary Columns (Lọc theo visibleColumns)
+        const allSummaryHeadersConfig = [
+            { id: 'P', label: 'P', color: 'F59E0B' },
+            { id: 'K', label: 'K', color: 'EF4444' },
+            { id: 'V', label: 'V', color: '9CA3AF' },
+            { id: 'T', label: 'T', color: '3B82F6' },
+            { id: 'VP', label: 'VP', color: '8B5CF6' },
+            { id: 'KH', label: 'KH', color: '10B981' }
+        ];
+        const activeSummaryHeaders = allSummaryHeadersConfig.filter(h => visibleColumns.includes(h.id));
+
+        // STT (1), Name (1), Code (1), Dates (N), Active Summary (M), Tổng (1), Ghi chú (2)
+        const totalCols = 3 + dates.length + activeSummaryHeaders.length + 1 + 2; 
         const lastColChar = getColumnLabel(totalCols);
 
         // --- 0. TIÊU ĐỀ CHUNG CỦA SHEET ---
