@@ -76,6 +76,12 @@ export async function markAttendance(
         timestamp: new Date().toISOString(),
     };
 
+    // Firebase Firestore không hỗ trợ giá trị `undefined`, chúng ta cần xoá các khoá này
+    if (record.subject === undefined) delete record.subject;
+    if (record.note === undefined) delete record.note;
+    if (record.missedPeriods === undefined) delete record.missedPeriods;
+    if (record.period === undefined) record.period = null;
+
     await setDoc(recordRef, record);
 }
 
@@ -158,6 +164,12 @@ export async function batchMarkAttendance(
             markedByRole: user.role,
             timestamp: new Date().toISOString(),
         };
+
+        // Firebase Firestore không hỗ trợ giá trị `undefined`
+        if (record.note === undefined) delete record.note;
+        if (record.missedPeriods === undefined) delete record.missedPeriods;
+        if (record.period === undefined) record.period = null;
+
         batch.set(doc(db, path, recordId), record);
         written++;
     }
