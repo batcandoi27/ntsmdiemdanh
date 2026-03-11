@@ -63,7 +63,11 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
         return groups;
     }, [absences, selectedClasses, classes]);
 
-    const visibleGroups = Object.keys(groupedData).sort();
+    const visibleGroups = Object.keys(groupedData).sort((a, b) => {
+        const nameA = groupedData[a].className;
+        const nameB = groupedData[b].className;
+        return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+    });
 
     if (visibleGroups.length === 0) {
         return (
