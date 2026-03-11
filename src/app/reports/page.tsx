@@ -158,8 +158,10 @@ export default function ReportsPage() {
                 alert('Chưa có dữ liệu để xuất.');
                 return;
             }
-            const ts = format(new Date(), 'HHmmss');
-            await exportGradeReport(data, `BaoCaoTheoKhoi_${ts}`);
+            const rangeStr = dateRange.start === dateRange.end 
+                ? format(new Date(dateRange.start), 'dd-MM-yyyy')
+                : `${format(new Date(dateRange.start), 'dd-MM-yyyy')}_den_${format(new Date(dateRange.end), 'dd-MM-yyyy')}`;
+            await exportGradeReport(data, `BaoCao_DiemDanh_TheoKhoi_${rangeStr}`);
         } catch (error) {
             console.error("[handleExportGrid] Lỗi:", error);
             alert('Lỗi xuất báo cáo: ' + (error as Error).message);

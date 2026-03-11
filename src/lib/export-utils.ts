@@ -561,8 +561,9 @@ export const exportGradeReport = async (data: ExportData[], fileName: string) =>
         let gradeTotalStudents = 0;
         let gradeIssueStudents = 0;
 
-        // Vẽ từng Lớp trong Sheet
-        classes.forEach((classData) => {
+        // Vẽ từng Lớp trong Sheet (Sắp xếp tự nhiên 9A1, 9A2... 9A10)
+        classes.sort((a, b) => a.className.localeCompare(b.className, undefined, { numeric: true, sensitivity: 'base' }))
+               .forEach((classData) => {
             const studentsWithData = classData.students.filter(s => Object.values(s.absences).some(status => status && status !== 'C'));
             const totalStudents = classData.students.length;
             const issueStudentsCount = studentsWithData.length;
