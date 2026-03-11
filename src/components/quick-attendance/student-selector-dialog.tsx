@@ -71,6 +71,9 @@ export function StudentSelectorDialog({
     const COMMON_VIOLATIONS = [
         "Đồng phục", "Điện thoại", "Chạy giỡn", "Ăn quà vặt", "Nói chuyện riêng", "Không thuộc bài"
     ];
+    
+    // Thêm danh sách các tiết cho phép Trễ
+    const LATE_PERIODS = ["T1", "T2", "T3", "T4", "T5"];
 
     useEffect(() => {
         if (open && classId) {
@@ -243,7 +246,7 @@ export function StudentSelectorDialog({
                                         {isChecked && showNoteInput && (
                                             <div className="mt-3 pl-8 animate-in slide-in-from-top-1">
                                                 <div className="flex flex-wrap gap-1.5 mb-2">
-                                                    {COMMON_VIOLATIONS.map(v => (
+                                                    {targetStatus === 'VP' && COMMON_VIOLATIONS.map(v => (
                                                         <button
                                                             key={v}
                                                             onClick={(e) => {
@@ -258,6 +261,44 @@ export function StudentSelectorDialog({
                                                             {v}
                                                         </button>
                                                     ))}
+                                                    {targetStatus === 'T' && LATE_PERIODS.map(p => {
+                                                        const currentNote = localNotesMap[item.student.code] || '';
+                                                        // Cho phép chọn nhiều Tiết (VD: "Trễ T1, T2")
+                                                        const isSelected = currentNote.includes(p);
+                                                        
+                                                        const togglePeriod = (e: React.MouseEvent) => {
+                                                            e.stopPropagation();
+                                                            let newNote = '';
+                                                            if (isSelected) {
+                                                                // Xoá tiết khỏi chuỗi Note (VD: "Trễ T1, T2" -> "Trễ T2")
+                                                                newNote = currentNote.replace(new RegExp(`(Trễ )?${p}(, )?`), '').trim();
+                                                                // Clean up comma at start/end
+                                                                newNote = newNote.replace(/^, /, '').replace(/,$/, '').trim();
+                                                            } else {
+                                                                // Thêm tiết vào chuỗi note mới
+                                                                const base = currentNote.replace(/^Trễ /, '');
+                                                                const parts = base ? base.split(', ').filter(Boolean) : [];
+                                                                parts.push(p);
+                                                                // Sort to keep order "T1", "T2" 
+                                                                parts.sort();
+                                                                newNote = `Trễ ${parts.join(', ')}`;
+                                                            }
+                                                            handleNoteChange(item.student.code, newNote);
+                                                        };
+                                                        
+                                                        return (
+                                                            <button
+                                                                key={p}
+                                                                onClick={togglePeriod}
+                                                                className={`text-[10px] px-2 py-1 rounded border transition-colors ${isSelected
+                                                                    ? 'bg-blue-100 text-blue-700 border-blue-200 font-bold'
+                                                                    : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                                                                    }`}
+                                                            >
+                                                                {p}
+                                                            </button>
+                                                        );
+                                                    })}
                                                 </div>
                                                 <input
                                                     type="text"
