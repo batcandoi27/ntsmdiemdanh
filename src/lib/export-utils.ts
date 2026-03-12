@@ -688,7 +688,10 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
             const studentsToDisplay = classData.students.filter(s => {
                 return Object.values(s.absences).some(raw => {
                     const parts = raw.split(',').map(p => p.trim());
-                    return parts.some(p => visibleColumns.includes(p));
+                    return parts.some(p => {
+                        const baseCode = p.split(' ')[0]; // Lấy "T" từ "T (Vắng T1)"
+                        return visibleColumns.includes(baseCode);
+                    });
                 });
             });
 
