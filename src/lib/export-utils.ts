@@ -119,6 +119,7 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
         const activeSummaryHeaders = allSummaryHeadersConfig.filter(h => visibleColumns.includes(h.id));
 
         // Tính toán tổng số cột để merge Header phủ kín chiều rộng
+        // 3 (STT, Tên, Mã) + dates.length + activeSummaryHeaders.length + 1 (Tổng)
         const totalCols = 3 + dates.length + activeSummaryHeaders.length + 1;
         const lastColChar = getColumnLabel(totalCols);
 
@@ -610,7 +611,7 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
             }
         }
 
-        // Summary Columns (Lọc theo visibleColumns)
+        // Summary Columns (P, K, T, VP, KH) - Lọc theo visibleColumns
         const allSummaryHeadersConfig = [
             { id: 'P', label: 'P', color: 'F59E0B' },
             { id: 'K', label: 'K', color: 'EF4444' },
@@ -621,8 +622,9 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
         ];
         const activeSummaryHeaders = allSummaryHeadersConfig.filter(h => visibleColumns.includes(h.id));
 
-        // STT (1), Name (1), Code (1), Dates (N), Active Summary (M), Tổng (1), Ghi chú (2)
-        const totalCols = 3 + dates.length + activeSummaryHeaders.length + 1 + 2; 
+        // Tính toán tổng số cột để merge Header (phải khớp với thực tế vẽ ở dưới)
+        // 2 (STT/Mã, Tên) + dates.length + activeSummaryHeaders.length
+        const totalCols = 2 + dates.length + activeSummaryHeaders.length; 
         const lastColChar = getColumnLabel(totalCols);
 
         // --- 0. TIÊU ĐỀ CHUNG CỦA SHEET ---
