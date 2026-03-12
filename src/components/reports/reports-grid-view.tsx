@@ -553,13 +553,12 @@ function GridCell({ status, visibleColumns }: { status: string, visibleColumns: 
 
     return (
         <div 
-            className={cn("w-7 h-7 mx-auto rounded-md flex items-center justify-center text-xs font-black shadow-sm group relative", style)}
-            title={note || undefined}
+            className={cn("w-7 h-7 mx-auto rounded-md flex items-center justify-center text-xs font-black shadow-sm group relative cursor-help", style)}
         >
             {baseCode}
             {hasNote && (
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-50">
-                    <div className="bg-gray-900 text-white text-[10px] px-2 py-1 rounded shadow-xl whitespace-nowrap border border-gray-700 font-bold">
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-[100] pointer-events-none">
+                    <div className="bg-gray-900 text-white text-[11px] px-2 py-1.5 rounded-lg shadow-2xl whitespace-nowrap border border-gray-700 font-bold">
                         {note}
                     </div>
                     <div className="w-2 h-2 bg-gray-900 rotate-45 mx-auto -mt-1 border-r border-b border-gray-700"></div>

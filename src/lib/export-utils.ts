@@ -291,7 +291,7 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
 
                 cell.value = displayStatus;
                 // Thêm Comment nếu có chi tiết (VD: vắng tiết, lỗi vi phạm)
-                if (fullDetails.includes('(')) {
+                if (fullDetails.length > displayStatus.length) {
                     cell.note = fullDetails;
                 }
                 cell.border = BORDER_STYLE;
