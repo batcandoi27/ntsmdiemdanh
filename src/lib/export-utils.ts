@@ -293,16 +293,16 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
                 cell.font = { name: 'Times New Roman', size: 10, bold: true };
 
                 // Stats: Chỉ đếm nếu trạng thái đó được hiển thị
-                if (statuses.includes('P')) countP++;
-                if (statuses.includes('K')) countK++;
-                if (statuses.includes('V')) countV++;
+                if (statuses.some(st => st.startsWith('P'))) countP++;
+                if (statuses.some(st => st.startsWith('K'))) countK++;
+                if (statuses.some(st => st.startsWith('V'))) countV++;
 
                 // Color Logic - Ưu tiên màu theo độ nghiêm trọng: K > P > T > VP
                 let activeColor = '';
-                if (statuses.includes('K')) activeColor = STATUS_COLORS['K'];
-                else if (statuses.includes('P')) activeColor = STATUS_COLORS['P'];
-                else if (statuses.includes('T')) activeColor = STATUS_COLORS['T'];
-                else if (statuses.includes('VP')) activeColor = STATUS_COLORS['VP'];
+                if (statuses.some(st => st.startsWith('K'))) activeColor = STATUS_COLORS['K'];
+                else if (statuses.some(st => st.startsWith('P'))) activeColor = STATUS_COLORS['P'];
+                else if (statuses.some(st => st.startsWith('T'))) activeColor = STATUS_COLORS['T'];
+                else if (statuses.some(st => st.startsWith('VP'))) activeColor = STATUS_COLORS['VP'];
 
                 if (activeColor) {
                     cell.fill = {
