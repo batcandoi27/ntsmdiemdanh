@@ -289,11 +289,32 @@ export async function getExcelExportData(
                 }
 
                 if (dateStr && statusCode && statusCode !== 'C') {
-                    // Nếu đã có bản ghi trong ngày (Sáng/Chiều), ưu tiên giữ lại hoặc gộp
-                    // Với Excel, chúng ta chỉ cần biết ngày đó có vắng hay không
-                    // Nếu nghỉ cả 2 buổi, logic ReportsListView sẽ hiện (SC)
-                    // Ở đây absences[dateStr] sẽ lưu trạng thái.
-                    absences[dateStr] = statusCode;
+                    // Cập nhật V3: Gộp trạng thái nếu cùng ngày (ví dụ Sáng vắng, Chiều trễ)
+                    const existing = absences[dateStr];
+                    if (existing) {
+                        const parts = existing.split(',').map(p => p.trim());
+                        if (!parts.includes(statusCode)) {
+                            absences[dateStr] = `${existing}, ${statusCode}`;
+                        }
+                    } else {
+                        absences[dateStr] = statusCode;
+                    }
+                    hasAbsence = true;
+                }
+
+                // Bổ sung Violation/Praise từ V3 fields mới nếu có
+                if (r.violation && dateStr) {
+                    const existing = absences[dateStr];
+                    if (!existing || !existing.includes('VP')) {
+                        absences[dateStr] = existing ? `${existing}, VP` : 'VP';
+                    }
+                    hasAbsence = true;
+                }
+                if (r.praise && dateStr) {
+                    const existing = absences[dateStr];
+                    if (!existing || !existing.includes('KH')) {
+                        absences[dateStr] = existing ? `${existing}, KH` : 'KH';
+                    }
                     hasAbsence = true;
                 }
             });
@@ -363,7 +384,25 @@ export async function getMonthlyReportData(classId: string, month: number, year:
                 if (status === 'violation') status = 'VP';
                 const dateKey = r.date || (r.timestamp ? r.timestamp.split('T')[0] : '');
                 if (dateKey) {
-                    absences[dateKey] = status;
+                    const existing = absences[dateKey];
+                    if (existing) {
+                        const parts = existing.split(',').map(p => p.trim());
+                        if (!parts.includes(status)) {
+                            absences[dateKey] = `${existing}, ${status}`;
+                        }
+                    } else {
+                        absences[dateKey] = status;
+                    }
+
+                    // Bổ sung Violation/Praise từ V3 fields mới
+                    if (r.violation) {
+                        const current = absences[dateKey];
+                        if (!current.includes('VP')) absences[dateKey] = `${current}, VP`;
+                    }
+                    if (r.praise) {
+                        const current = absences[dateKey];
+                        if (!current.includes('KH')) absences[dateKey] = `${current}, KH`;
+                    }
                 }
             }
         });
@@ -441,9 +480,21 @@ export async function getAdvancedReportData(startDate: string, endDate: string, 
                 if (status === 'violation') status = 'VP';
 
                 const student = students.find(s => s.code === studentCode);
-                if (student && status) {
-                    if (!data[student.id].stats[status]) data[student.id].stats[status] = 0;
-                    data[student.id].stats[status]++;
+                if (student) {
+                    if (status && status !== 'present') {
+                        if (!data[student.id].stats[status]) data[student.id].stats[status] = 0;
+                        data[student.id].stats[status]++;
+                    }
+                    // Đếm Violation từ field riêng
+                    if (record.violation) {
+                        if (!data[student.id].stats['VP']) data[student.id].stats['VP'] = 0;
+                        data[student.id].stats['VP']++;
+                    }
+                    // Đếm Praise từ field riêng
+                    if (record.praise) {
+                        if (!data[student.id].stats['KH']) data[student.id].stats['KH'] = 0;
+                        data[student.id].stats['KH']++;
+                    }
                 }
             }
         });
