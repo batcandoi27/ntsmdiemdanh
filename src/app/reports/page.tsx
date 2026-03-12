@@ -111,7 +111,7 @@ export default function ReportsPage() {
                 return;
             }
             const ts = format(new Date(), 'HHmmss');
-            await exportToExcel(data, `BaoCao_${dateRange.start}_${ts}`, isCompact, visibleColumns);
+            await exportGradeReport(data, `BaoCao_Khoi_${ts}`, visibleColumns);
         } catch (error) {
             console.error("[handleExport] Lỗi:", error);
             alert('Lỗi xuất báo cáo: ' + (error as Error).message);
