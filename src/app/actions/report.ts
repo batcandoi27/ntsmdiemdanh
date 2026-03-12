@@ -169,15 +169,22 @@ export async function getReports(criteria: ReportCriteria): Promise<ReportResult
                 // Chuẩn hoá status vì V3 format mới dài chữ tiếng anh
                 if (status === 'absent') status = 'K';
                 if (status === 'excused') status = 'P';
-                if (status === 'late') status = 'T';
-                if (status === 'violation') status = 'VP';
+                if (status === 'late') {
+                    const periods = record.missedPeriods || [];
+                    status = periods.length > 0 
+                        ? `T (Vắng T${periods.join(', T')})` 
+                        : `T (15p đầu giờ)`;
+                }
+                if (status === 'violation') {
+                    status = record.violationNote ? `VP (${record.violationNote})` : 'VP';
+                }
                 if (status === 'praise') status = 'KH';
 
                 if (status === 'P') totalP++;
                 if (status === 'K') totalK++;
                 if (status === 'V') totalV++;
-                if (status === 'T') totalT++;
-                if (status === 'VP') totalVP++;
+                if (status.startsWith('T')) totalT++;
+                if (status.startsWith('VP')) totalVP++;
                 if (status === 'KH') totalKH++;
 
                 const info = studentInfoMap.get(code) || { name: record.studentName || code, stt: 0 };
@@ -285,7 +292,7 @@ export async function getExcelExportData(
                             : `T (15p đầu giờ)`;
                     }
                     if (statusCode === 'violation') {
-                        statusCode = `VP (${r.violationNote || 'Vi phạm'})`;
+                        statusCode = record.violationNote ? `VP (${record.violationNote})` : 'VP';
                     }
                     if (statusCode === 'praise') statusCode = 'KH';
                     dateStr = r.date || r.timestamp?.split('T')[0];
@@ -312,7 +319,7 @@ export async function getExcelExportData(
                 // Bổ sung Violation/Praise từ V3 fields mới nếu có
                 if (r.violation && dateStr) {
                     const existing = absences[dateStr];
-                    const vpLabel = `VP (${r.violationNote || 'Vi phạm'})`;
+                    const vpLabel = r.violationNote ? `VP (${r.violationNote})` : 'VP';
                     if (!existing || !existing.includes('VP')) {
                         absences[dateStr] = existing ? `${existing}, ${vpLabel}` : vpLabel;
                     }
@@ -395,7 +402,7 @@ export async function getMonthlyReportData(classId: string, month: number, year:
                         : `T (15p đầu giờ)`;
                 }
                 if (status === 'violation') {
-                    status = `VP (${r.violationNote || 'Vi phạm'})`;
+                    status = record.violationNote ? `VP (${record.violationNote})` : 'VP';
                 }
                 const dateKey = r.date || (r.timestamp ? r.timestamp.split('T')[0] : '');
                 if (dateKey) {
@@ -412,7 +419,7 @@ export async function getMonthlyReportData(classId: string, month: number, year:
                     // Bổ sung Violation/Praise từ V3 fields mới
                     if (r.violation) {
                         const current = absences[dateKey];
-                        const vpLabel = `VP (${r.violationNote || 'Vi phạm'})`;
+                        const vpLabel = record.violationNote ? `VP (${record.violationNote})` : 'VP';
                         if (!current.includes('VP')) absences[dateKey] = `${current}, ${vpLabel}`;
                     }
                     if (r.praise) {

@@ -67,7 +67,8 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
     const groups: Record<string, AbsenceDetail[]> = {};
 
     data.forEach(item => {
-        if (!visibleColumns.includes(item.status)) return; // Filter
+        const baseCode = item.status.split(' ')[0];
+        if (!visibleColumns.includes(baseCode)) return; // Filter
         const key = groupBy === 'DATE' ? item.date : item.className;
         if (!groups[key]) groups[key] = [];
         groups[key].push(item);
@@ -494,6 +495,7 @@ function CompactStatusBadge({ status }: { status: string }) {
 }
 
 function StatusBadge({ status }: { status: string }) {
+    const baseCode = status.split(' ')[0];
     const map = {
         'P': { text: 'Phép (P)', bg: 'bg-yellow-100', color: 'text-yellow-700' },
         'K': { text: 'Không (K)', bg: 'bg-red-100', color: 'text-red-700' },
@@ -502,11 +504,11 @@ function StatusBadge({ status }: { status: string }) {
         'VP': { text: 'Vi Phạm (VP)', bg: 'bg-purple-100', color: 'text-purple-700' },
         'KH': { text: 'Khen thưởng (KH)', bg: 'bg-pink-100', color: 'text-pink-700' },
     };
-    const style = map[status as keyof typeof map] || { text: status, bg: 'bg-gray-100', color: 'text-gray-600' };
+    const style = map[baseCode as keyof typeof map] || { text: baseCode, bg: 'bg-gray-100', color: 'text-gray-600' };
 
     return (
         <span className={cn("px-2 py-1 rounded text-xs font-bold", style.bg, style.color)}>
-            {style.text}
+            {status.includes('(') ? status : style.text}
         </span>
     );
 }
