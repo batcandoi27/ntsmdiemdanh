@@ -239,8 +239,12 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
                 const rawStatus = s.absences[dateStr] || '';
                 
                 // Hỗ trợ hiển thị đa trạng thái (ví dụ: "T, VP")
-                // Trong data mới từ v3, s.absences[dateStr] có thể chứa "T, VP" nếu ta map đúng lúc fetch export.
-                const statuses = rawStatus.split(',').map(st => st.trim()).filter(Boolean);
+                // Lọc theo visibleColumns: Chỉ hiện những gì người dùng muốn xem
+                const statuses = rawStatus.split(',')
+                    .map(st => st.trim())
+                    .filter(Boolean)
+                    .filter(st => visibleColumns.includes(st));
+                    
                 const displayStatus = statuses.join(', ');
                 
                 const cell = row.getCell(dayColIdx);
