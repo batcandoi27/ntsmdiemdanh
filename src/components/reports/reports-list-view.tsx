@@ -496,19 +496,30 @@ function CompactStatusBadge({ status }: { status: string }) {
 
 function StatusBadge({ status }: { status: string }) {
     const baseCode = status.split(' ')[0];
+    const hasNote = status.includes('(');
+    const note = hasNote ? status.substring(status.indexOf('(') + 1, status.lastIndexOf(')')) : '';
+
     const map = {
-        'P': { text: 'Phép (P)', bg: 'bg-yellow-100', color: 'text-yellow-700' },
-        'K': { text: 'Không (K)', bg: 'bg-red-100', color: 'text-red-700' },
-        'V': { text: 'Vắng (V)', bg: 'bg-gray-100', color: 'text-gray-700' },
-        'T': { text: 'Trễ (T)', bg: 'bg-blue-100', color: 'text-blue-700' },
-        'VP': { text: 'Vi Phạm (VP)', bg: 'bg-purple-100', color: 'text-purple-700' },
-        'KH': { text: 'Khen thưởng (KH)', bg: 'bg-pink-100', color: 'text-pink-700' },
+        'P': { text: 'Phép (P)', bg: 'bg-yellow-100', color: 'text-yellow-700', border: 'border-yellow-200' },
+        'K': { text: 'Không (K)', bg: 'bg-red-100', color: 'text-red-700', border: 'border-red-200' },
+        'V': { text: 'Vắng (V)', bg: 'bg-gray-100', color: 'text-gray-700', border: 'border-gray-200' },
+        'T': { text: 'Trễ (T)', bg: 'bg-blue-100', color: 'text-blue-700', border: 'border-blue-200' },
+        'VP': { text: 'Vi Phạm (VP)', bg: 'bg-purple-100', color: 'text-purple-700', border: 'border-purple-200' },
+        'KH': { text: 'Khen thưởng (KH)', bg: 'bg-pink-100', color: 'text-pink-700', border: 'border-pink-200' },
     };
-    const style = map[baseCode as keyof typeof map] || { text: baseCode, bg: 'bg-gray-100', color: 'text-gray-600' };
+    const style = map[baseCode as keyof typeof map] || { text: baseCode, bg: 'bg-gray-100', color: 'text-gray-600', border: 'border-gray-200' };
 
     return (
-        <span className={cn("px-2 py-1 rounded text-xs font-bold", style.bg, style.color)}>
-            {status.includes('(') ? status : style.text}
+        <span className={cn("px-2 py-1 rounded text-xs font-bold border group relative cursor-help", style.bg, style.color, style.border)}>
+            {style.text}
+            {hasNote && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-[100] pointer-events-none">
+                    <div className="bg-gray-900 text-white text-[11px] px-2 py-1.5 rounded-lg shadow-2xl whitespace-nowrap border border-gray-700 font-bold">
+                        {note}
+                    </div>
+                    <div className="w-2 h-2 bg-gray-900 rotate-45 mx-auto -mt-1 border-r border-b border-gray-700"></div>
+                </div>
+            )}
         </span>
     );
 }
