@@ -8,6 +8,7 @@ import { ViewModeProvider } from '@/context/view-mode-context';
 import { ViewContainer } from '@/components/view-container';
 import { FeatureFlagsProvider } from '@/context/feature-flags-context';
 import { BottomNav } from '@/components/layout/bottom-nav';
+import { Analytics } from "@vercel/analytics/next"
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -38,6 +39,7 @@ export default function RootLayout({
             </ViewModeProvider>
           </FeatureFlagsProvider>
         </AuthProvider>
+        <Analytics />
       </body>
     </html>
   )
