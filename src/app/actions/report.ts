@@ -147,6 +147,8 @@ export async function getReports(criteria: ReportCriteria): Promise<ReportResult
                         if (status === 'KH') totalKH++;
 
                         const info = studentInfoMap.get(code) || { name: code, stt: 0 };
+                        const noteV1 = record.notes ? record.notes[code] : undefined;
+                        const finalStatus = noteV1 ? `${status} (${noteV1})` : status;
 
                         absences.push({
                             id: `${record.date}_${code}`,
@@ -156,8 +158,8 @@ export async function getReports(criteria: ReportCriteria): Promise<ReportResult
                             studentCode: code,
                             studentName: info.name,
                             stt: info.stt,
-                            status: status as AttendanceStatus,
-                            notes: record.notes ? record.notes[code] : undefined
+                            status: finalStatus as AttendanceStatus,
+                            notes: noteV1
                         });
                     }
                 });
@@ -298,7 +300,9 @@ export async function getExcelExportData(
                     dateStr = r.date || r.timestamp?.split('T')[0];
                 } else if (r.absences && r.absences[student.code]) {
                     // It's V1 format
-                    statusCode = r.absences[student.code];
+                    const baseStatus = r.absences[student.code];
+                    const noteV1 = r.notes ? r.notes[student.code] : undefined;
+                    statusCode = noteV1 ? `${baseStatus} (${noteV1})` : baseStatus;
                     dateStr = r.date;
                 }
 
@@ -385,8 +389,11 @@ export async function getMonthlyReportData(classId: string, month: number, year:
         records.forEach((r: any) => {
             // V1 logic
             if (r.absences && r.absences[s.code]) {
-                const status = r.absences[s.code];
-                if (status && status !== 'C' && status !== '') {
+                const baseStatus = r.absences[s.code];
+                const noteV1 = r.notes ? r.notes[s.code] : undefined;
+                const status = noteV1 ? `${baseStatus} (${noteV1})` : baseStatus;
+                
+                if (baseStatus && baseStatus !== 'C' && baseStatus !== '') {
                     absences[r.date] = status;
                 }
             }
