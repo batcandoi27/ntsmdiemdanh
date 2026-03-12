@@ -30,16 +30,14 @@ import { DEFAULT_YEAR as ACTIVE_YEAR } from '@/config/constants';
 // Mark Attendance (Single Student)
 // ============================================
 
-interface MarkInput {
-    classId: string;
-    studentId: string;
-    studentName: string;
-    session: SessionType;
-    period: number | null;
     status: AttendanceStatusV3;
     subject?: string;
     note?: string;
     missedPeriods?: number[];
+    violation?: boolean;
+    violationNote?: string;
+    praise?: boolean;
+    praiseNote?: string;
 }
 
 /**
@@ -70,6 +68,10 @@ export async function markAttendance(
         subject: input.subject,
         note: input.note,
         missedPeriods: input.missedPeriods,
+        violation: input.violation,
+        violationNote: input.violationNote,
+        praise: input.praise,
+        praiseNote: input.praiseNote,
         markedBy: user.uid,
         markedByName: user.displayName,
         markedByRole: user.role,
@@ -80,9 +82,20 @@ export async function markAttendance(
     if (record.subject === undefined) delete record.subject;
     if (record.note === undefined) delete record.note;
     if (record.missedPeriods === undefined) delete record.missedPeriods;
+    if (record.violation === undefined) delete record.violation;
+    if (record.violationNote === undefined) delete record.violationNote;
+    if (record.praise === undefined) delete record.praise;
+    if (record.praiseNote === undefined) delete record.praiseNote;
     if (record.period === undefined) record.period = null;
 
-    await setDoc(recordRef, record);
+    // Exception-only: Nếu HS không có bất kỳ trạng thái đặc biệt nào (vắng/trễ/vi phạm/khen) 
+    // và status là 'present' -> Xoá record
+    const hasException = record.status !== 'present' || record.violation || record.praise;
+    if (!hasException) {
+        await deleteDoc(recordRef);
+    } else {
+        await setDoc(recordRef, record);
+    }
 }
 
 /**
@@ -115,12 +128,18 @@ export async function markPresent(
 // Batch Mark (Whole Class Quick)
 // ============================================
 
-interface BatchMarkInput {
-    classId: string;
-    session: SessionType;
-    period: number | null;
     /** Map studentId → status. Chỉ bao gồm HS vắng/trễ/phép (không cần HS có mặt) */
-    marks: { studentId: string; studentName: string; status: AttendanceStatusV3; note?: string; missedPeriods?: number[] }[];
+    marks: { 
+        studentId: string; 
+        studentName: string; 
+        status: AttendanceStatusV3; 
+        note?: string; 
+        missedPeriods?: number[];
+        violation?: boolean;
+        violationNote?: string;
+        praise?: boolean;
+        praiseNote?: string;
+    }[];
 }
 
 /**
@@ -159,6 +178,10 @@ export async function batchMarkAttendance(
             status: mark.status,
             note: mark.note,
             missedPeriods: mark.missedPeriods,
+            violation: mark.violation,
+            violationNote: mark.violationNote,
+            praise: mark.praise,
+            praiseNote: mark.praiseNote,
             markedBy: user.uid,
             markedByName: user.displayName,
             markedByRole: user.role,
@@ -168,6 +191,10 @@ export async function batchMarkAttendance(
         // Firebase Firestore không hỗ trợ giá trị `undefined`
         if (record.note === undefined) delete record.note;
         if (record.missedPeriods === undefined) delete record.missedPeriods;
+        if (record.violation === undefined) delete record.violation;
+        if (record.violationNote === undefined) delete record.violationNote;
+        if (record.praise === undefined) delete record.praise;
+        if (record.praiseNote === undefined) delete record.praiseNote;
         if (record.period === undefined) record.period = null;
 
         batch.set(doc(db, path, recordId), record);
@@ -233,6 +260,10 @@ export function calculateSummary(
     const absentCount = sessionRecords.filter(r => r.status === 'absent').length;
     const lateCount = sessionRecords.filter(r => r.status === 'late').length;
     const excusedCount = sessionRecords.filter(r => r.status === 'excused').length;
+    
+    // Violation được đếm riêng, không phụ thuộc vào trạng thái chuyên cần
+    const recordsWithViolation = sessionRecords.filter(r => r.violation === true);
+    
     const presentCount = totalActive - absentCount - lateCount - excusedCount;
     const attendanceRate = totalActive > 0 ? Math.round((presentCount / totalActive) * 100) : 0;
 

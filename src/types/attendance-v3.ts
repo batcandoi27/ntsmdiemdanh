@@ -16,7 +16,7 @@ import { SessionType } from './timetable';
 // Core Types
 // ============================================
 
-export type AttendanceStatusV3 = 'absent' | 'late' | 'excused' | 'violation' | 'praise';
+export type AttendanceStatusV3 = 'absent' | 'late' | 'excused' | 'present';
 
 export interface AttendanceRecordV3 {
     id: string;                     // Document ID = classId_session_period_studentId
@@ -25,10 +25,17 @@ export interface AttendanceRecordV3 {
     studentName: string;
     session: SessionType;           // 'morning' | 'afternoon'
     period: number | null;          // null = CẢ BUỔI (99% trường hợp), 1-5 = theo tiết
-    status: AttendanceStatusV3;     // 'absent' | 'late' | 'excused'
+    status: AttendanceStatusV3;     // 'absent' | 'late' | 'excused' | 'present'
     subject?: string;               // Chỉ khi period != null
-    note?: string;
+    note?: string;                  // Ghi chú cho status chính (vắng/trễ)
     missedPeriods?: number[];       // Dành cho Trễ / Về Sớm theo tiết
+    
+    // Violation & Praise (Có thể đi kèm với status trên)
+    violation?: boolean;
+    violationNote?: string;
+    praise?: boolean;
+    praiseNote?: string;
+
     markedBy: string;               // UID
     markedByName: string;
     markedByRole: UserRole;

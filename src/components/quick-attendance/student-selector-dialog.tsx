@@ -59,10 +59,15 @@ export function StudentSelectorDialog({
     onSaved
 }: StudentSelectorDialogProps) {
     const [students, setStudents] = useState<StudentAttendanceDetail[]>([]);
-    // Map studentCode -> boolean (isChecked for targetStatus)
+    // Map studentCode -> main status ('P', 'K', 'T', 'V', or '' for present)
     const [localStatusMap, setLocalStatusMap] = useState<Record<string, AttendanceStatus>>({});
-    // Local Notes Map: studentCode -> note
+    // Map studentCode -> boolean for violation/praise
+    const [localViolationMap, setLocalViolationMap] = useState<Record<string, boolean>>({});
+    const [localPraiseMap, setLocalPraiseMap] = useState<Record<string, boolean>>({});
+    // Local Notes Map: studentCode -> note (chuyên cần) + maps cho vi phạm
     const [localNotesMap, setLocalNotesMap] = useState<Record<string, string>>({});
+    const [localViolationNotesMap, setLocalViolationNotesMap] = useState<Record<string, string>>({});
+
     const [loading, setLoading] = useState(false);
     const [isSaving, startSaving] = useTransition();
     const [search, setSearch] = useState('');
@@ -82,15 +87,32 @@ export function StudentSelectorDialog({
                 .then(data => {
                     setStudents(data);
                     // Initialize local maps
-                    const map: Record<string, AttendanceStatus> = {};
+                    const statusMap: Record<string, AttendanceStatus> = {};
+                    const violationMap: Record<string, boolean> = {};
+                    const praiseMap: Record<string, boolean> = {};
                     const noteMap: Record<string, string> = {};
+                    const vNoteMap: Record<string, string> = {};
 
                     data.forEach(s => {
-                        map[s.student.code] = s.status;
+                        // Backend v3 records now include detailed fields
+                        // getClassAttendanceDetails maps these to StudentAttendanceDetail
+                        // We need to ensure we have access to those extra fields.
+                        // For now let's assume they are passed or we need to update the action.
+                        statusMap[s.student.code] = s.status;
                         if (s.note) noteMap[s.student.code] = s.note;
+                        
+                        // @ts-ignore - Extra fields from v3 record
+                        if (s.violation) violationMap[s.student.code] = true;
+                        // @ts-ignore
+                        if (s.violationNote) vNoteMap[s.student.code] = s.violationNote;
+                        // @ts-ignore
+                        if (s.praise) praiseMap[s.student.code] = true;
                     });
-                    setLocalStatusMap(map);
+                    setLocalStatusMap(statusMap);
+                    setLocalViolationMap(violationMap);
+                    setLocalPraiseMap(praiseMap);
                     setLocalNotesMap(noteMap);
+                    setLocalViolationNotesMap(vNoteMap);
                 })
                 .finally(() => setLoading(false));
         }
@@ -98,42 +120,72 @@ export function StudentSelectorDialog({
 
     const handleToggle = (studentCode: string) => {
         triggerHapticFeedback();
+        
+        if (targetStatus === 'VP') {
+            // Toggle Vi phạm độc lập
+            setLocalViolationMap(prev => ({
+                ...prev,
+                [studentCode]: !prev[studentCode]
+            }));
+            return;
+        }
+
+        if (targetStatus === 'KH') {
+            // Toggle Khen thưởng độc lập
+            setLocalPraiseMap(prev => ({
+                ...prev,
+                [studentCode]: !prev[studentCode]
+            }));
+            return;
+        }
+
+        // Toggle Chuyên cần (P, K, T, V)
         setLocalStatusMap(prev => {
             const currentStatus = prev[studentCode];
             const isTarget = currentStatus === targetStatus;
-
             return {
                 ...prev,
-                [studentCode]: isTarget ? '' : targetStatus
+                [studentCode]: isTarget ? '' as AttendanceStatus : targetStatus
             };
         });
     };
 
     const handleNoteChange = (studentCode: string, note: string) => {
-        setLocalNotesMap(prev => ({
-            ...prev,
-            [studentCode]: note
-        }));
+        if (targetStatus === 'VP') {
+            setLocalViolationNotesMap(prev => ({ ...prev, [studentCode]: note }));
+        } else {
+            setLocalNotesMap(prev => ({ ...prev, [studentCode]: note }));
+        }
     };
 
     const handleSave = () => {
         startSaving(async () => {
-            const marks: { studentId: string; studentName: string; status: AttendanceStatusV3; note?: string }[] = [];
+            const marks: any[] = [];
+            const allCodes = Array.from(new Set([
+                ...Object.keys(localStatusMap),
+                ...Object.keys(localViolationMap),
+                ...Object.keys(localPraiseMap)
+            ]));
 
-            Object.entries(localStatusMap).forEach(([code, status]) => {
-                let v3Status: AttendanceStatusV3 | '' = '';
-                if (status === 'P') v3Status = 'excused';
-                else if (status === 'K') v3Status = 'absent';
-                else if (status === 'T') v3Status = 'late';
-                else if (status === 'VP') v3Status = 'violation';
-                else if (status === 'KH') v3Status = 'praise';
+            allCodes.forEach(code => {
+                const status = localStatusMap[code] || '';
+                const hasViolation = localViolationMap[code];
+                const hasPraise = localPraiseMap[code];
 
-                if (v3Status !== '') {
+                if (status || hasViolation || hasPraise) {
+                    let v3Status: AttendanceStatusV3 = 'present';
+                    if (status === 'P') v3Status = 'excused';
+                    else if (status === 'K') v3Status = 'absent';
+                    else if (status === 'T') v3Status = 'late';
+
                     marks.push({
                         studentId: code,
                         studentName: students.find(s => s.student.code === code)?.student.fullName || code,
-                        status: v3Status as AttendanceStatusV3,
-                        note: localNotesMap[code] || ''
+                        status: v3Status,
+                        note: localNotesMap[code] || '',
+                        violation: hasViolation || false,
+                        violationNote: localViolationNotesMap[code] || '',
+                        praise: hasPraise || false
                     });
                 }
             });
@@ -202,8 +254,15 @@ export function StudentSelectorDialog({
                         <div className="space-y-2">
                             {filteredStudents.map(item => {
                                 const currentStatus = localStatusMap[item.student.code];
-                                const isChecked = currentStatus === targetStatus;
-                                const isOtherStatus = currentStatus && currentStatus !== targetStatus;
+                                const hasViolation = localViolationMap[item.student.code];
+                                const hasPraise = localPraiseMap[item.student.code];
+                                
+                                let isChecked = false;
+                                if (targetStatus === 'VP') isChecked = hasViolation || false;
+                                else if (targetStatus === 'KH') isChecked = hasPraise || false;
+                                else isChecked = currentStatus === targetStatus;
+
+                                const isOtherStatus = !isChecked && (currentStatus || hasViolation || hasPraise);
 
                                 return (
                                     <div
@@ -234,16 +293,28 @@ export function StudentSelectorDialog({
                                                 </div>
                                             </div>
 
-                                            {/* Status Badge if selected or other */}
-                                            {(currentStatus && !isChecked) && (
-                                                <span className={`text-xs font-bold px-2 py-1 rounded-full bg-gray-200 text-gray-600`}>
-                                                    {currentStatus}
-                                                </span>
-                                            )}
+                                            {/* Status Badge - Multi status support */}
+                                            <div className="flex gap-1">
+                                                {currentStatus && (
+                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 border border-blue-200`}>
+                                                        {currentStatus}
+                                                    </span>
+                                                )}
+                                                {hasViolation && (
+                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-600 border border-purple-200`}>
+                                                        VP
+                                                    </span>
+                                                )}
+                                                {hasPraise && (
+                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-100 text-green-600 border border-green-200`}>
+                                                        KH
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
 
-                                        {/* Inline Note Input if Checked AND (VP or T) */}
-                                        {isChecked && showNoteInput && (
+                                        {/* Inline Note Input if Checked AND (VP or T or status='late') */}
+                                        {isChecked && (targetStatus === 'VP' || targetStatus === 'T') && (
                                             <div className="mt-3 pl-8 animate-in slide-in-from-top-1">
                                                 <div className="flex flex-wrap gap-1.5 mb-2">
                                                     {targetStatus === 'VP' && COMMON_VIOLATIONS.map(v => (
@@ -253,7 +324,7 @@ export function StudentSelectorDialog({
                                                                 e.stopPropagation();
                                                                 handleNoteChange(item.student.code, v);
                                                             }}
-                                                            className={`text-[10px] px-2 py-1 rounded border transition-colors ${localNotesMap[item.student.code] === v
+                                                            className={`text-[10px] px-2 py-1 rounded border transition-colors ${localViolationNotesMap[item.student.code] === v
                                                                 ? 'bg-purple-100 text-purple-700 border-purple-200 font-bold'
                                                                 : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
                                                                 }`}

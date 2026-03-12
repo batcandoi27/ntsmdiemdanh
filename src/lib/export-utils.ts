@@ -236,29 +236,40 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
 
             dates.forEach(date => {
                 const dateStr = format(date, 'yyyy-MM-dd');
-                const status = s.absences[dateStr] || '';
+                const rawStatus = s.absences[dateStr] || '';
+                
+                // Hỗ trợ hiển thị đa trạng thái (ví dụ: "T, VP")
+                // Trong data mới từ v3, s.absences[dateStr] có thể chứa "T, VP" nếu ta map đúng lúc fetch export.
+                const statuses = rawStatus.split(',').map(st => st.trim()).filter(Boolean);
+                const displayStatus = statuses.join(', ');
+                
                 const cell = row.getCell(dayColIdx);
 
-                cell.value = status;
+                cell.value = displayStatus;
                 cell.border = BORDER_STYLE;
                 cell.alignment = { horizontal: 'center', vertical: 'middle' };
                 cell.font = { name: 'Times New Roman', size: 10, bold: true };
 
                 // Stats
-                if (status === 'P') countP++;
-                if (status === 'K') countK++;
-                if (status === 'V') countV++;
+                if (statuses.includes('P')) countP++;
+                if (statuses.includes('K')) countK++;
+                if (statuses.includes('V')) countV++;
 
-                // Color Logic
-                if (STATUS_COLORS[status]) {
+                // Color Logic - Ưu tiên màu theo độ nghiêm trọng: K > P > T > VP
+                let activeColor = '';
+                if (statuses.includes('K')) activeColor = STATUS_COLORS['K'];
+                else if (statuses.includes('P')) activeColor = STATUS_COLORS['P'];
+                else if (statuses.includes('T')) activeColor = STATUS_COLORS['T'];
+                else if (statuses.includes('VP')) activeColor = STATUS_COLORS['VP'];
+
+                if (activeColor) {
                     cell.fill = {
                         type: 'pattern',
                         pattern: 'solid',
-                        fgColor: { argb: STATUS_COLORS[status] }
+                        fgColor: { argb: activeColor }
                     };
                     cell.font = { ...cell.font, color: { argb: 'FFFFFFFF' } }; // White text
                 } else {
-                    // Default weekend color for empty cells?
                     const dayOfWeek = date.getDay(); // 0 is Sunday
                     if (dayOfWeek === 0 || dayOfWeek === 6) {
                         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } };

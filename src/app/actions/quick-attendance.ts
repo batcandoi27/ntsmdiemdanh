@@ -140,11 +140,13 @@ export async function getGradeAttendanceSummary(grade: number, dateStr: string, 
     return result;
 }
 
-export interface StudentAttendanceDetail {
-    student: Student;
     status: AttendanceStatus;
     note?: string;
     effectiveStatus?: string;
+    violation?: boolean;
+    violationNote?: string;
+    praise?: boolean;
+    praiseNote?: string;
 }
 
 // ...
@@ -179,8 +181,18 @@ export async function getClassAttendanceDetails(classId: string, dateStr: string
             if (status === 'excused') uiStatus = 'P';
             else if (status === 'absent') uiStatus = 'K';
             else if (status === 'late') uiStatus = 'T';
-            else if (status === 'violation') uiStatus = 'VP';
-            else if (status === 'praise') uiStatus = 'KH';
+            else if (status === 'present') uiStatus = ''; // Explicitly present
+
+            return {
+                student: s,
+                status: uiStatus as AttendanceStatus,
+                note: note,
+                effectiveStatus: getEffectiveStatus(s),
+                violation: record.violation,
+                violationNote: record.violationNote,
+                praise: record.praise,
+                praiseNote: record.praiseNote
+            };
         }
 
         return {
