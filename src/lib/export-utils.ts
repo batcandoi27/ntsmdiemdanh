@@ -229,7 +229,10 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
             });
         });
 
-        console.log(`Bắt đầu ghi dữ liệu Excel cho lớp: ${classData.className}, số lượng HS hiển thị: ${studentsToDisplay.length}`);
+        console.log(`[Export] Processing Class: ${classData.className}, Students: ${studentsToDisplay.length}`);
+        if (studentsToDisplay.length > 0) {
+            console.log(`[Export] Sample student:`, studentsToDisplay[0].name, studentsToDisplay[0].absences);
+        }
         
         // Cập nhật tiêu đề lớp (dòng 5) để khớp với bộ lọc
         const totalStudents = classData.students.length;
@@ -291,11 +294,14 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
 
                 cell.value = displayStatus;
                 // Thêm Comment nếu có chi tiết (VD: vắng tiết, lỗi vi phạm)
-                if (fullDetails.length > displayStatus.length) {
-                    cell.note = fullDetails;
+                // Logic: Nếu chuỗi chi tiết đầy đủ khác với chuỗi hiển thị rút gọn
+                if (fullDetails !== displayStatus) {
+                    cell.note = {
+                        texts: [{ text: fullDetails }]
+                    };
                 }
                 cell.border = BORDER_STYLE;
-                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
                 cell.font = { name: 'Times New Roman', size: 10, bold: true };
 
                 // Stats: Chỉ đếm nếu trạng thái đó được hiển thị
