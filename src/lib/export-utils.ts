@@ -92,22 +92,58 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
     data.forEach(classData => {
         const sheet = workbook.addWorksheet(`Lớp ${classData.className}`);
 
-        // --- 1. Title Section ---
-        sheet.mergeCells('A1:E1');
+        // --- 1. Chuẩn bị dữ liệu cột ---
+        const dates: Date[] = [];
+        if (classData.startDate && classData.endDate) {
+            let curr = new Date(classData.startDate);
+            const end = new Date(classData.endDate);
+            while (curr <= end) {
+                dates.push(new Date(curr));
+                curr.setDate(curr.getDate() + 1);
+            }
+        } else {
+            const daysInMonth = new Date(classData.year, classData.month, 0).getDate();
+            for (let d = 1; d <= daysInMonth; d++) {
+                dates.push(new Date(classData.year, classData.month - 1, d));
+            }
+        }
+
+        const allSummaryHeadersConfig = [
+            { id: 'P', label: 'P' },
+            { id: 'K', label: 'K' },
+            { id: 'V', label: 'V' },
+            { id: 'T', label: 'T' },
+            { id: 'VP', label: 'VP' },
+            { id: 'KH', label: 'KH' }
+        ];
+        const activeSummaryHeaders = allSummaryHeadersConfig.filter(h => visibleColumns.includes(h.id));
+
+        // Tính toán tổng số cột để merge Header phủ kín chiều rộng
+        const totalCols = 3 + dates.length + activeSummaryHeaders.length + 1;
+        const lastColChar = getColumnLabel(totalCols);
+
+        // --- 2. Title Section ---
+        sheet.mergeCells(`A1:${lastColChar}1`);
         const title1 = sheet.getCell('A1');
         title1.value = "TRƯỜNG THCS TRẦN BỘI CƠ";
-        title1.font = { bold: true, size: 12, name: 'Times New Roman' };
-        title1.alignment = { horizontal: 'left' };
+        title1.font = { bold: true, size: 14, name: 'Times New Roman' };
+        title1.alignment = { horizontal: 'left', vertical: 'middle' };
 
-        sheet.mergeCells('A3:AC3'); // Merge Rộng ra
+        sheet.mergeCells(`A2:${lastColChar}2`);
+        const titleType = sheet.getCell('A2');
+        titleType.value = classData.startDate && classData.endDate ? "BÁO CÁO ĐIỂM DANH CHI TIẾT THEO TUẦN" : "BÁO CÁO ĐIỂM DANH CHI TIẾT THEO THÁNG";
+        titleType.font = { bold: true, size: 18, name: 'Times New Roman', color: { argb: 'FF1E40AF' } };
+        titleType.alignment = { horizontal: 'center', vertical: 'middle' };
+
+        sheet.mergeCells(`A3:${lastColChar}3`);
         const titleMain = sheet.getCell('A3');
         if (classData.startDate && classData.endDate) {
-            titleMain.value = `BẢNG ĐIỂM DANH TỪ ${format(new Date(classData.startDate), 'dd/MM/yyyy')} ĐẾN ${format(new Date(classData.endDate), 'dd/MM/yyyy')} - LỚP ${classData.className}`;
+            titleMain.value = `Thời gian trích xuất: Từ ngày ${format(new Date(classData.startDate), 'dd/MM/yyyy')} đến ngày ${format(new Date(classData.endDate), 'dd/MM/yyyy')}`;
         } else {
-            titleMain.value = `BẢNG ĐIỂM DANH THÁNG ${classData.month} - NĂM ${classData.year} - LỚP ${classData.className}`;
+            titleMain.value = `Tháng ${classData.month} - Năm ${classData.year}`;
         }
-        titleMain.font = { bold: true, size: 14, name: 'Times New Roman', color: { argb: 'FF0000FF' } }; // Blue Title
-        titleMain.alignment = { horizontal: 'center' };
+        titleMain.font = { italic: true, size: 12, name: 'Times New Roman' };
+        titleMain.alignment = { horizontal: 'center', vertical: 'middle' };
 
         // --- 2. Header Rows ---
         // Row 5: STT, Họ Tên, Mã HS | Ngày 1...31 | Tổng kết
@@ -136,26 +172,8 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
         setHeaderStyle(sheet.getCell(`B${subHeaderRowIdx}`));
         setHeaderStyle(sheet.getCell(`C${subHeaderRowIdx}`));
 
-        // Generate Days Columns based on date range or full month
+        // Generate Days Columns (Đã chuẩn bị ở trên)
         let colIdx = 4; // Start from D
-        const dates: Date[] = [];
-
-        if (classData.startDate && classData.endDate) {
-            // Use specific range (e.g. for Weekly or Custom reports)
-            let curr = new Date(classData.startDate);
-            const end = new Date(classData.endDate);
-            while (curr <= end) {
-                dates.push(new Date(curr));
-                curr.setDate(curr.getDate() + 1);
-            }
-        } else {
-            // Default to full month
-            const daysInMonth = new Date(classData.year, classData.month, 0).getDate();
-            for (let d = 1; d <= daysInMonth; d++) {
-                dates.push(new Date(classData.year, classData.month - 1, d));
-            }
-        }
-
         dates.forEach(date => {
             const d = date.getDate();
             const dayOfWeek = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][date.getDay()];
@@ -182,17 +200,6 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
             colIdx++;
         });
 
-        // Summary Columns (Lọc theo visibleColumns)
-        const allSummaryHeaders = [
-            { id: 'P', label: 'P' },
-            { id: 'K', label: 'K' },
-            { id: 'V', label: 'V' },
-            { id: 'T', label: 'T' },
-            { id: 'VP', label: 'VP' },
-            { id: 'KH', label: 'KH' }
-        ];
-        const activeSummaryHeaders = allSummaryHeaders.filter(h => visibleColumns.includes(h.id));
-        
         activeSummaryHeaders.forEach(h => {
             const cell = sheet.getRow(headerRowIdx).getCell(colIdx);
             cell.value = h.label;
@@ -227,9 +234,18 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
         const totalStudents = classData.students.length;
         const titleCell = sheet.getCell('A5');
         const activeSTTLabel = ['P', 'K', 'T', 'VP', 'KH'].filter(id => visibleColumns.includes(id)).join('/');
-        titleCell.value = `| LỚP ${classData.className} (Sĩ số: ${totalStudents}, Số HS ${activeSTTLabel.toLowerCase()}: ${studentsToDisplay.length})`;
-        titleCell.font = { name: 'Times New Roman', size: 14, bold: true, italic: true, color: { argb: 'FF059669' } };
-        sheet.mergeCells('A5:K5');
+        
+        sheet.mergeCells(`A5:${lastColChar}5`);
+        titleCell.value = {
+            richText: [
+                { text: `| LỚP ${classData.className} \t`, font: { bold: true, size: 12, name: 'Times New Roman', color: { argb: 'FF059669' } } },
+                { text: `(Sĩ số: ${totalStudents}, `, font: { italic: true, size: 11, name: 'Times New Roman', color: { argb: 'FF1E3A8A' } } }, // Blue
+                { text: `Số HS ${activeSTTLabel}: ${studentsToDisplay.length})`, font: { bold: true, italic: true, size: 11, name: 'Times New Roman', color: { argb: 'FFEF4444' } } } // Red
+            ]
+        };
+        titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } }; // Light Green BG
+        titleCell.alignment = { horizontal: 'left', vertical: 'middle' };
+        sheet.getRow(5).height = 25;
 
         let currentRowIdx = 7;
         studentsToDisplay.forEach((s, index) => {
@@ -687,7 +703,7 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
                 richText: [
                     { text: `| LỚP ${classData.className} \t`, font: { bold: true, size: 12, name: 'Times New Roman', color: { argb: 'FF059669' } } },
                     { text: `(Sĩ số: ${totalStudents}, `, font: { italic: true, size: 11, name: 'Times New Roman', color: { argb: 'FF1E3A8A' } } }, // Blue
-                    { text: `Số HS ${activeSTTLabel.toLowerCase()}: ${issueStudentsCount})`, font: { bold: true, italic: true, size: 11, name: 'Times New Roman', color: { argb: 'FFEF4444' } } } // Red
+                    { text: `Số HS ${activeSTTLabel}: ${issueStudentsCount})`, font: { bold: true, italic: true, size: 11, name: 'Times New Roman', color: { argb: 'FFEF4444' } } } // Red
                 ]
             };
             titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } }; // Light Green BG
@@ -757,7 +773,7 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
                 sheet.mergeCells(`A${currentRowIdx}:${lastColChar}${currentRowIdx}`);
                 const emptyCell = sheet.getRow(currentRowIdx).getCell(1);
                 const activeLoi = ['P', 'K', 'T', 'VP', 'KH'].filter(id => visibleColumns.includes(id)).join('/');
-                emptyCell.value = `Không có học sinh báo lỗi (${activeLoi}) trong thời gian này.`;
+                emptyCell.value = `Không có học sinh báo lỗi ( ${activeLoi} ) trong thời gian này.`;
                 emptyCell.font = { italic: true, name: 'Times New Roman', size: 11 };
                 emptyCell.alignment = { horizontal: 'center' };
                 emptyCell.border = BORDER_STYLE;
