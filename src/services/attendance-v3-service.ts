@@ -30,6 +30,12 @@ import { DEFAULT_YEAR as ACTIVE_YEAR } from '@/config/constants';
 // Mark Attendance (Single Student)
 // ============================================
 
+interface MarkInput {
+    classId: string;
+    studentId: string;
+    studentName: string;
+    session: SessionType;
+    period: number | null;
     status: AttendanceStatusV3;
     subject?: string;
     note?: string;
@@ -128,6 +134,10 @@ export async function markPresent(
 // Batch Mark (Whole Class Quick)
 // ============================================
 
+interface BatchMarkInput {
+    classId: string;
+    session: SessionType;
+    period: number | null;
     /** Map studentId → status. Chỉ bao gồm HS vắng/trễ/phép (không cần HS có mặt) */
     marks: { 
         studentId: string; 
