@@ -402,7 +402,7 @@ export async function getMonthlyReportData(classId: string, month: number, year:
                         : `T (15p đầu giờ)`;
                 }
                 if (status === 'violation') {
-                    status = record.violationNote ? `VP (${record.violationNote})` : 'VP';
+                    status = r.violationNote ? `VP (${r.violationNote})` : 'VP';
                 }
                 const dateKey = r.date || (r.timestamp ? r.timestamp.split('T')[0] : '');
                 if (dateKey) {
@@ -420,7 +420,9 @@ export async function getMonthlyReportData(classId: string, month: number, year:
                     if (r.violation) {
                         const current = absences[dateKey];
                         const vpLabel = r.violationNote ? `VP (${r.violationNote})` : 'VP';
-                        if (!current.includes('VP')) absences[dateKey] = `${current}, ${vpLabel}`;
+                        if (!current.includes('VP')) {
+                            absences[dateKey] = current ? `${current}, ${vpLabel}` : vpLabel;
+                        }
                     }
                     if (r.praise) {
                         const current = absences[dateKey];
