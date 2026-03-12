@@ -212,9 +212,27 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
 
 
         // --- 3. Data Rows ---
-        console.log(`Bắt đầu ghi dữ liệu Excel cho lớp: ${classData.className}, số lượng HS: ${classData.students.length}`);
+        // LỌC HỌC SINH: Chỉ giữ những em có ít nhất 1 lỗi hiển thị
+        const studentsToDisplay = classData.students.filter(s => {
+            // Kiểm tra xem có bất kỳ lỗi nào NẰM TRONG visibleColumns không
+            return Object.values(s.absences).some(raw => {
+                const parts = raw.split(',').map(p => p.trim());
+                return parts.some(p => visibleColumns.includes(p));
+            });
+        });
+
+        console.log(`Bắt đầu ghi dữ liệu Excel cho lớp: ${classData.className}, số lượng HS hiển thị: ${studentsToDisplay.length}`);
+        
+        // Cập nhật tiêu đề lớp (dòng 5) để khớp với bộ lọc
+        const totalStudents = classData.students.length;
+        const titleCell = sheet.getCell('A5');
+        const activeSTTLabel = ['P', 'K', 'T', 'VP', 'KH'].filter(id => visibleColumns.includes(id)).join('/');
+        titleCell.value = `| LỚP ${classData.className} (Sĩ số: ${totalStudents}, Số HS ${activeSTTLabel.toLowerCase()}: ${studentsToDisplay.length})`;
+        titleCell.font = { name: 'Times New Roman', size: 14, bold: true, italic: true, color: { argb: 'FF059669' } };
+        sheet.mergeCells('A5:K5');
+
         let currentRowIdx = 7;
-        classData.students.forEach((s, index) => {
+        studentsToDisplay.forEach((s, index) => {
             const row = sheet.getRow(currentRowIdx);
 
             // Basic Info
@@ -254,7 +272,7 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
                 cell.alignment = { horizontal: 'center', vertical: 'middle' };
                 cell.font = { name: 'Times New Roman', size: 10, bold: true };
 
-                // Stats
+                // Stats: Chỉ đếm nếu trạng thái đó được hiển thị
                 if (statuses.includes('P')) countP++;
                 if (statuses.includes('K')) countK++;
                 if (statuses.includes('V')) countV++;
@@ -290,9 +308,9 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
                 if (h.id === 'P') val = countP;
                 else if (h.id === 'K') val = countK;
                 else if (h.id === 'V') val = countV;
-                else if (h.id === 'T') val = Object.values(s.absences).filter(v => v === 'T' || v.startsWith('T ')).length;
-                else if (h.id === 'VP') val = Object.values(s.absences).filter(v => v === 'VP').length;
-                else if (h.id === 'KH') val = Object.values(s.absences).filter(v => v === 'KH').length;
+                else if (h.id === 'T') val = Object.values(s.absences).filter(v => (v === 'T' || v.startsWith('T ')) && visibleColumns.includes('T')).length;
+                else if (h.id === 'VP') val = Object.values(s.absences).filter(v => v.split(',').map(x => x.trim()).includes('VP') && visibleColumns.includes('VP')).length;
+                else if (h.id === 'KH') val = Object.values(s.absences).filter(v => v.split(',').map(x => x.trim()).includes('KH') && visibleColumns.includes('KH')).length;
                 
                 row.getCell(dayColIdx).value = val > 0 ? val : '';
                 rowTotal += val;
@@ -329,9 +347,11 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
         dates.forEach((date, dIdx) => {
             const dateStr = format(date, 'yyyy-MM-dd');
             let dayTotal = 0;
-            classData.students.forEach(s => {
-                const status = s.absences[dateStr];
-                if (status && status !== '' && status !== 'C') {
+            studentsToDisplay.forEach(s => {
+                const raw = s.absences[dateStr] || '';
+                const parts = raw.split(',').map(p => p.trim());
+                const activeOnThisDay = parts.some(p => visibleColumns.includes(p));
+                if (activeOnThisDay) {
                     dayTotal++;
                 }
             });
@@ -643,9 +663,16 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
         // Vẽ từng Lớp trong Sheet (Sắp xếp tự nhiên 9A1, 9A2... 9A10)
         classes.sort((a, b) => a.className.localeCompare(b.className, undefined, { numeric: true, sensitivity: 'base' }))
                .forEach((classData) => {
-            const studentsWithData = classData.students.filter(s => Object.values(s.absences).some(status => status && status !== 'C'));
+            // LỌC HỌC SINH cho báo cáo Khối: Chỉ giữ em có lỗi thuộc visibleColumns
+            const studentsToDisplay = classData.students.filter(s => {
+                return Object.values(s.absences).some(raw => {
+                    const parts = raw.split(',').map(p => p.trim());
+                    return parts.some(p => visibleColumns.includes(p));
+                });
+            });
+
             const totalStudents = classData.students.length;
-            const issueStudentsCount = studentsWithData.length;
+            const issueStudentsCount = studentsToDisplay.length;
 
             gradeTotalStudents += totalStudents;
             gradeIssueStudents += issueStudentsCount;
@@ -655,12 +682,12 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
             const titleRow = sheet.getRow(currentRowIdx);
             const titleCell = titleRow.getCell(1);
 
-            // Sửa yêu cầu 1: Chia 2 (thực tế là 3) nhóm màu sắc cho tiêu đề lớp
+            const activeSTTLabel = ['P', 'K', 'T', 'VP', 'KH'].filter(id => visibleColumns.includes(id)).join('/');
             titleCell.value = {
                 richText: [
                     { text: `| LỚP ${classData.className} \t`, font: { bold: true, size: 12, name: 'Times New Roman', color: { argb: 'FF059669' } } },
                     { text: `(Sĩ số: ${totalStudents}, `, font: { italic: true, size: 11, name: 'Times New Roman', color: { argb: 'FF1E3A8A' } } }, // Blue
-                    { text: `Số HS vắng/trễ/vi phạm: ${issueStudentsCount})`, font: { bold: true, italic: true, size: 11, name: 'Times New Roman', color: { argb: 'FFEF4444' } } } // Red
+                    { text: `Số HS ${activeSTTLabel.toLowerCase()}: ${issueStudentsCount})`, font: { bold: true, italic: true, size: 11, name: 'Times New Roman', color: { argb: 'FFEF4444' } } } // Red
                 ]
             };
             titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } }; // Light Green BG
@@ -726,16 +753,17 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
             let classSumP = 0, classSumK = 0, classSumT = 0, classSumVP = 0, classSumKH = 0;
             const classDaySums: Record<string, number> = {};
 
-            if (studentsWithData.length === 0) {
+            if (studentsToDisplay.length === 0) {
                 sheet.mergeCells(`A${currentRowIdx}:${lastColChar}${currentRowIdx}`);
                 const emptyCell = sheet.getRow(currentRowIdx).getCell(1);
-                emptyCell.value = "Không có học sinh vi phạm hay nghỉ học trong thời gian này.";
+                const activeLoi = ['P', 'K', 'T', 'VP', 'KH'].filter(id => visibleColumns.includes(id)).join('/');
+                emptyCell.value = `Không có học sinh báo lỗi (${activeLoi}) trong thời gian này.`;
                 emptyCell.font = { italic: true, name: 'Times New Roman', size: 11 };
                 emptyCell.alignment = { horizontal: 'center' };
                 emptyCell.border = BORDER_STYLE;
                 currentRowIdx++;
             } else {
-                studentsWithData.forEach((s) => {
+                studentsToDisplay.forEach((s) => {
                     const row = sheet.getRow(currentRowIdx);
                     let cIdx = 1;
                     
@@ -753,26 +781,34 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
 
                     dates.forEach(date => {
                         const dateStr = format(date, 'yyyy-MM-dd');
-                        const status = s.absences[dateStr] || '';
+                        const rawStatus = s.absences[dateStr] || '';
+                        const statuses = rawStatus.split(',')
+                            .map(st => st.trim())
+                            .filter(Boolean)
+                            .filter(st => visibleColumns.includes(st));
+                        
+                        const displayStatus = statuses.join(', ');
                         
                         const cell = row.getCell(cIdx);
-                        cell.value = status;
+                        cell.value = displayStatus;
                         cell.border = BORDER_STYLE;
                         cell.alignment = { horizontal: 'center', vertical: 'middle' };
                         cell.font = { name: 'Times New Roman', size: 10, bold: true };
 
-                        if (status === 'P') sP++;
-                        if (status === 'K') sK++;
-                        if (status === 'T' || status.startsWith('T ')) sT++;
-                        if (status === 'VP') sVP++;
-                        if (status === 'KH') sKH++;
+                        if (statuses.includes('P')) sP++;
+                        if (statuses.includes('K')) sK++;
+                        if (statuses.includes('T')) sT++;
+                        if (statuses.includes('VP')) sVP++;
+                        if (statuses.includes('KH')) sKH++;
 
-                        if (STATUS_COLORS[status]) {
-                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STATUS_COLORS[status] } };
+                        // Lấy màu trạng thái đầu tiên được hiển thị
+                        const firstActive = statuses[0];
+                        if (firstActive && STATUS_COLORS[firstActive]) {
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STATUS_COLORS[firstActive] } };
                             cell.font = { ...cell.font, color: { argb: 'FFFFFFFF' } };
                         }
                         
-                        if (status && status !== 'KH') {
+                        if (statuses.length > 0) {
                             classDaySums[dateStr] = (classDaySums[dateStr] || 0) + 1;
                         }
 
