@@ -278,7 +278,10 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
                 const statuses = rawStatus.split(',')
                     .map(st => st.trim())
                     .filter(Boolean)
-                    .filter(st => visibleColumns.includes(st));
+                    .filter(st => {
+                        const baseCode = st.split(' ')[0]; // Trích xuất P/K/T/VP/KH
+                        return visibleColumns.includes(baseCode);
+                    });
                     
                 const displayStatus = statuses.join(', ');
                 
@@ -803,7 +806,10 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
                         const statuses = rawStatus.split(',')
                             .map(st => st.trim())
                             .filter(Boolean)
-                            .filter(st => visibleColumns.includes(st));
+                            .filter(st => {
+                                const baseCode = st.split(' ')[0];
+                                return visibleColumns.includes(baseCode);
+                            });
                         
                         const displayStatus = statuses.join(', ');
                         
@@ -813,17 +819,20 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
                         cell.alignment = { horizontal: 'center', vertical: 'middle' };
                         cell.font = { name: 'Times New Roman', size: 10, bold: true };
 
-                        if (statuses.includes('P')) sP++;
-                        if (statuses.includes('K')) sK++;
-                        if (statuses.includes('T')) sT++;
-                        if (statuses.includes('VP')) sVP++;
-                        if (statuses.includes('KH')) sKH++;
+                        if (statuses.some(st => st.startsWith('P'))) sP++;
+                        if (statuses.some(st => st.startsWith('K'))) sK++;
+                        if (statuses.some(st => st.startsWith('T'))) sT++;
+                        if (statuses.some(st => st.startsWith('VP'))) sVP++;
+                        if (statuses.some(st => st.startsWith('KH'))) sKH++;
 
                         // Lấy màu trạng thái đầu tiên được hiển thị
                         const firstActive = statuses[0];
-                        if (firstActive && STATUS_COLORS[firstActive]) {
-                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STATUS_COLORS[firstActive] } };
-                            cell.font = { ...cell.font, color: { argb: 'FFFFFFFF' } };
+                        if (firstActive) {
+                            const baseCode = firstActive.split(' ')[0];
+                            if (STATUS_COLORS[baseCode]) {
+                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STATUS_COLORS[baseCode] } };
+                                cell.font = { ...cell.font, color: { argb: 'FFFFFFFF' } };
+                            }
                         }
                         
                         if (statuses.length > 0) {

@@ -278,8 +278,15 @@ export async function getExcelExportData(
                     statusCode = r.status;
                     if (statusCode === 'absent') statusCode = 'K';
                     if (statusCode === 'excused') statusCode = 'P';
-                    if (statusCode === 'late') statusCode = 'T';
-                    if (statusCode === 'violation') statusCode = 'VP';
+                    if (statusCode === 'late') {
+                        const periods = r.missedPeriods || [];
+                        statusCode = periods.length > 0 
+                            ? `T (Vắng T${periods.join(', T')})` 
+                            : `T (15p đầu giờ)`;
+                    }
+                    if (statusCode === 'violation') {
+                        statusCode = `VP (${r.violationNote || 'Vi phạm'})`;
+                    }
                     if (statusCode === 'praise') statusCode = 'KH';
                     dateStr = r.date || r.timestamp?.split('T')[0];
                 } else if (r.absences && r.absences[student.code]) {
@@ -305,8 +312,9 @@ export async function getExcelExportData(
                 // Bổ sung Violation/Praise từ V3 fields mới nếu có
                 if (r.violation && dateStr) {
                     const existing = absences[dateStr];
+                    const vpLabel = `VP (${r.violationNote || 'Vi phạm'})`;
                     if (!existing || !existing.includes('VP')) {
-                        absences[dateStr] = existing ? `${existing}, VP` : 'VP';
+                        absences[dateStr] = existing ? `${existing}, ${vpLabel}` : vpLabel;
                     }
                     hasAbsence = true;
                 }
@@ -380,8 +388,15 @@ export async function getMonthlyReportData(classId: string, month: number, year:
                 let status = r.status;
                 if (status === 'absent') status = 'K';
                 if (status === 'excused') status = 'P';
-                if (status === 'late') status = 'T';
-                if (status === 'violation') status = 'VP';
+                if (status === 'late') {
+                    const periods = r.missedPeriods || [];
+                    status = periods.length > 0 
+                        ? `T (Vắng T${periods.join(', T')})` 
+                        : `T (15p đầu giờ)`;
+                }
+                if (status === 'violation') {
+                    status = `VP (${r.violationNote || 'Vi phạm'})`;
+                }
                 const dateKey = r.date || (r.timestamp ? r.timestamp.split('T')[0] : '');
                 if (dateKey) {
                     const existing = absences[dateKey];
@@ -397,7 +412,8 @@ export async function getMonthlyReportData(classId: string, month: number, year:
                     // Bổ sung Violation/Praise từ V3 fields mới
                     if (r.violation) {
                         const current = absences[dateKey];
-                        if (!current.includes('VP')) absences[dateKey] = `${current}, VP`;
+                        const vpLabel = `VP (${r.violationNote || 'Vi phạm'})`;
+                        if (!current.includes('VP')) absences[dateKey] = `${current}, ${vpLabel}`;
                     }
                     if (r.praise) {
                         const current = absences[dateKey];
