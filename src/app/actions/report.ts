@@ -292,7 +292,7 @@ export async function getExcelExportData(
                             : `T (15p đầu giờ)`;
                     }
                     if (statusCode === 'violation') {
-                        statusCode = record.violationNote ? `VP (${record.violationNote})` : 'VP';
+                        statusCode = r.violationNote ? `VP (${r.violationNote})` : 'VP';
                     }
                     if (statusCode === 'praise') statusCode = 'KH';
                     dateStr = r.date || r.timestamp?.split('T')[0];
@@ -419,7 +419,7 @@ export async function getMonthlyReportData(classId: string, month: number, year:
                     // Bổ sung Violation/Praise từ V3 fields mới
                     if (r.violation) {
                         const current = absences[dateKey];
-                        const vpLabel = record.violationNote ? `VP (${record.violationNote})` : 'VP';
+                        const vpLabel = r.violationNote ? `VP (${r.violationNote})` : 'VP';
                         if (!current.includes('VP')) absences[dateKey] = `${current}, ${vpLabel}`;
                     }
                     if (r.praise) {
