@@ -34,8 +34,11 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
 
         // ...
         absences.forEach(record => {
-            // Filter by visible columns
-            if (!visibleColumns.includes(record.status)) return;
+            const status = record.status;
+            const baseCode = status.split(' ')[0];
+            
+            // Filter by visible columns using base code
+            if (!visibleColumns.includes(baseCode)) return;
 
             const clsId = record.classId;
             // Filter by selectedClasses if set
@@ -57,7 +60,7 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                 };
             }
 
-            groups[clsId].students[record.studentCode].absences[record.date] = record.status;
+            groups[clsId].students[record.studentCode].absences[record.date] = status;
         });
 
         return groups;
@@ -220,12 +223,13 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                                                     const colClass = isSat ? "bg-orange-50" : isSun ? "bg-red-50" : "bg-white";
 
                                                     const status = student.absences[dateStr];
-
-                                                    if (status === 'P') rowStats.P++;
-                                                    if (status === 'K') rowStats.K++;
-                                                    if (status === 'T') rowStats.T++;
-                                                    if (status === 'VP') rowStats.VP++;
-                                                    if (status === 'KH') rowStats.KH++;
+                                                    const baseStatus = status ? status.split(' ')[0] : '';
+                                                    
+                                                    if (baseStatus === 'P') rowStats.P++;
+                                                    if (baseStatus === 'K') rowStats.K++;
+                                                    if (baseStatus === 'T') rowStats.T++;
+                                                    if (baseStatus === 'VP') rowStats.VP++;
+                                                    if (baseStatus === 'KH') rowStats.KH++;
 
                                                     return (
                                                         <td key={dateStr} className={cn("p-0 border border-gray-400 text-center relative h-full align-top", colClass)}>
@@ -529,8 +533,12 @@ function AddAttendanceModal({ classId, className, onClose, onRefresh }: { classI
 function GridCell({ status, visibleColumns }: { status: string, visibleColumns: string[] }) {
     if (!status) return null;
 
-    // Filter by visibility (redundant if parent filters, but good for safety)
-    if (!visibleColumns.includes(status)) return null;
+    const baseCode = status.split(' ')[0];
+    const hasNote = status.includes('(');
+    const note = hasNote ? status.substring(status.indexOf('(') + 1, status.lastIndexOf(')')) : '';
+
+    // Filter by visibility 
+    if (!visibleColumns.includes(baseCode)) return null;
 
     const map = {
         'P': "bg-yellow-400 text-black border border-yellow-600",
@@ -540,12 +548,23 @@ function GridCell({ status, visibleColumns }: { status: string, visibleColumns: 
         'KH': "bg-pink-500 text-white border border-pink-700",
     };
 
-    const style = map[status as keyof typeof map];
-    if (!style) return null; // Or render default?
+    const style = map[baseCode as keyof typeof map];
+    if (!style) return null;
 
     return (
-        <div className={cn("w-7 h-7 mx-auto rounded-md flex items-center justify-center text-xs font-black shadow-sm", style)}>
-            {status}
+        <div 
+            className={cn("w-7 h-7 mx-auto rounded-md flex items-center justify-center text-xs font-black shadow-sm group relative", style)}
+            title={note || undefined}
+        >
+            {baseCode}
+            {hasNote && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-50">
+                    <div className="bg-gray-900 text-white text-[10px] px-2 py-1 rounded shadow-xl whitespace-nowrap border border-gray-700 font-bold">
+                        {note}
+                    </div>
+                    <div className="w-2 h-2 bg-gray-900 rotate-45 mx-auto -mt-1 border-r border-b border-gray-700"></div>
+                </div>
+            )}
         </div>
     );
 }

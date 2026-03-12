@@ -283,11 +283,17 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
                         return visibleColumns.includes(baseCode);
                     });
                     
-                const displayStatus = statuses.join(', ');
+                // Tách mã gốc để hiển thị trong ô, chi tiết đưa vào Comment
+                const displayStatus = statuses.map(st => st.split(' ')[0]).join(', ');
+                const fullDetails = statuses.join('\n');
                 
                 const cell = row.getCell(dayColIdx);
 
                 cell.value = displayStatus;
+                // Thêm Comment nếu có chi tiết (VD: vắng tiết, lỗi vi phạm)
+                if (fullDetails.includes('(')) {
+                    cell.note = fullDetails;
+                }
                 cell.border = BORDER_STYLE;
                 cell.alignment = { horizontal: 'center', vertical: 'middle' };
                 cell.font = { name: 'Times New Roman', size: 10, bold: true };
@@ -814,10 +820,16 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
                                 return visibleColumns.includes(baseCode);
                             });
                         
-                        const displayStatus = statuses.join(', ');
+                        // Tách mã gốc để hiển thị, chi tiết đưa vào Comment
+                        const displayStatus = statuses.map(st => st.split(' ')[0]).join(', ');
+                        const fullDetails = statuses.join('\n');
                         
                         const cell = row.getCell(cIdx);
                         cell.value = displayStatus;
+                        // Thêm Comment nếu có chi tiết
+                        if (fullDetails.includes('(')) {
+                            cell.note = fullDetails;
+                        }
                         cell.border = BORDER_STYLE;
                         cell.alignment = { horizontal: 'center', vertical: 'middle' };
                         cell.font = { name: 'Times New Roman', size: 10, bold: true };
