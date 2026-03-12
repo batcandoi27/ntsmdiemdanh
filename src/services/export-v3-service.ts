@@ -130,14 +130,21 @@ export async function buildExcelWorkbook(
                 attendanceMap.set(record.studentId, new Map());
             }
             let statusCode = '';
-            if (record.status === 'absent') statusCode = 'V';
+            if (record.status === 'absent') statusCode = 'K';
             else if (record.status === 'excused') statusCode = 'P';
-            else if (record.status === 'violation') statusCode = 'VP';
             else if (record.status === 'late') {
                 statusCode = 'T';
                 if (record.missedPeriods && record.missedPeriods.length > 0) {
                     statusCode = `T (T${record.missedPeriods.join(', ')})`;
                 }
+            }
+
+            // Nếu có vi phạm, ghi thêm vào mã (cho export v3)
+            if (record.violation) {
+                statusCode = statusCode ? `${statusCode}, VP` : 'VP';
+            }
+            if (record.praise) {
+                statusCode = statusCode ? `${statusCode}, KH` : 'KH';
             }
 
             attendanceMap.get(record.studentId)!.set(date, statusCode);

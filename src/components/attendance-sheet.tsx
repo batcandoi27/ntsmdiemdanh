@@ -304,13 +304,20 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                     if (r.status === 'excused') uiStatus = 'P';
                     else if (r.status === 'absent') uiStatus = 'K';
                     else if (r.status === 'late') uiStatus = 'T';
-                    else if (r.status === 'violation') uiStatus = 'VP';
-                    else if (r.status === 'praise') uiStatus = 'KH';
-
+                    
+                    // Ưu tiên hiển thị status chính, nhưng nếu có VP/KH thì UI cũ vẫn cần map
                     if (uiStatus) {
                         attMap[r.studentId] = uiStatus as AttendanceStatus;
+                    } else if (r.violation) {
+                        attMap[r.studentId] = 'VP';
+                    } else if (r.praise) {
+                        attMap[r.studentId] = 'KH';
+                    }
+
+                    if (attMap[r.studentId]) {
                         if (r.note) noteMap[r.studentId] = r.note;
-                        if (uiStatus === 'T' && r.missedPeriods) {
+                        if (r.violation && r.violationNote) noteMap[r.studentId] = r.violationNote;
+                        if (attMap[r.studentId] === 'T' && r.missedPeriods) {
                             lateMap[r.studentId] = r.missedPeriods;
                         }
                     }

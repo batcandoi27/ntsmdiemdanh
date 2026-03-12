@@ -104,15 +104,21 @@ export async function getGradeAttendanceSummary(grade: number, dateStr: string, 
             if (status === 'excused') uiStatus = 'P';
             else if (status === 'absent') uiStatus = 'K';
             else if (status === 'late') uiStatus = 'T';
-            else if (status === 'violation') uiStatus = 'VP';
-            else if (status === 'praise') uiStatus = 'KH';
+            
+            // UI Status cho Vi phạm/Khen thưởng lấy từ field riêng
+            if (record.violation) {
+                const vpItem = { ...item, note: record.violationNote || item.note };
+                counts.VP++; 
+                lists.VP.push(vpItem);
+            }
+            if (record.praise) {
+                counts.KH++;
+                lists.KH.push(item);
+            }
 
             if (uiStatus === 'P') { counts.P++; lists.P.push(item); }
             else if (uiStatus === 'K') { counts.K++; lists.K.push(item); }
-            // Assuming V not used extensively in v3, map absent to K usually
             else if (uiStatus === 'T') { counts.T++; lists.T.push(item); }
-            else if (uiStatus === 'VP') { counts.VP++; lists.VP.push(item); }
-            else if (uiStatus === 'KH') { counts.KH++; lists.KH.push(item); }
         });
 
         // Sort lists by STT
@@ -140,6 +146,8 @@ export async function getGradeAttendanceSummary(grade: number, dateStr: string, 
     return result;
 }
 
+export interface StudentAttendanceDetail {
+    student: Student;
     status: AttendanceStatus;
     note?: string;
     effectiveStatus?: string;
@@ -315,14 +323,20 @@ export async function getClassesAttendanceSummary(classIds: string[], dateStr: s
             if (status === 'excused') uiStatus = 'P';
             else if (status === 'absent') uiStatus = 'K';
             else if (status === 'late') uiStatus = 'T';
-            else if (status === 'violation') uiStatus = 'VP';
-            else if (status === 'praise') uiStatus = 'KH';
+
+            if (record.violation) {
+                const vpItem = { ...item, note: record.violationNote || item.note };
+                counts.VP++; 
+                lists.VP.push(vpItem);
+            }
+            if (record.praise) {
+                counts.KH++;
+                lists.KH.push(item);
+            }
 
             if (uiStatus === 'P') { counts.P++; lists.P.push(item); }
             else if (uiStatus === 'K') { counts.K++; lists.K.push(item); }
             else if (uiStatus === 'T') { counts.T++; lists.T.push(item); }
-            else if (uiStatus === 'VP') { counts.VP++; lists.VP.push(item); }
-            else if (uiStatus === 'KH') { counts.KH++; lists.KH.push(item); }
         });
 
         const sortFn = (a: { stt: string }, b: { stt: string }) => (parseInt(a.stt) || 0) - (parseInt(b.stt) || 0);
