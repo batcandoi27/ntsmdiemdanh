@@ -80,6 +80,13 @@ export default function QuickAttendancePage() {
         return c.grade === grade;
     }).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
+    // Auto-select first class when filtered list changes
+    useEffect(() => {
+        if (filteredClasses.length > 0 && !quickClassId) {
+            setQuickClassId(filteredClasses[0].id);
+        }
+    }, [filteredClasses, quickClassId]);
+
     const fetchBlockData = useCallback(async () => {
         setLoading(true);
         // Use selected date
@@ -89,7 +96,7 @@ export default function QuickAttendancePage() {
         } else {
             data = await getGradeAttendanceSummary(grade, date, session);
         }
-        setBlockData(data);
+        setBlockData(data || []);
         setLoading(false);
     }, [grade, date, myClassIds, session]);
 
@@ -467,7 +474,7 @@ export default function QuickAttendancePage() {
 
             {/* Block Attendance Table (Desktop Only) */}
             {
-                mode === 'BLOCK' && viewDevice === 'desktop' && blockData.length > 0 && (
+                mode === 'BLOCK' && viewDevice === 'desktop' && Array.isArray(blockData) && blockData.length > 0 && (
                     <div className="animate-in slide-in-from-bottom-8 fade-in duration-500 bg-white rounded-2xl shadow-sm border border-gray-100 p-6 overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
@@ -500,6 +507,11 @@ export default function QuickAttendancePage() {
                                                         )}>
                                                             {item.className}
                                                         </div>
+                                                        {item.teacherName && (
+                                                            <div className="text-[10px] text-gray-400 mt-1 font-medium text-center truncate px-1" title={item.teacherName}>
+                                                                GV: {item.teacherName}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </td>
                                                 <td className="py-4 px-2 text-center font-bold text-gray-600 align-top pt-5">

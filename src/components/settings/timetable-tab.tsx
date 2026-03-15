@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { CalendarDays, Upload, Edit, Copy, Download, Save, RefreshCw, Plus } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
-import { FirebaseAdapter } from '@/services/firebase-adapter';
+import { db } from '@/services/db';
 import { getTimetableForClass, getAllTimetables } from '@/services/timetable-service';
 import { Class } from '@/types/models';
 import { Timetable, DAY_ORDER, DAY_LABELS, SESSION_LABELS } from '@/types/timetable';
@@ -35,8 +35,7 @@ export function TimetableTab() {
     const loadClasses = async () => {
         setLoading(true);
         try {
-            const adapter = new FirebaseAdapter();
-            const classList = await adapter.getClasses();
+            const classList = await db.getClasses();
             setClasses(classList);
             if (classList.length > 0) {
                 setSelectedClassId(classList[0].id);

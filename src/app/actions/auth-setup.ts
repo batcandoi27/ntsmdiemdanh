@@ -2,6 +2,9 @@
 
 import { adminDb as db, adminAuth as auth } from '@/lib/firebase-admin';
 import { AppUser, UserRole, DEFAULT_PERMISSIONS, DEFAULT_EDIT_WINDOW } from '@/types/models';
+import { supabaseAdmin } from '@/lib/supabase-admin';
+
+const isSupabase = process.env.NEXT_PUBLIC_USE_SUPABASE === 'true';
 
 export async function setupRoleWithoutCode(
     uid: string,
@@ -14,11 +17,18 @@ export async function setupRoleWithoutCode(
     try {
         // Sử dụng db và auth đã được khởi tạo từ @/lib/firebase-admin
 
-        // 1. Verify user exists in Firebase Auth to prevent unauthorized calls
-        try {
-            await auth.getUser(uid);
-        } catch (error) {
-            return { success: false, message: 'Người dùng không hợp lệ hoặc chưa đăng nhập.' };
+        // 1. Verify user exists to prevent unauthorized calls
+        if (isSupabase) {
+            const { data: { user }, error: authError } = await supabaseAdmin.auth.admin.getUserById(uid);
+            if (authError || !user) {
+                return { success: false, message: 'Người dùng Supabase không hợp lệ hoặc chưa đăng nhập.' };
+            }
+        } else {
+            try {
+                await auth.getUser(uid);
+            } catch (error) {
+                return { success: false, message: 'Người dùng Firebase không hợp lệ hoặc chưa đăng nhập.' };
+            }
         }
 
         // 2. Validate valid roles meant for registration
@@ -43,7 +53,32 @@ export async function setupRoleWithoutCode(
             ...(homeroomClassId ? { homeroomClassId } : {}),
         };
 
-        await db.doc(`users/${uid}`).set(newUserProfile);
+        if (isSupabase) {
+            // Kiểm tra xem profile đã tồn tại và đã active chưa
+            const { data: existingProfile } = await supabaseAdmin
+                .from('profiles')
+                .select('is_active, role')
+                .eq('email', email)
+                .single();
+
+            const shouldBeActive = existingProfile?.is_active || requestedRole === 'admin' || requestedRole === 'principal';
+
+            // Update Supabase profiles table
+            const { error: dbError } = await supabaseAdmin
+                .from('profiles')
+                .upsert({
+                    id: uid,
+                    email,
+                    full_name: displayName,
+                    role: requestedRole,
+                    is_active: shouldBeActive // Giữ nguyên active nếu đã có hoặc là sếp
+                }, { onConflict: 'email' });
+            
+            if (dbError) throw dbError;
+        } else {
+            // Update Firebase Firestore
+            await db.doc(`users/${uid}`).set(newUserProfile);
+        }
 
         return {
             success: true,

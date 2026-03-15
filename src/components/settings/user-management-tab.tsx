@@ -8,7 +8,7 @@ import { useAuth } from '@/context/auth-context';
 import { Users, Search, Plus, UserCheck, UserX, Edit, MoreVertical, Shield, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Class } from '@/types/models';
-import { FirebaseAdapter } from '@/services/firebase-adapter';
+import { db } from '@/services/db';
 import { UserFormModal } from './user-form-modal';
 
 export function UserManagementTab() {
@@ -38,7 +38,7 @@ export function UserManagementTab() {
         try {
             const [usersRes, classesData] = await Promise.all([
                 getUsersPaginated(PAGE_SIZE),
-                new FirebaseAdapter().getClasses()
+                db.getClasses()
             ]);
 
             setUsers(usersRes.users);

@@ -19,7 +19,7 @@ import { AppUser } from '@/types/models';
 import { checkClassAccess } from './auth-guard';
 import { DEFAULT_YEAR } from '@/config/constants';
 
-const YEAR_PATH = `years/${DEFAULT_YEAR}`;
+const getYearPath = (year: string = DEFAULT_YEAR) => `schools/default/years/${year}`;
 
 // ============================================
 // CRUD
@@ -27,9 +27,11 @@ const YEAR_PATH = `years/${DEFAULT_YEAR}`;
 
 export async function saveTimetable(
     user: AppUser,
-    timetable: Omit<Timetable, 'id' | 'createdBy' | 'createdByName' | 'updatedAt' | 'isActive'>
+    timetable: Omit<Timetable, 'id' | 'createdBy' | 'createdByName' | 'updatedAt' | 'isActive'>,
+    year?: string
 ): Promise<string> {
     checkClassAccess(user, timetable.classId);
+    const path = getYearPath(year);
 
     const data = {
         ...timetable,
@@ -39,18 +41,19 @@ export async function saveTimetable(
         isActive: true,
     };
 
-    const ref = await addDoc(collection(db, `${YEAR_PATH}/timetables`), data);
+    const ref = await addDoc(collection(db, `${path}/timetables`), data);
     return ref.id;
 }
 
-export async function getTimetable(id: string): Promise<Timetable | null> {
-    const snap = await getDoc(doc(db, `${YEAR_PATH}/timetables`, id));
+export async function getTimetable(id: string, year?: string): Promise<Timetable | null> {
+    const snap = await getDoc(doc(db, `${getYearPath(year)}/timetables`, id));
     return snap.exists() ? { ...snap.data(), id: snap.id } as Timetable : null;
 }
 
-export async function getTimetableForClass(classId: string, date?: string): Promise<Timetable | null> {
+export async function getTimetableForClass(classId: string, date?: string, year?: string): Promise<Timetable | null> {
+    const path = getYearPath(year);
     const q = query(
-        collection(db, `${YEAR_PATH}/timetables`),
+        collection(db, `${path}/timetables`),
         where('classId', '==', classId),
         where('isActive', '==', true)
     );
@@ -69,13 +72,13 @@ export async function getTimetableForClass(classId: string, date?: string): Prom
     return active[0] || null;
 }
 
-export async function getAllTimetables(): Promise<Timetable[]> {
-    const snap = await getDocs(collection(db, `${YEAR_PATH}/timetables`));
+export async function getAllTimetables(year?: string): Promise<Timetable[]> {
+    const snap = await getDocs(collection(db, `${getYearPath(year)}/timetables`));
     return snap.docs.map(d => ({ ...d.data(), id: d.id }) as Timetable);
 }
 
-export async function deactivateTimetable(id: string): Promise<void> {
-    await updateDoc(doc(db, `${YEAR_PATH}/timetables`, id), { isActive: false });
+export async function deactivateTimetable(id: string, year?: string): Promise<void> {
+    await updateDoc(doc(db, `${getYearPath(year)}/timetables`, id), { isActive: false });
 }
 
 // ============================================

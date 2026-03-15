@@ -6,13 +6,13 @@ import { AuthProvider as AuthContextProvider, useAuth } from '@/context/auth-con
 import { LogOut, AlertTriangle, Clock } from 'lucide-react';
 
 /**
- * AuthProvider v3.1
+ * AuthProvider v3.2
  *
  * Bọc AuthContextProvider + xử lý redirect:
  * - Chưa login → redirect /login
  * - Đang ở /login mà đã login → redirect /
  * - Pending (isActive=false) → cho xem app ở chế độ đọc + banner vàng
- * - Loading → hiện overlay
+ * - Loading → hiện overlay (delay 300ms)
  */
 
 /** Banner nhỏ hiện ở trên cùng khi tài khoản đang chờ xét duyệt */
@@ -48,12 +48,16 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
     const [showOverlay, setShowOverlay] = useState(false);
 
     useEffect(() => {
-        // Delay hiển thị overlay 500ms để tránh giật màn hình nếu auth load nhanh
+        // Bug 2 Fix: Giảm delay overlay từ 1500ms → 300ms
         let timer: NodeJS.Timeout;
         if (loading) {
-            timer = setTimeout(() => setShowOverlay(true), 500);
+            timer = setTimeout(() => setShowOverlay(true), 300);
         } else {
-            setShowOverlay(false);
+            // Khi hết loading, giữ overlay thêm 300ms để dữ liệu kịp render
+            timer = setTimeout(() => {
+                setShowOverlay(false);
+                setChecked(true);
+            }, 300);
         }
         return () => clearTimeout(timer);
     }, [loading]);
@@ -66,19 +70,15 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
         if (!firebaseUser && !isLoginPage) {
             router.push('/login');
         } else if (firebaseUser && isLoginPage) {
-            // Nếu đã login Google nhưng appUser chưa tồn tại (chưa setup) -> Được ở lại /login để setup
             if (!appUser) {
-                setChecked(true);
-            }
-            // Pending hoặc active đều chuyển về trang chủ
-            else {
+                // Chờ profile load
+            } else {
                 router.push('/');
             }
         } else if (firebaseUser && !appUser && !isLoginPage) {
-            // Tình huống: Có Firebase session nhưng chưa có AppUser -> Bắt quay về Login làm Form Setup Role
             router.push('/login');
         } else {
-            setChecked(true);
+            // OK
         }
     }, [firebaseUser, appUser, loading, pathname, router]);
 

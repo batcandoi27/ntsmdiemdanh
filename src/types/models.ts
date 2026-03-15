@@ -60,7 +60,7 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, UserPermissions> = {
         canAccessAPI: true,
     },
     principal: {
-        canEditAttendance: false,
+        canEditAttendance: true,
         canEditStudentStatus: true,
         canCreateAccounts: true,
         canViewAllClasses: true,
@@ -70,7 +70,7 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, UserPermissions> = {
     },
     supervisor: {
         canEditAttendance: true,
-        canEditStudentStatus: false,
+        canEditStudentStatus: true,
         canCreateAccounts: false,
         canViewAllClasses: true,
         canExportData: true,
@@ -138,6 +138,7 @@ export interface AppSettings {
     schoolName: string;             // 'THCS Nguyễn Trãi'
     schoolCode?: string;            // 'THCS_NT'
     periodsPerSession: number;      // 5
+    classSizeMethod?: 'real' | 'manual'; // [v3] Phương thức tính sĩ số
     createdAt: string;
     updatedAt: string;
 }
@@ -193,6 +194,7 @@ export interface Class {
     maleCount?: number;
     classType?: string; // BT, TCH...
     actualStudentCount?: number;    // [v3] Sĩ số thực tế = active + temp_leave
+    manualStudentCount?: number;    // [v3] Sĩ số tự nhập (nếu cấu hình là 'manual')
     sessions?: ('morning' | 'afternoon')[]; // [v3] ['morning'] hoặc ['morning','afternoon']
     isPersonal?: boolean; // Đánh dấu lớp do người dùng tự tạo
     ownerId?: string;     // ID người dùng tạo lớp cá nhân

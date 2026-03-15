@@ -24,17 +24,25 @@ export interface AttendanceRecordV3 {
     studentId: string;
     studentName: string;
     session: SessionType;           // 'morning' | 'afternoon'
-    period: number | null;          // null = CẢ BUỔI (99% trường hợp), 1-5 = theo tiết
+    period: number | null;          // null = BUỔI (99% trường hợp), 1-5 = theo tiết lẻ
+    date?: string;                  // YYYY-MM-DD
+
     status: AttendanceStatusV3;     // 'absent' | 'late' | 'excused' | 'present'
     subject?: string;               // Chỉ khi period != null
     note?: string;                  // Ghi chú cho status chính (vắng/trễ)
-    missedPeriods?: number[];       // Dành cho Trễ / Về Sớm theo tiết
     
-    // Violation & Praise (Có thể đi kèm với status trên)
+    // Ngoại lệ chi tiết theo tiết – áp dụng cho K, P, T
+    missedPeriods?: number[];       // [1,3,5] -> Các tiết vắng/phép/trễ thực sự
+    
+    // Violation (Có thể đi kèm với status trên)
     violation?: boolean;
+    violationPeriods?: number[];    // [1,2] -> Các tiết vi phạm nề nếp
     violationNote?: string;
-    praise?: boolean;
-    praiseNote?: string;
+
+    // Khen thưởng (Reward/Praise) - lưu ở mức buổi
+    reward?: boolean;
+    rewardNote?: string;
+    rewardType?: string;            // Loai khen thuong: good_deed, helpful...
 
     markedBy: string;               // UID
     markedByName: string;

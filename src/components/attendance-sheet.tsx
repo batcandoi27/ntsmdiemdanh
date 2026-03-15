@@ -6,10 +6,9 @@ import { batchMarkAttendance, getClassAttendance } from '@/services/attendance-v
 import { AttendanceStatusV3 } from '@/types/attendance-v3';
 import { useAuth } from '@/context/auth-context';
 import { getColumnsByFrequency } from '@/services/column-service';
-import { getEffectiveStatus } from '@/services/student-status-service';
-import { getDailyRecords, saveDailyRecord, deleteRecord } from '@/services/record-service';
 import { getClassAndStudents } from '@/app/actions/common';
 import { useAppSettings } from '@/hooks/use-settings';
+import { getEffectiveStatus, getClassSize } from '@/services/student-status-service';
 import { Loader2, Calendar, Save, CheckCircle, AlertCircle, Clock, Ban, HelpCircle, UserX, X, ChevronDown, MessageSquare, Edit3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Modal } from '@/components/ui/modal';
@@ -420,20 +419,34 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
             }
 
             // Generate marks payload for V3 API
-            const marks: { studentId: string; studentName: string; status: AttendanceStatusV3; note?: string; missedPeriods?: number[] }[] = [];
+            const marks: any[] = [];
             Object.entries(attendance).forEach(([code, status]) => {
                 let v3Status: AttendanceStatusV3 | '' = '';
+                let violation = false;
+                let reward = false;
+
                 if (status === 'P') v3Status = 'excused';
                 else if (status === 'K' || status === 'V') v3Status = 'absent';
                 else if (status === 'T') v3Status = 'late';
+                else if (status === 'VP') {
+                    v3Status = 'violation' as any; // Legacy compatibility
+                    violation = true;
+                } else if (status === 'KH') {
+                    v3Status = 'praise' as any; // Legacy compatibility
+                    reward = true;
+                }
 
-                if (v3Status !== '') {
+                if (v3Status !== '' || violation || reward) {
                     marks.push({
                         studentId: code,
                         studentName: students.find(s => s.code === code)?.fullName || code,
                         status: v3Status as AttendanceStatusV3,
                         note: notes[code] || '',
-                        missedPeriods: v3Status === 'late' ? latePeriods[code] : undefined
+                        missedPeriods: (v3Status === 'late' || v3Status === 'excused' || v3Status === 'absent') ? latePeriods[code] : undefined,
+                        violation,
+                        violationNote: violation ? (notes[code] || '') : undefined,
+                        reward,
+                        rewardNote: reward ? (notes[code] || '') : undefined
                     });
                 }
             });
@@ -535,7 +548,7 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                         ĐIỂM DANH LỚP {cls.name}
                     </h3>
                     <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded-full">
-                        Sĩ số: {countPresent}/{students.length} HS
+                        Sĩ số: {countPresent}/{cls ? getClassSize(cls, settings) : students.length} HS
                     </span>
                 </div>
 

@@ -33,7 +33,7 @@ service cloud.firestore {
     function canEditAttendance(classId) {
       let user = getUser();
       return isSignedIn()
-        && user.permissions.canEditAttendance == true
+        && (user.permissions.canEditAttendance == true || user.role == 'supervisor')
         && (user.permissions.canViewAllClasses == true || classId in user.assignedClassIds);
     }
 
@@ -68,10 +68,13 @@ service cloud.firestore {
     match /years/{year} {
       match /classes/{classId} {
         allow read: if isSignedIn();
-        allow write: if isAdmin() || isPrincipal();
+        allow write: if isAdmin() || isPrincipal() || (getUser().role == 'supervisor');
       }
-      
-      // ... (other rules)
+
+      match /students/{studentId} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin() || isPrincipal() || (getUser().role == 'supervisor');
+      }
     }
 
     // ============================================
@@ -89,9 +92,8 @@ service cloud.firestore {
     match /schools/{schoolId}/years/{year} {
       match /classes/{classId} {
         allow read: if isSignedIn();
-        allow create: if isAdmin() || isPrincipal() 
-          || (isSignedIn() && request.resource.data.isPersonal == true && request.resource.data.ownerId == request.auth.uid);
-        allow update: if isAdmin() || isPrincipal()
+        allow create: if isAdmin() || isPrincipal();
+        allow update: if isAdmin() || isPrincipal() || (getUser().role == 'supervisor')
           || (isSignedIn() && resource.data.isPersonal == true && resource.data.ownerId == request.auth.uid && request.resource.data.ownerId == request.auth.uid);
         allow delete: if isAdmin() || isPrincipal()
           || (isSignedIn() && resource.data.isPersonal == true && resource.data.ownerId == request.auth.uid);
@@ -105,7 +107,7 @@ service cloud.firestore {
       match /students/{studentId} {
         allow read: if isSignedIn();
         allow create: if isAdmin() || isPrincipal();
-        allow update: if isAdmin() || isPrincipal()
+        allow update: if isAdmin() || isPrincipal() || (getUser().role == 'supervisor')
           || (getUser().role == 'teacher' && resource.data.classId in getUser().assignedClassIds);
         allow delete: if isAdmin();
       }

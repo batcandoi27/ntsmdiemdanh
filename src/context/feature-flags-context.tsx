@@ -36,6 +36,12 @@ export function FeatureFlagsProvider({ children }: { children: React.ReactNode }
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        const isSupabase = process.env.NEXT_PUBLIC_USE_SUPABASE === 'true';
+        if (isSupabase || !db) {
+            setLoading(false);
+            return;
+        }
+
         const unsubscribe = onSnapshot(
             doc(db, 'sys_config', 'features'),
             (docSnap) => {

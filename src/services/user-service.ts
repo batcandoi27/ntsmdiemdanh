@@ -81,9 +81,10 @@ export async function createUser(input: CreateUserInput): Promise<AppUser> {
 
     if (input.email) appUser.email = input.email;
     if (input.studentCode) appUser.studentCode = input.studentCode;
+    if (input.studentCode) appUser.studentCode = input.studentCode;
     if (input.assignedGrade) appUser.assignedGrade = input.assignedGrade;
 
-    await setDoc(doc(db, 'users', uid), appUser);
+    await setDoc(doc(db, 'schools', 'default', 'users', uid), appUser);
 
     return appUser;
 }
@@ -93,29 +94,29 @@ export async function createUser(input: CreateUserInput): Promise<AppUser> {
 // ============================================
 
 export async function getUser(uid: string): Promise<AppUser | null> {
-    const snap = await getDoc(doc(db, 'users', uid));
+    const snap = await getDoc(doc(db, 'schools', 'default', 'users', uid));
     return snap.exists() ? (snap.data() as AppUser) : null;
 }
 
 export async function getUsersByRole(role: UserRole): Promise<AppUser[]> {
-    const q = query(collection(db, 'users'), where('role', '==', role));
+    const q = query(collection(db, 'schools', 'default', 'users'), where('role', '==', role));
     const snap = await getDocs(q);
     return snap.docs.map(d => d.data() as AppUser);
 }
 
 export async function getAllUsers(): Promise<AppUser[]> {
-    const snap = await getDocs(collection(db, 'users'));
+    const snap = await getDocs(collection(db, 'schools', 'default', 'users'));
     return snap.docs.map(d => d.data() as AppUser);
 }
 
 export async function getUsersPaginated(pageSize: number = 20, lastDocUid?: string): Promise<{ users: AppUser[], hasMore: boolean }> {
-    let q = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(pageSize + 1));
+    let q = query(collection(db, 'schools', 'default', 'users'), orderBy('createdAt', 'desc'), limit(pageSize + 1));
 
     if (lastDocUid) {
         // Cần get Doc của lastDocUid trước
-        const lastDocSnap = await getDoc(doc(db, 'users', lastDocUid));
+        const lastDocSnap = await getDoc(doc(db, 'schools', 'default', 'users', lastDocUid));
         if (lastDocSnap.exists()) {
-            q = query(collection(db, 'users'), orderBy('createdAt', 'desc'), startAfter(lastDocSnap), limit(pageSize + 1));
+            q = query(collection(db, 'schools', 'default', 'users'), orderBy('createdAt', 'desc'), startAfter(lastDocSnap), limit(pageSize + 1));
         }
     }
 
@@ -133,7 +134,7 @@ export async function getUsersPaginated(pageSize: number = 20, lastDocUid?: stri
 
 export async function getUsersForClass(classId: string): Promise<AppUser[]> {
     const q = query(
-        collection(db, 'users'),
+        collection(db, 'schools', 'default', 'users'),
         where('assignedClassIds', 'array-contains', classId)
     );
     const snap = await getDocs(q);
@@ -158,23 +159,23 @@ export async function updateUser(uid: string, data: Partial<AppUser>): Promise<v
         }
     }
 
-    await updateDoc(doc(db, 'users', uid), updateData);
+    await updateDoc(doc(db, 'schools', 'default', 'users', uid), updateData);
 }
 
 export async function assignClassesToUser(uid: string, classIds: string[]): Promise<void> {
-    await updateDoc(doc(db, 'users', uid), {
+    await updateDoc(doc(db, 'schools', 'default', 'users', uid), {
         assignedClassIds: classIds,
     });
 }
 
 export async function deactivateUser(uid: string): Promise<void> {
-    await updateDoc(doc(db, 'users', uid), {
+    await updateDoc(doc(db, 'schools', 'default', 'users', uid), {
         isActive: false,
     });
 }
 
 export async function activateUser(uid: string): Promise<void> {
-    await updateDoc(doc(db, 'users', uid), {
+    await updateDoc(doc(db, 'schools', 'default', 'users', uid), {
         isActive: true,
     });
 }
@@ -205,7 +206,7 @@ export async function deleteUser(uid: string): Promise<void> {
 
 // Hard delete (admin only, hiếm dùng)
 export async function hardDeleteUser(uid: string): Promise<void> {
-    await deleteDoc(doc(db, 'users', uid));
+    await deleteDoc(doc(db, 'schools', 'default', 'users', uid));
     // Note: Không thể xoá Firebase Auth user từ client SDK
     // Cần Firebase Admin SDK hoặc Cloud Function
 }

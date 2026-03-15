@@ -5,8 +5,10 @@ import { AttendanceRecord, AttendanceStatus, PeriodRecord, AppUser } from '@/typ
 import { getCustomColumns } from '@/services/column-service';
 import { getAllRecordsForColumn, getOneTimeRecords } from '@/services/record-service';
 import { TermReportData } from '@/lib/export-utils';
-import { markAttendance, markPresent } from '@/services/attendance-v3-service';
+import { normalizeAttendanceRecord, markAttendance, markPresent } from '@/services/attendance-v3-service';
 import { revalidatePath } from 'next/cache';
+import { fetchAppSettings } from './settings';
+import { getClassSize } from '@/services/student-status-service';
 
 const mockAdminUser: AppUser = {
     uid: 'admin-report',
@@ -38,6 +40,7 @@ export interface ExportData {
     month: number;
     startDate?: string;
     endDate?: string;
+    totalStudents?: number;
 }
 
 export interface ReportCriteria {
@@ -75,7 +78,12 @@ function filterActiveStudentsForReport(students: any[], reportStartDate: string)
     reportStart.setHours(0, 0, 0, 0);
 
     return students.filter(s => {
-        const isDroppedOut = s.status === 'Nghỉ học' || s.status === 'Chuyển trường' || s.statusV3 === 'dropped_out';
+        // Hỗ trợ status từ Supabase ('dropped_out') và các status cũ của Firebase
+        const isDroppedOut = s.status === 'Nghỉ học' || 
+                           s.status === 'Chuyển trường' || 
+                           s.status === 'dropped_out' || 
+                           s.statusV3 === 'dropped_out';
+        
         if (!isDroppedOut) return true;
 
         if (s.statusDate) {
@@ -88,9 +96,32 @@ function filterActiveStudentsForReport(students: any[], reportStartDate: string)
     });
 }
 
-export async function getReports(criteria: ReportCriteria): Promise<ReportResult> {
-    console.log('=== GET REPORT CALLED ===', criteria);
+export async function getReports(criteria: ReportCriteria, userRole: string = 'teacher'): Promise<ReportResult> {
+    console.log('=== GET REPORT CALLED ===', criteria, { userRole });
+    
+    // VALIDATION: Quota Optimization
+    const start = new Date(criteria.startDate);
+    const end = new Date(criteria.endDate);
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays > 31) {
+        throw new Error(`Khoảng thời gian báo cáo quá dài (${diffDays} ngày). Vui lòng chọn tối đa 31 ngày để bảo vệ hệ thống.`);
+    }
+
+    const classCount = criteria.classIds?.length || 0;
+    if ((userRole === 'teacher' || userRole === 'gvbm') && classCount > 10) {
+        throw new Error(`Giáo viên chỉ được phép chọn tối đa 10 lớp mỗi lần báo cáo. Bạn đã chọn ${classCount} lớp.`);
+    }
+
+    console.log(`[getReports] Validation passed: ${diffDays} days, ${classCount} classes.`);
+
+    // 0. Get Settings
+    const settingsRes = await fetchAppSettings();
+    const appSettings = settingsRes.success ? settingsRes.settings : null;
+
     // 1. Get raw attendance records
+    // Optimization: Chúng ta sẽ truyền thêm tín hiệu 'onlyExceptions' nếu cần (V3 mặc định chỉ có exceptions)
     const records = await db.getReportData(criteria.startDate, criteria.endDate, criteria.classIds);
     console.log('Records returned from DB:', records.length);
     if (records.length > 0) {
@@ -124,13 +155,17 @@ export async function getReports(criteria: ReportCriteria): Promise<ReportResult
         let students = await db.getStudentsByClass(classId);
         students = filterActiveStudentsForReport(students, criteria.startDate);
 
-        classSizes[classId] = students.length;
+        // Lấy Class object để có sĩ số tự nhập
+        const classObj = classes.find(c => c.id === classId);
+        classSizes[classId] = classObj ? getClassSize(classObj, appSettings) : students.length;
 
         // Map Code -> { Name, STT }
-        const studentInfoMap = new Map(students.map((s, index) => [
-            s.code,
-            { name: s.fullName, stt: index + 1 }
-        ]));
+        const studentInfoMap = new Map();
+        students.forEach((s, index) => {
+            const info = { name: s.fullName, stt: index + 1 };
+            studentInfoMap.set(s.code, info);
+            if (s.id) studentInfoMap.set(s.id, info); // Supabase UUID support
+        });
 
         classRecords.forEach((record: any) => {
             // Hỗ trợ cả Format cũ (V1 có absences map) và Format mới (V3 - Exception only)
@@ -165,31 +200,60 @@ export async function getReports(criteria: ReportCriteria): Promise<ReportResult
                 });
             } else if (record.studentId && record.status) {
                 // Xử lý logic Format mới V3 (Từng Record điểm danh lẻ)
-                const code = record.studentId;
-                let status = record.status;
+                // Chuẩn hoá dữ liệu trước khi tính toán
+                const normRecord = normalizeAttendanceRecord(record);
+                const code = normRecord.studentId;
+                let status = normRecord.status;
 
-                // Chuẩn hoá status vì V3 format mới dài chữ tiếng anh
+                // Map status sang mã ngắn để tính toán logic bên dưới
                 if (status === 'absent') status = 'K';
                 if (status === 'excused') status = 'P';
                 if (status === 'late') {
-                    const periods = record.missedPeriods || [];
+                    const periods = normRecord.missedPeriods || [];
                     status = periods.length > 0 
                         ? `T (Vắng T${periods.join(', T')})` 
-                        : `T (15p đầu giờ)`;
+                        : (normRecord.note ? `T (${normRecord.note})` : 'T');
                 }
-                if (status === 'violation') {
-                    status = record.violationNote ? `VP (${record.violationNote})` : 'VP';
+                
+                // Trạng thái VP/KH được xử lý qua flag sau khi normalize
+                const getWeight = (statusType: string) => {
+                    if (normRecord.missedPeriods) return normRecord.missedPeriods.length;
+                    return 0;
+                };
+
+                const getVPWeight = () => {
+                    if (normRecord.violationPeriods) return normRecord.violationPeriods.length;
+                    if (normRecord.violation) return 5; // Mặc định cũ là cả buổi
+                    return 0;
+                };
+
+                if (status === 'P') totalP += getWeight('P') || 1;
+                else if (status === 'K') totalK += getWeight('K') || 1;
+                else if (status === 'V') totalV += getWeight('V') || 1;
+                else if (status.startsWith('T')) totalT += getWeight('T') || 1;
+
+                if (normRecord.reward) {
+                    totalKH++;
                 }
-                if (status === 'praise') status = 'KH';
 
-                if (status === 'P') totalP++;
-                if (status === 'K') totalK++;
-                if (status === 'V') totalV++;
-                if (status.startsWith('T')) totalT++;
-                if (status.startsWith('VP')) totalVP++;
-                if (status === 'KH') totalKH++;
+                if (normRecord.violation) {
+                    totalVP += getVPWeight() || 1;
+                    const vpLabel = normRecord.violationNote ? `VP (${normRecord.violationNote})` : 'VP';
+                    if (status === 'present' || !status) {
+                        status = vpLabel;
+                    } else if (!status.includes('VP')) {
+                        status = `${status}, ${vpLabel}`;
+                    }
+                }
+                
+                if (normRecord.reward && !status.includes('KH')) {
+                     const khLabel = normRecord.rewardNote ? `KH (${normRecord.rewardNote})` : 'KH';
+                     status = (status === 'present' || !status) ? khLabel : `${status}, ${khLabel}`;
+                }
 
-                const info = studentInfoMap.get(code) || { name: record.studentName || code, stt: 0 };
+
+                const studentInfo = studentInfoMap.get(code);
+                const info = studentInfo || { name: record.studentName || code, stt: 0 };
 
                 // Do V3 lưu timestamp, extract lại ngày nếu Date không chuẩn
                 const dateKey = record.date || (record.timestamp ? record.timestamp.split('T')[0] : '');
@@ -240,8 +304,27 @@ export async function getExcelExportData(
     startDate: string,
     endDate: string,
     classIds: string[],
-    isCompact: boolean = false
+    isCompact: boolean = false,
+    userRole: string = 'teacher'
 ): Promise<ExportData[]> {
+    console.log('=== GET EXCEL EXPORT CALLED ===', { startDate, endDate, classCount: classIds.length, userRole });
+    
+    // VALIDATION: Quota Optimization
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diffDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays > 31) {
+        throw new Error(`Khoảng thời gian xuất báo cáo quá dài (${diffDays} ngày). Vui lòng chọn tối đa 31 ngày.`);
+    }
+
+    if ((userRole === 'teacher' || userRole === 'gvbm') && classIds.length > 10) {
+        throw new Error(`Giáo viên chỉ được phép xuất tối đa 10 lớp mỗi lần. Bạn đã chọn ${classIds.length} lớp.`);
+    }
+    // 0. Get Settings
+    const settingsRes = await fetchAppSettings();
+    const appSettings = settingsRes.success ? settingsRes.settings : null;
+
     // 1. Get raw attendance records
     const records = await db.getReportData(startDate, endDate, classIds);
 
@@ -278,64 +361,60 @@ export async function getExcelExportData(
             let hasAbsence = false;
 
             // V3 data: record is 1 exception
-            classRecords.filter(r => r.studentId === student.code || (r.absences && r.absences[student.code])).forEach(r => {
+            classRecords.filter(r => {
+                // Chỉ lấy bản ghi thuộc về học sinh này
+                // TH1: V3 format (studentId khớp)
+                // TH2: V1 format (absences chứa student code)
+                return r.studentId === student.code || (r.absences && r.absences[student.code]);
+            }).forEach(r => {
                 let statusCode = '';
                 let dateStr = '';
 
                 if (r.studentId && r.status) {
-                    // It's V3 format
-                    statusCode = r.status;
+                    // It's V3 format - Chuẩn hoá dữ liệu trước khi tính toán
+                    const normRecord = normalizeAttendanceRecord(r);
+                    statusCode = normRecord.status;
+
                     if (statusCode === 'absent') statusCode = 'K';
                     if (statusCode === 'excused') statusCode = 'P';
-                    if (statusCode === 'late') {
-                        const periods = r.missedPeriods || [];
-                        statusCode = periods.length > 0 
-                            ? `T (Vắng T${periods.join(', T')})` 
-                            : `T (15p đầu giờ)`;
-                    }
-                    if (statusCode === 'violation') {
-                        statusCode = r.violationNote ? `VP (${r.violationNote})` : 'VP';
-                    }
-                    if (statusCode === 'praise') statusCode = 'KH';
-                    dateStr = r.date || r.timestamp?.split('T')[0];
-                } else if (r.absences && r.absences[student.code]) {
-                    // It's V1 format
-                    const baseStatus = r.absences[student.code];
-                    const noteV1 = r.notes ? r.notes[student.code] : undefined;
-                    statusCode = noteV1 ? `${baseStatus} (${noteV1})` : baseStatus;
-                    dateStr = r.date;
-                }
-
-                if (dateStr && statusCode && statusCode !== 'C') {
-                    // Cập nhật V3: Gộp trạng thái nếu cùng ngày (ví dụ Sáng vắng, Chiều trễ)
-                    const existing = absences[dateStr];
-                    if (existing) {
-                        const parts = existing.split(',').map(p => p.trim());
-                        if (!parts.includes(statusCode)) {
-                            absences[dateStr] = `${existing}, ${statusCode}`;
+                    
+                    if (statusCode === 'K' || statusCode === 'P' || statusCode === 'late' || (statusCode === 'T' && !statusCode.includes('('))) {
+                        if (statusCode === 'late') statusCode = 'T';
+                        const periods = normRecord.missedPeriods || [];
+                        if (periods.length > 0 && periods.length < 5) {
+                            statusCode = `${statusCode} (T${periods.join(', T')})`;
+                        } else if (statusCode === 'T' && periods.length === 0 && (normRecord.note || normRecord.violationNote)) {
+                            statusCode = `T (${normRecord.note || normRecord.violationNote})`;
                         }
-                    } else {
-                        absences[dateStr] = statusCode;
                     }
-                    hasAbsence = true;
+
+                    // Xử lý Violation tập trung
+                    if (normRecord.violation) {
+                        const vPeriods = normRecord.violationPeriods || [];
+                        const note = normRecord.violationNote || normRecord.note || '';
+                        const pTag = (vPeriods.length > 0 && vPeriods.length < 5) ? ` [T${vPeriods.join(', T')}]` : '';
+                        const vpLabel = note ? `VP (${note}${pTag})` : `VP${pTag}`;
+                        
+                        if (statusCode === 'present' || !statusCode) {
+                            statusCode = vpLabel;
+                        } else if (!statusCode.includes('VP')) {
+                            statusCode = `${statusCode}, ${vpLabel}`;
+                        }
+                    }
+
+                    // Xử lý Reward/KH tập trung
+                    if (normRecord.reward) {
+                        const khLabel = normRecord.rewardNote || normRecord.note ? `KH (${normRecord.rewardNote || normRecord.note})` : 'KH';
+                        if (statusCode === 'present' || !statusCode) {
+                            statusCode = khLabel;
+                        } else if (!statusCode.includes('KH')) {
+                            statusCode = `${statusCode}, ${khLabel}`;
+                        }
+                    }
+
+                    dateStr = normRecord.date || normRecord.timestamp?.split('T')[0];
                 }
 
-                // Bổ sung Violation/Praise từ V3 fields mới nếu có
-                if (r.violation && dateStr) {
-                    const existing = absences[dateStr];
-                    const vpLabel = r.violationNote ? `VP (${r.violationNote})` : 'VP';
-                    if (!existing || !existing.includes('VP')) {
-                        absences[dateStr] = existing ? `${existing}, ${vpLabel}` : vpLabel;
-                    }
-                    hasAbsence = true;
-                }
-                if (r.praise && dateStr) {
-                    const existing = absences[dateStr];
-                    if (!existing || !existing.includes('KH')) {
-                        absences[dateStr] = existing ? `${existing}, KH` : 'KH';
-                    }
-                    hasAbsence = true;
-                }
             });
 
             // Filter compact logic
@@ -356,6 +435,7 @@ export async function getExcelExportData(
                 month: exportMonth,
                 startDate: startDate, // Thêm ngày bắt đầu để helper tính toán cột
                 endDate: endDate,     // Thêm ngày kết thúc
+                totalStudents: getClassSize(cls, appSettings),
                 students: mappedStudents.sort((a, b) => a.name.localeCompare(b.name))
             });
         }
@@ -367,6 +447,10 @@ export async function getExcelExportData(
 }
 
 export async function getMonthlyReportData(classId: string, month: number, year: number) {
+    // 0. Get Settings
+    const settingsRes = await fetchAppSettings();
+    const appSettings = settingsRes.success ? settingsRes.settings : null;
+
     // 1. Get Class Info
     const classes = await db.getClasses();
     const cls = classes.find(c => c.id === classId);
@@ -400,17 +484,20 @@ export async function getMonthlyReportData(classId: string, month: number, year:
             // V3 logic
             else if (r.studentId === s.code && r.status) {
                 let status = r.status;
+                // Hỗ trợ cả Firebase English VÀ Supabase short codes
                 if (status === 'absent') status = 'K';
                 if (status === 'excused') status = 'P';
-                if (status === 'late') {
+                if (status === 'late' || (status === 'T' && !status.includes('('))) {
                     const periods = r.missedPeriods || [];
                     status = periods.length > 0 
                         ? `T (Vắng T${periods.join(', T')})` 
-                        : `T (15p đầu giờ)`;
+                        : (r.note ? `T (${r.note})` : 'T');
                 }
-                if (status === 'violation') {
-                    status = r.violationNote ? `VP (${r.violationNote})` : 'VP';
+                if (status === 'violation' || (status === 'VP' && !status.includes('('))) {
+                    const note = r.violationNote || r.note || '';
+                    status = note ? `VP (${note})` : 'VP';
                 }
+                if (status === 'praise' || status === 'KH') status = 'KH';
                 const dateKey = r.date || (r.timestamp ? r.timestamp.split('T')[0] : '');
                 if (dateKey) {
                     const existing = absences[dateKey];
@@ -450,12 +537,33 @@ export async function getMonthlyReportData(classId: string, month: number, year:
         className: cls.name,
         year,
         month,
+        totalStudents: getClassSize(cls, appSettings),
         students: studentData
     };
 }
 
 
-export async function getAdvancedReportData(startDate: string, endDate: string, classIds: string[], userId?: string): Promise<TermReportData[]> {
+export async function getAdvancedReportData(
+    startDate: string, 
+    endDate: string, 
+    classIds: string[], 
+    userId?: string,
+    userRole: string = 'teacher'
+): Promise<TermReportData[]> {
+    console.log('=== GET ADVANCED REPORT CALLED ===', { startDate, endDate, classCount: classIds.length, userRole });
+
+    // VALIDATION: Quota Optimization
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diffDays = Math.ceil(Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays > 31) {
+        throw new Error(`Khoảng thời gian báo cáo học kỳ quá dài (${diffDays} ngày). Vui lòng chọn tối đa 31 ngày.`);
+    }
+
+    if ((userRole === 'teacher' || userRole === 'gvbm') && classIds.length > 10) {
+        throw new Error(`Giáo viên chỉ được phép báo cáo học kỳ tối đa 10 lớp mỗi lần.`);
+    }
     // 1. Get Classes
     const allClasses = await db.getClasses();
     const targetClasses = classIds.length > 0
@@ -504,31 +612,40 @@ export async function getAdvancedReportData(startDate: string, endDate: string, 
             }
             // V3 logic
             else if (record.studentId && record.status) {
-                const studentCode = record.studentId;
-                let status = record.status;
+                const normRecord = normalizeAttendanceRecord(record);
+                const studentCode = normRecord.studentId;
+                let status = normRecord.status;
+
+                // Map status sang mã ngắn
                 if (status === 'absent') status = 'K';
-                if (status === 'excused') status = 'P';
-                if (status === 'late') status = 'T';
-                if (status === 'violation') status = 'VP';
+                else if (status === 'excused') status = 'P';
+                else if (status === 'late') status = 'T';
+
+                const weight = normRecord.missedPeriods ? normRecord.missedPeriods.length : 1;
+                const vpWeight = normRecord.violationPeriods ? normRecord.violationPeriods.length : (normRecord.violation ? 5 : 0);
 
                 const student = students.find(s => s.code === studentCode);
                 if (student) {
                     if (status && status !== 'present') {
-                        if (!data[student.id].stats[status]) data[student.id].stats[status] = 0;
-                        data[student.id].stats[status]++;
+                        // Tránh đếm trùng VP/KH nếu gán trực tiếp qua status
+                        if (status !== 'violation' && status !== 'reward' && status !== 'VP' && status !== 'KH') {
+                            if (!data[student.id].stats[status]) data[student.id].stats[status] = 0;
+                            data[student.id].stats[status] += weight;
+                        }
                     }
-                    // Đếm Violation từ field riêng
-                    if (record.violation) {
+                    // Đếm Violation
+                    if (normRecord.violation) {
                         if (!data[student.id].stats['VP']) data[student.id].stats['VP'] = 0;
-                        data[student.id].stats['VP']++;
+                        data[student.id].stats['VP'] += vpWeight || 1;
                     }
-                    // Đếm Praise từ field riêng
-                    if (record.praise) {
+                    // Đếm Praise/Reward
+                    if (normRecord.reward) {
                         if (!data[student.id].stats['KH']) data[student.id].stats['KH'] = 0;
                         data[student.id].stats['KH']++;
                     }
                 }
             }
+
         });
 
         // 4b. Get Custom Records

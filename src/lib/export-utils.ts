@@ -42,6 +42,7 @@ interface ExportData {
     month: number;
     startDate?: string;
     endDate?: string;
+    totalStudents?: number; // Sĩ số cấu hình
 }
 
 // --- Helpers ---
@@ -235,7 +236,7 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
         }
         
         // Cập nhật tiêu đề lớp (dòng 5) để khớp với bộ lọc
-        const totalStudents = classData.students.length;
+        const totalStudents = classData.totalStudents || classData.students.length;
         const titleCell = sheet.getCell('A5');
         const activeSTTLabel = ['P', 'K', 'T', 'VP', 'KH'].filter(id => visibleColumns.includes(id)).join('/');
         
@@ -287,15 +288,20 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
                     });
                     
                 // Tách mã gốc để hiển thị trong ô, chi tiết đưa vào Comment
+                // Tách mã gốc để hiển thị trong ô, chi tiết đưa vào Comment
                 const displayStatus = statuses.map(st => st.split(' ')[0]).join(', ');
                 const fullDetails = statuses.join('\n');
                 
                 const cell = row.getCell(dayColIdx);
-
                 cell.value = displayStatus;
+
+                // DEBUG LOG: Hiển thị trong Console F12 để kiểm tra trích xuất
+                if (fullDetails.includes('(')) {
+                    console.log(`[Export-Monthly] Student: ${s.name}, Date: ${dateStr}, Note: ${fullDetails}`);
+                }
+
                 // Thêm Comment nếu có chi tiết (VD: vắng tiết, lỗi vi phạm)
-                // Logic: Nếu chuỗi chi tiết đầy đủ khác với chuỗi hiển thị rút gọn
-                if (fullDetails !== displayStatus) {
+                if (fullDetails.includes('(')) {
                     cell.note = {
                         texts: [{ text: fullDetails }]
                     };
@@ -707,7 +713,7 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
                 });
             });
 
-            const totalStudents = classData.students.length;
+            const totalStudents = classData.totalStudents || classData.students.length;
             const issueStudentsCount = studentsToDisplay.length;
 
             gradeTotalStudents += totalStudents;
@@ -818,23 +824,35 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
                     dates.forEach(date => {
                         const dateStr = format(date, 'yyyy-MM-dd');
                         const rawStatus = s.absences[dateStr] || '';
+                        if (rawStatus) {
+                            console.log(`[Raw-Data-Check] Student: ${s.name}, Date: ${dateStr}, Raw: ${rawStatus}`);
+                        }
                         const statuses = rawStatus.split(',')
                             .map(st => st.trim())
                             .filter(Boolean)
                             .filter(st => {
-                                const baseCode = st.split(' ')[0];
+                                const match = st.match(/^([A-Z]+)/);
+                                const baseCode = match ? match[1] : st.split(' ')[0];
                                 return visibleColumns.includes(baseCode);
                             });
                         
                         // Tách mã gốc để hiển thị, chi tiết đưa vào Comment
-                        const displayStatus = statuses.map(st => st.split(' ')[0]).join(', ');
+                        const displayStatus = statuses.map(st => {
+                             const m = st.match(/^([A-Z]+)/);
+                             return m ? m[1] : st.split(' ')[0];
+                        }).join(', ');
                         const fullDetails = statuses.join('\n');
                         
                         const cell = row.getCell(cIdx);
                         cell.value = displayStatus;
-                        // Thêm Comment nếu có chi tiết
+
+                        // DEBUG LOG: Hiển thị trong Console F12 để kiểm tra trích xuất
+                        // Kiểm tra cả dấu ngoặc đơn ()
                         if (fullDetails.includes('(')) {
-                            cell.note = fullDetails;
+                            cell.note = {
+                                texts: [{ text: fullDetails }],
+                                margins: { inset: [0.5, 0.5, 0.5, 0.5], insetmode: 'custom' }
+                            };
                         }
                         cell.border = BORDER_STYLE;
                         cell.alignment = { horizontal: 'center', vertical: 'middle' };

@@ -136,6 +136,13 @@ const ALLOWED_TRANSITIONS: Record<string, StatusTransition[]> = {
         'active->suspended',
         'suspended->active',
     ],
+    supervisor: [
+        'active->temporary_leave',
+        'temporary_leave->active',
+        'active->dropped_out',
+        'active->suspended',
+        'suspended->active',
+    ],
     admin: [
         'active->temporary_leave',
         'temporary_leave->active',

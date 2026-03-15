@@ -52,7 +52,8 @@ export function ExportTab() {
             }
 
             setStatusText('Đang tải thời khoá biểu...');
-            const timetables = await getAllTimetables();
+            const timetables = await getAllTimetables(activeYear);
+            console.log(`[Export] Found ${timetables.length} timetables for year ${activeYear}`);
 
             setStatusText('Đang tổng hợp dữ liệu điểm danh...');
             const attendanceMap: Record<string, AttendanceRecordV3[]> = {};
@@ -72,9 +73,10 @@ export function ExportTab() {
                 setStatusText(`Đang xử lý điểm danh ngày ${dateKey} (${currentDay}/${totalDays})`);
 
                 try {
-                    const recordsSnap = await getDocs(collection(db, `years/${activeYear}/attendanceV3/${dateKey}/records`));
+                    const recordsSnap = await getDocs(collection(db, `schools/default/years/${activeYear}/attendance/${dateKey}/records`));
                     if (!recordsSnap.empty) {
                         attendanceMap[dateKey] = recordsSnap.docs.map(d => d.data() as AttendanceRecordV3);
+                        console.log(`[Export] Found ${recordsSnap.size} attendance records for ${dateKey}`);
                     }
                 } catch (e) {
                     console.warn(`Lỗi fetch điểm danh ngày ${dateKey}:`, e);

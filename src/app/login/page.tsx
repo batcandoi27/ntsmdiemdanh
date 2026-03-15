@@ -28,11 +28,31 @@ interface ClassOption {
     grade: number;
 }
 
+import { useRouter } from 'next/navigation';
+import { db as dbInstance } from '@/services/db';
+
 export default function LoginPage() {
-    const { signIn, signInWithGoogle, firebaseUser, needsRoleCode, error: authError, loading } = useAuth();
+    const router = useRouter();
+    const { 
+        signIn, 
+        signInWithGoogle, 
+        firebaseUser, 
+        appUser, // Thêm appUser để kiểm tra redirect
+        needsRoleCode, 
+        error: authError, 
+        loading 
+    } = useAuth();
+
     const [emailOrCode, setEmailOrCode] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+
+    // Tự động chuyển hướng khi đã đăng nhập thành công
+    useEffect(() => {
+        if (!loading && appUser && !needsRoleCode) {
+            router.push('/');
+        }
+    }, [appUser, loading, needsRoleCode, router]);
 
     // States cho bước thiết lập Role
     const [requestedRole, setRequestedRole] = useState('teacher');
@@ -58,19 +78,20 @@ export default function LoginPage() {
     const fetchClasses = async () => {
         setLoadingClasses(true);
         try {
-            // Lấy từ Cấu trúc V3: schools/{schoolId}/years/{year}/classes
-            const q = query(collection(db, 'schools', 'default', 'years', '2025-2026', 'classes'));
-            const snap = await getDocs(q);
-            const list = snap.docs.map(d => ({
-                id: d.id,
-                name: d.data().name as string,
-                grade: d.data().grade as number,
+            // Sử dụng dbInstance để lấy dữ liệu từ Supabase hoặc Firebase tùy chế độ
+            const listData = await dbInstance.getClasses();
+            const list = listData.map(cls => ({
+                id: cls.id,
+                name: cls.className,
+                grade: cls.grade || 0,
             }));
 
-            // Sort mảng bằng JavaScript (grade tăng dần, name tăng dần)
+            // Sort màng bằng JavaScript (grade tăng dần, name tăng dần)
             list.sort((a, b) => {
                 if (a.grade !== b.grade) return a.grade - b.grade;
-                return a.name.localeCompare(b.name);
+                const nameA = a.name || '';
+                const nameB = b.name || '';
+                return nameA.localeCompare(nameB);
             });
 
             setAllClasses(list);

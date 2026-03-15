@@ -59,6 +59,8 @@ export async function importSchoolData(formData: FormData) {
                         teacherId: '',
                         teacherName: '', // Sẽ cập nhật sau nếu tìm thấy
                         totalStudents: 0,
+                        actualStudentCount: 0,
+                        manualStudentCount: 0,
                         femaleCount: 0,
                         maleCount: 0,
                         classType: 'Normal'
@@ -67,6 +69,7 @@ export async function importSchoolData(formData: FormData) {
 
                 const currentClass = classMap.get(classId)!;
                 currentClass.totalStudents++;
+                currentClass.actualStudentCount = (currentClass.actualStudentCount || 0) + 1;
 
                 const gender = clean(row['Giới tính']);
                 if (gender === 'Nữ') currentClass.femaleCount++;

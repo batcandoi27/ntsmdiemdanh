@@ -15,37 +15,85 @@ interface MobileStudentCardProps {
     };
     status: AttendanceStatus;
     note?: string;
-    onUpdateStatus: (status: AttendanceStatus, note?: string) => void;
-    // New props for Phase 09
+    missedPeriods?: number[];
+    violation?: boolean;
+    violationNote?: string;
+    violationPeriods?: number[];
+    reward?: boolean;
+    rewardNote?: string;
+    onUpdateAll: (data: {
+        status: AttendanceStatus;
+        note?: string;
+        missedPeriods?: number[];
+        violation?: boolean;
+        violationNote?: string;
+        violationPeriods?: number[];
+        reward?: boolean;
+        rewardNote?: string;
+    }) => void;
     visibleStatuses?: { P: boolean; K: boolean; T: boolean; VP: boolean; KH: boolean };
     customColumns?: { id: string; name: string; checked: boolean }[];
     onUpdateCustomColumn?: (colId: string, checked: boolean) => void;
 }
 
-const VIOLATION_REASONS = [
-    "Không đồng phục", "Tóc dài/nhuộm",
-    "Sử dụng điện thoại", " Ồn ào/Nói chuyện",
-    "Không thuộc bài", "Đi trễ (VP)",
-    "Quên dụng cụ", "Ngủ trong lớp",
-    "Ăn vụng", "Xả rác"
-];
+const NOTE_SUGGESTIONS = {
+    P: [
+        { group: "Sức khỏe & Gia đình", items: ["Có tang", "Bệnh", "Bệnh nằm viện", "Tai nạn", "Y tế"], color: "bg-yellow-50 text-yellow-700 border-yellow-200" },
+        { group: "Hoạt động trường", items: ["Thi HS giỏi", "Thi năng khiếu", "Hoạt động trường", "Hoạt động Đội", "Thi đấu thể thao"], color: "bg-blue-50 text-blue-700 border-blue-200" }
+    ],
+    K: [
+        { group: "Bổ sung", items: ["Có bổ sung Phép"], color: "bg-red-50 text-red-700 border-red-200" }
+    ],
+    VP: [
+        { group: "Tác phong", items: ["Sai đồng phục", "Không phù hiệu", "Áo ngoài quần", "Đem điện thoại", "Đeo Ba lô", "Ko Khăn quàng", "Đi dép", "Tóc sai QĐ"], color: "bg-purple-100 text-purple-700 border-purple-200" },
+        { group: "Trong giờ học", items: ["Nói chuyện", "Mất trật tự", "Không làm bài", "Không mang sách", "Không mang vở", "Không học bài", "Không trực nhật", "Không nộp bài", "Quên dụng cụ"], color: "bg-pink-100 text-pink-700 border-pink-200" },
+        { group: "Khác", items: ["Khác", "Chạy giỡn", "Nói chuyện riêng", "Không thuộc bài"], color: "bg-gray-100 text-gray-700 border-gray-200" }
+    ],
+    KH: [
+        { group: "Học tập", items: ["Phát biểu tốt", "Bài làm tốt", "Điểm tốt", "Tiến bộ", "Thái độ", "Chăm học", "Tích cực", "Hợp tác tốt", "Gương mẫu"], color: "bg-green-100 text-green-700 border-green-200" },
+        { group: "Hoạt động", items: ["Trực nhật tốt", "Giúp bạn", "Hỗ trợ lớp", "Tham gia tốt"], color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+        { group: "Đặc biệt", items: ["Gương tốt", "Xuất sắc", "Tuyên dương"], color: "bg-orange-100 text-orange-700 border-orange-200" }
+    ]
+};
 
 export function MobileStudentCard({
-    student, status, note, onUpdateStatus,
+    student, status, note, 
+    missedPeriods = [1,2,3,4,5],
+    violation, violationNote, violationPeriods = [1,2,3,4,5],
+    reward, rewardNote,
+    onUpdateAll,
     visibleStatuses = { P: true, K: true, T: true, VP: true, KH: true },
     customColumns = [],
     onUpdateCustomColumn
 }: MobileStudentCardProps) {
     const [open, setOpen] = useState(false);
-    const [view, setView] = useState<'MAIN' | 'VIOLATION'>('MAIN');
-    const [violationReason, setViolationReason] = useState(note || '');
+    const [view, setView] = useState<'MAIN' | 'DETAILS'>('MAIN');
+    
+    // Local State for Editing
+    const [localStatus, setLocalStatus] = useState<AttendanceStatus>(status);
+    const [localNote, setLocalNote] = useState(note || '');
+    const [localMissedPeriods, setLocalMissedPeriods] = useState<number[]>(missedPeriods || [1,2,3,4,5]);
+    
+    const [localViolation, setLocalViolation] = useState(violation || false);
+    const [localVNote, setLocalVNote] = useState(violationNote || '');
+    const [localVPeriods, setLocalVPeriods] = useState<number[]>(violationPeriods || [1,2,3,4,5]);
+    
+    const [localReward, setLocalReward] = useState(reward || false);
+    const [localRNote, setLocalRNote] = useState(rewardNote || '');
 
     useEffect(() => {
         if (open) {
             setView('MAIN');
-            setViolationReason(note || '');
+            setLocalStatus(status);
+            setLocalNote(note || '');
+            setLocalMissedPeriods(missedPeriods || [1,2,3,4,5]);
+            setLocalViolation(violation || false);
+            setLocalVNote(violationNote || '');
+            setLocalVPeriods(violationPeriods || [1,2,3,4,5]);
+            setLocalReward(reward || false);
+            setLocalRNote(rewardNote || '');
         }
-    }, [open, note]);
+    }, [open, status, note, missedPeriods, violation, violationNote, violationPeriods, reward, rewardNote]);
 
     // Helpers for display
     const shortName = (student.name || 'Học Sinh').split(' ').slice(-2).join(' ');
@@ -72,11 +120,32 @@ export function MobileStudentCard({
         }
     };
 
-    const isException = status !== '';
+    const isException = status !== '' || violation || reward;
 
-    const handleSaveViolation = () => {
-        onUpdateStatus('VP', violationReason);
+    const handleSave = () => {
+        onUpdateAll({
+            status: localStatus,
+            note: localNote,
+            missedPeriods: localMissedPeriods,
+            violation: localViolation,
+            violationNote: localVNote,
+            violationPeriods: localVPeriods,
+            reward: localReward,
+            rewardNote: localRNote
+        });
         setOpen(false);
+    };
+
+    const togglePeriod = (p: number, type: 'missed' | 'violation') => {
+        if (type === 'missed') {
+            setLocalMissedPeriods(prev => 
+                prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p].sort()
+            );
+        } else {
+            setLocalVPeriods(prev => 
+                prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p].sort()
+            );
+        }
     };
 
     return (
@@ -133,7 +202,7 @@ export function MobileStudentCard({
 
                     <div className="p-4 flex-1 overflow-y-auto">
                         <Drawer.Title className="text-xl font-bold text-center mb-6 flex items-center justify-center relative">
-                            {view === 'VIOLATION' && (
+                            {view === 'DETAILS' && (
                                 <button
                                     onClick={() => setView('MAIN')}
                                     className="absolute left-0 p-2 -ml-2 text-gray-400 hover:text-gray-600"
@@ -141,144 +210,265 @@ export function MobileStudentCard({
                                     <ChevronLeft size={24} />
                                 </button>
                             )}
-                            <span className="truncate max-w-[200px]">{student.name}</span>
+                            <div className="flex flex-col items-center">
+                                <span className="truncate max-w-[240px] leading-tight">{student.name}</span>
+                                <span className="text-xs font-mono text-gray-400 font-normal mt-1">{student.code}</span>
+                            </div>
                         </Drawer.Title>
 
                         {view === 'MAIN' ? (
-                            <div className="space-y-6">
+                            <div className="space-y-6 pb-20">
                                 {/* Fixed Columns */}
                                 <div className="grid grid-cols-2 gap-3">
                                     <StatusButton
-                                        type="Present"
-                                        active={status === ''}
+                                        active={localStatus === ''}
                                         icon={<CheckCircle2 size={24} />}
                                         label="Có mặt"
-                                        onClick={() => { onUpdateStatus(''); setOpen(false); }}
+                                        onClick={() => { setLocalStatus(''); setLocalNote(''); }}
                                         color="green"
                                     />
                                     {visibleStatuses.T && (
                                         <StatusButton
-                                            type="T"
-                                            active={status === 'T'}
+                                            active={localStatus === 'T'}
                                             icon={<Clock size={24} />}
                                             label="Đi trễ"
-                                            onClick={() => { onUpdateStatus('T'); setOpen(false); }}
+                                            onClick={() => { setLocalStatus('T'); setView('DETAILS'); }}
                                             color="blue"
                                         />
                                     )}
                                     {visibleStatuses.P && (
                                         <StatusButton
-                                            type="P"
-                                            active={status === 'P'}
+                                            active={localStatus === 'P'}
                                             icon={<FileText size={24} />}
                                             label="Có phép"
-                                            onClick={() => { onUpdateStatus('P'); setOpen(false); }}
+                                            onClick={() => { setLocalStatus('P'); setView('DETAILS'); }}
                                             color="yellow"
                                         />
                                     )}
                                     {visibleStatuses.K && (
                                         <StatusButton
-                                            type="K"
-                                            active={status === 'K'}
+                                            active={localStatus === 'K'}
                                             icon={<Ban size={24} />}
                                             label="Không phép"
-                                            onClick={() => { onUpdateStatus('K'); setOpen(false); }}
+                                            onClick={() => { setLocalStatus('K'); setView('DETAILS'); }}
                                             color="red"
                                         />
                                     )}
                                     {visibleStatuses.VP && (
                                         <StatusButton
-                                            type="VP"
-                                            active={status === 'VP'}
+                                            active={localViolation}
                                             icon={<AlertTriangle size={24} />}
                                             label="Vi phạm"
-                                            onClick={() => setView('VIOLATION')}
+                                            onClick={() => { setLocalViolation(!localViolation); setView('DETAILS'); }}
                                             color="purple"
-                                            className="col-span-1"
                                         />
                                     )}
                                     {visibleStatuses.KH && (
                                         <StatusButton
-                                            type="KH"
-                                            active={status === 'KH'}
+                                            active={localReward}
                                             icon={<Star size={24} />}
                                             label="Khen thưởng"
-                                            onClick={() => { onUpdateStatus('KH'); setOpen(false); }}
+                                            onClick={() => { setLocalReward(!localReward); setView('DETAILS'); }}
                                             color="orange"
-                                            className="col-span-1"
                                         />
                                     )}
                                 </div>
 
-                                {/* Custom Columns Section */}
+                                {/* Custom Columns */}
                                 {customColumns.length > 0 && (
-                                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                        <h3 className="text-sm font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
-                                            <span className="w-8 h-px bg-gray-200"></span>
-                                            Theo Dõi Khác
-                                            <span className="flex-1 h-px bg-gray-200"></span>
-                                        </h3>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            {customColumns.map(col => (
-                                                <button
-                                                    key={col.id}
-                                                    onClick={() => onUpdateCustomColumn?.(col.id, !col.checked)}
-                                                    className={cn(
-                                                        "flex items-center gap-3 p-3 rounded-xl border-2 transition-all active:scale-95 text-left",
-                                                        col.checked
-                                                            ? "bg-indigo-50 border-indigo-500 text-indigo-700"
-                                                            : "bg-white border-gray-100 text-gray-600 hover:bg-gray-50"
-                                                    )}
-                                                >
-                                                    <div className={cn(
-                                                        "w-6 h-6 rounded-md flex items-center justify-center border transition-colors",
-                                                        col.checked ? "bg-indigo-500 border-indigo-500 text-white" : "border-gray-300"
-                                                    )}>
-                                                        {col.checked && <CheckCircle2 size={14} />}
-                                                    </div>
-                                                    <span className="font-bold text-sm line-clamp-2">{col.name}</span>
-                                                </button>
-                                            ))}
-                                        </div>
+                                    <div className="grid grid-cols-2 gap-3 pt-2">
+                                        {customColumns.map(col => (
+                                            <button
+                                                key={col.id}
+                                                onClick={() => onUpdateCustomColumn?.(col.id, !col.checked)}
+                                                className={cn(
+                                                    "flex items-center gap-3 p-3 rounded-xl border-2 transition-all active:scale-95 text-left h-16",
+                                                    col.checked ? "bg-indigo-50 border-indigo-500 text-indigo-700" : "bg-white border-gray-100 text-gray-600"
+                                                )}
+                                            >
+                                                <div className={cn("w-5 h-5 rounded border flex items-center justify-center shrink-0", col.checked ? "bg-indigo-500 border-indigo-500 text-white" : "border-gray-300")}>
+                                                    {col.checked && <CheckCircle2 size={12} />}
+                                                </div>
+                                                <span className="font-bold text-xs line-clamp-2">{col.name}</span>
+                                            </button>
+                                        ))}
                                     </div>
                                 )}
+
+                                {/* Bottom Floating Action */}
+                                <div className="fixed bottom-6 left-4 right-4 animate-in slide-in-from-bottom-4">
+                                    <button
+                                        onClick={handleSave}
+                                        className="w-full bg-gray-900 text-white font-bold py-4 rounded-2xl shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all text-lg"
+                                    >
+                                        <Save size={20} />
+                                        HOÀN TẤT
+                                    </button>
+                                </div>
                             </div>
                         ) : (
-                            <div className="flex flex-col h-full">
-                                <h3 className="text-sm font-bold text-gray-500 uppercase mb-3">Chọn lỗi vi phạm</h3>
-                                <div className="grid grid-cols-2 gap-2 mb-4">
-                                    {VIOLATION_REASONS.map(reason => (
-                                        <button
-                                            key={reason}
-                                            onClick={() => setViolationReason(reason)}
-                                            className={cn(
-                                                "py-3 px-2 rounded-lg text-sm font-medium border transition-colors",
-                                                violationReason === reason
-                                                    ? "bg-purple-100 border-purple-500 text-purple-800"
-                                                    : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
-                                            )}
-                                        >
-                                            {reason}
-                                        </button>
-                                    ))}
+                            <div className="space-y-8 pb-24">
+                                {/* DETAIL VIEW: Show specific controls based on what's active */}
+                                
+                                {/* 1. Attendance Details (P, K, T) */}
+                                {(['P', 'K', 'T'].includes(localStatus)) && (
+                                    <div className="animate-in fade-in slide-in-from-right-4">
+                                        <h3 className="text-sm font-bold text-gray-500 uppercase mb-4 flex items-center gap-2">
+                                            Chi tiết {getStatusLabel(localStatus)}
+                                        </h3>
+                                        
+                                        <div className="mb-6">
+                                            <p className="text-xs text-gray-400 mb-3">Chọn các tiết vắng/muộn:</p>
+                                            <div className="grid grid-cols-5 gap-2">
+                                                {[1, 2, 3, 4, 5].map(p => (
+                                                    <button
+                                                        key={p}
+                                                        onClick={() => togglePeriod(p, 'missed')}
+                                                        className={cn(
+                                                            "py-3 rounded-xl font-bold border-2 transition-all",
+                                                            localMissedPeriods.includes(p)
+                                                                ? "bg-blue-50 border-blue-500 text-blue-700"
+                                                                : "bg-white border-gray-100 text-gray-400"
+                                                        )}
+                                                    >
+                                                        T{p}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4 mb-4">
+                                            {(['P', 'K'].includes(localStatus)) && (NOTE_SUGGESTIONS[localStatus as 'P' | 'K']).map(group => (
+                                                <div key={group.group} className="space-y-2">
+                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">{group.group}</p>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        {group.items.map(item => (
+                                                            <button
+                                                                key={item}
+                                                                onClick={() => setLocalNote(item)}
+                                                                className={cn(
+                                                                    "py-2.5 px-2 rounded-xl text-[11px] font-bold border transition-all active:scale-95",
+                                                                    localNote === item ? "bg-gray-800 border-gray-800 text-white shadow-md" : cn("bg-white border-gray-100", group.color)
+                                                                )}
+                                                            >
+                                                                {item}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <textarea
+                                            value={localNote}
+                                            onChange={(e) => setLocalNote(e.target.value)}
+                                            placeholder="Ghi chú thêm..."
+                                            className="w-full p-4 border-2 border-gray-100 rounded-2xl focus:border-blue-400 outline-none min-h-[100px] text-lg bg-gray-50/50"
+                                        />
+                                    </div>
+                                )}
+
+                                {/* 2. Violation Details */}
+                                {localViolation && (
+                                    <div className="animate-in fade-in slide-in-from-right-4 border-t pt-6">
+                                        <h3 className="text-sm font-bold text-purple-600 uppercase mb-4 flex items-center gap-2">
+                                            Chi tiết Vi phạm
+                                        </h3>
+
+                                        <div className="mb-6">
+                                            <p className="text-xs text-gray-400 mb-3">Tiết vi phạm:</p>
+                                            <div className="grid grid-cols-5 gap-2">
+                                                {[1, 2, 3, 4, 5].map(p => (
+                                                    <button
+                                                        key={p}
+                                                        onClick={() => togglePeriod(p, 'violation')}
+                                                        className={cn(
+                                                            "py-3 rounded-xl font-bold border-2 transition-all",
+                                                            localVPeriods.includes(p)
+                                                                ? "bg-purple-50 border-purple-500 text-purple-700"
+                                                                : "bg-white border-gray-100 text-gray-400"
+                                                        )}
+                                                    >
+                                                        T{p}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4 mb-4">
+                                            {NOTE_SUGGESTIONS.VP.map(group => (
+                                                <div key={group.group} className="space-y-2">
+                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">{group.group}</p>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        {group.items.map(reason => (
+                                                            <button
+                                                                key={reason}
+                                                                onClick={() => setLocalVNote(reason)}
+                                                                className={cn(
+                                                                    "py-2.5 px-2 rounded-xl text-[11px] font-bold border transition-all active:scale-95",
+                                                                    localVNote === reason ? "bg-purple-600 border-purple-600 text-white shadow-md" : cn("bg-white border-gray-100", group.color)
+                                                                )}
+                                                            >
+                                                                {reason}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <textarea
+                                            value={localVNote}
+                                            onChange={(e) => setLocalVNote(e.target.value)}
+                                            placeholder="Nội dung vi phạm..."
+                                            className="w-full p-4 border-2 border-gray-100 rounded-2xl focus:border-purple-400 outline-none min-h-[100px] text-lg bg-gray-50/50"
+                                        />
+                                    </div>
+                                )}
+
+                                {/* 3. Reward Details */}
+                                {localReward && (
+                                    <div className="animate-in fade-in slide-in-from-right-4 border-t pt-6">
+                                        <h3 className="text-sm font-bold text-orange-500 uppercase mb-4">Mô tả Khen thưởng</h3>
+                                        <div className="space-y-4 mb-4">
+                                            {NOTE_SUGGESTIONS.KH.map(group => (
+                                                <div key={group.group} className="space-y-2">
+                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">{group.group}</p>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        {group.items.map(item => (
+                                                            <button
+                                                                key={item}
+                                                                onClick={() => setLocalRNote(item)}
+                                                                className={cn(
+                                                                    "py-2.5 px-2 rounded-xl text-[11px] font-bold border transition-all active:scale-95",
+                                                                    localRNote === item ? "bg-orange-500 border-orange-500 text-white shadow-md" : cn("bg-white border-gray-100", group.color)
+                                                                )}
+                                                            >
+                                                                {item}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <textarea
+                                            value={localRNote}
+                                            onChange={(e) => setLocalRNote(e.target.value)}
+                                            placeholder="Vì sao em được khen?"
+                                            className="w-full p-4 border-2 border-gray-100 rounded-2xl focus:border-orange-400 outline-none min-h-[100px] text-lg bg-gray-50/50"
+                                        />
+                                    </div>
+                                )}
+
+                                {/* Bottom Floating Action for Details View */}
+                                <div className="fixed bottom-6 left-4 right-4">
+                                    <button
+                                        onClick={() => setView('MAIN')}
+                                        className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all text-lg"
+                                    >
+                                        <ChevronLeft size={20} />
+                                        QUAY LẠI CHỌN TIẾP
+                                    </button>
                                 </div>
-
-                                <h3 className="text-sm font-bold text-gray-500 uppercase mb-2">Hoặc nhập chi tiết</h3>
-                                <textarea
-                                    value={violationReason}
-                                    onChange={(e) => setViolationReason(e.target.value)}
-                                    placeholder="Ví dụ: Nói chuyện, Xả rác..."
-                                    className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 min-h-[80px] text-base mb-4 bg-gray-50"
-                                />
-
-                                <button
-                                    onClick={handleSaveViolation}
-                                    disabled={!violationReason.trim()}
-                                    className="w-full bg-purple-600 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all text-lg flex items-center justify-center gap-2 mt-auto disabled:opacity-50 disabled:shadow-none"
-                                >
-                                    <Save size={20} />
-                                    LƯU VI PHẠM
-                                </button>
                             </div>
                         )}
                     </div>
@@ -288,7 +478,7 @@ export function MobileStudentCard({
     );
 }
 
-function StatusButton({ type, active, icon, label, onClick, color, className }: any) {
+function StatusButton({ active, icon, label, onClick, color, className }: any) {
     const activeClass = {
         green: "bg-green-100 border-green-500 text-green-800 ring-1 ring-green-500",
         blue: "bg-blue-100 border-blue-500 text-blue-800 ring-1 ring-blue-500",

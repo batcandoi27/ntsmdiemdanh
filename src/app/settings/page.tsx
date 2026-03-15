@@ -14,11 +14,12 @@ import { YearTab } from '@/components/settings/year-tab';
 import { ExportTab } from '@/components/settings/export-tab';
 import { ApiTab } from '@/components/settings/api-tab';
 import { FeatureFlagsTab } from '@/components/settings/feature-flags-tab';
+import { ClassSizeTab } from '@/components/settings/class-size-tab';
 import { useAuth } from '@/context/auth-context';
-import { FirebaseAdapter } from '@/services/firebase-adapter';
+import { db } from '@/services/db';
 import { Class } from '@/types/models';
 
-type TabType = 'data' | 'fixed-columns' | 'custom-columns' | 'my-classes' | 'users' | 'timetable' | 'year' | 'export' | 'api' | 'feature-flags';
+type TabType = 'data' | 'fixed-columns' | 'custom-columns' | 'my-classes' | 'users' | 'timetable' | 'year' | 'export' | 'api' | 'feature-flags' | 'class-size';
 
 export default function SettingsPage() {
     const [isPending, startTransition] = useTransition();
@@ -52,8 +53,7 @@ export default function SettingsPage() {
 
     const loadClasses = async () => {
         try {
-            const adapter = new FirebaseAdapter();
-            const classList = await adapter.getClasses();
+            const classList = await db.getClasses();
             setClasses(classList);
         } catch (error) {
             console.error('Error loading classes:', error);
@@ -157,6 +157,7 @@ export default function SettingsPage() {
         tabs.push({ id: 'timetable' as TabType, label: 'Thời khoá biểu', icon: CalendarDays });
         tabs.push({ id: 'year' as TabType, label: 'Năm học', icon: Archive });
         tabs.push({ id: 'export' as TabType, label: 'Xuất báo cáo', icon: Download });
+        tabs.push({ id: 'class-size' as TabType, label: 'Sĩ số lớp', icon: Users });
         tabs.push({ id: 'feature-flags' as TabType, label: 'Tính năng', icon: ToggleRight });
     }
 
@@ -206,20 +207,20 @@ export default function SettingsPage() {
 
             {/* Tabs */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="flex border-b border-gray-100 overflow-x-auto scrollbar-hide">
+                <div className="flex flex-wrap border-b border-gray-100 p-2 gap-1.5 bg-gray-50/50">
                     {tabs.map(tab => (
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
                             className={cn(
-                                "flex-shrink-0 flex items-center justify-center gap-2 py-4 px-3 md:px-4 font-medium transition-all whitespace-nowrap",
+                                "flex items-center gap-2 py-2 px-3 rounded-xl font-bold transition-all text-xs md:text-sm",
                                 activeTab === tab.id
-                                    ? "text-blue-600 border-b-2 border-blue-600 bg-blue-50/50"
-                                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                                    ? "text-blue-700 bg-white shadow-sm ring-1 ring-gray-200"
+                                    : "text-gray-500 hover:text-gray-800 hover:bg-white/50"
                             )}
                         >
-                            <tab.icon size={18} />
-                            <span className="hidden md:inline">{tab.label}</span>
+                            <tab.icon size={16} className={cn(activeTab === tab.id ? "text-blue-600" : "text-gray-400")} />
+                            <span>{tab.label}</span>
                         </button>
                     ))}
                 </div>
@@ -227,7 +228,7 @@ export default function SettingsPage() {
                 <div className="p-6">
                     {/* Tab Content */}
                     {activeTab === 'data' && (
-                        <div className="grid md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 gap-6">
                             {/* Data Management Card */}
                             <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
                                 <div className="flex items-center gap-3 mb-4">
@@ -309,35 +310,6 @@ export default function SettingsPage() {
                                     </div>
                                 </div>
                             </div>
-
-
-                            {/* System Info Card */}
-                            <div className="bg-gray-50 rounded-xl p-6 border border-gray-100 opacity-60">
-                                <div className="flex items-center gap-3 mb-4">
-                                    <div className="bg-gray-100 p-2 rounded-lg text-gray-600">
-                                        <Settings size={24} />
-                                    </div>
-                                    <h2 className="font-bold text-lg text-gray-800">Cấu Hình Chung</h2>
-                                </div>
-                                <p className="text-gray-500 text-sm mb-6">
-                                    Các cài đặt về năm học, học kỳ và thông tin trường học.
-                                </p>
-
-                                <div className="space-y-4 text-sm">
-                                    <div className="flex justify-between py-2 border-b border-gray-100">
-                                        <span className="text-gray-500">Năm học</span>
-                                        <span className="font-medium">2025 - 2026</span>
-                                    </div>
-                                    <div className="flex justify-between py-2 border-b border-gray-100">
-                                        <span className="text-gray-500">Học kỳ</span>
-                                        <span className="font-medium">Học kỳ 2</span>
-                                    </div>
-                                    <div className="flex justify-between py-2 border-b border-gray-100">
-                                        <span className="text-gray-500">Phiên bản</span>
-                                        <span className="font-medium">02.2026</span>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                     )}
 
@@ -371,6 +343,10 @@ export default function SettingsPage() {
 
                     {activeTab === 'custom-columns' && (
                         <CustomColumnsTab classIds={myClassIds} selectedClasses={selectedClasses} />
+                    )}
+
+                    {activeTab === 'class-size' && (
+                        <ClassSizeTab />
                     )}
 
                     {activeTab === 'feature-flags' && (

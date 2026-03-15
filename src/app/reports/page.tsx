@@ -86,7 +86,10 @@ export default function ReportsPage() {
         setIsFilterActive(true);
         try {
             const targetClassIds = selectedClasses;
-            const data = await getReports({ startDate: dateRange.start, endDate: dateRange.end, classIds: targetClassIds });
+            const data = await getReports(
+                { startDate: dateRange.start, endDate: dateRange.end, classIds: targetClassIds },
+                appUser?.role
+            );
             setResult(data);
         } catch (error) {
             console.error(error);
@@ -105,7 +108,7 @@ export default function ReportsPage() {
         setExportLoading(true);
         try {
             const targetClassIds = selectedClasses;
-            const data = await getExcelExportData(dateRange.start, dateRange.end, targetClassIds, isCompact);
+            const data = await getExcelExportData(dateRange.start, dateRange.end, targetClassIds, isCompact, appUser?.role);
             if (!data || data.length === 0) {
                 alert('Chưa có dữ liệu để xuất.');
                 return;
@@ -129,7 +132,7 @@ export default function ReportsPage() {
         setExportLoading(true);
         try {
             const targetClassIds = selectedClasses;
-            const data = await getAdvancedReportData(dateRange.start, dateRange.end, targetClassIds, appUser?.uid);
+            const data = await getAdvancedReportData(dateRange.start, dateRange.end, targetClassIds, appUser?.uid, appUser?.role);
             if (data.length === 0) {
                 alert('Không có dữ liệu để xuất.');
                 return;
@@ -153,7 +156,7 @@ export default function ReportsPage() {
         setExportLoading(true);
         try {
             const targetClassIds = selectedClasses;
-            const data = await getExcelExportData(dateRange.start, dateRange.end, targetClassIds);
+            const data = await getExcelExportData(dateRange.start, dateRange.end, targetClassIds, false, appUser?.role);
             if (!data || data.length === 0) {
                 alert('Chưa có dữ liệu để xuất.');
                 return;

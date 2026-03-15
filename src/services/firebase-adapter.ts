@@ -37,6 +37,10 @@ export class FirebaseAdapter implements DbAdapter {
 
     // --- System / Admin ---
     async clearCurrentYearData(): Promise<void> {
+        if (!db) {
+            console.warn("Firestore db not initialized. Skipping clearCurrentYearData.");
+            return;
+        }
         await this.ensureAuth();
         console.log(`🔥 DELETING DATA FOR YEAR: ${CURRENT_YEAR}`);
 
@@ -73,13 +77,15 @@ export class FirebaseAdapter implements DbAdapter {
     // --- Classes ---
     async getClasses(options?: { isPersonal?: boolean; ownerId?: string }): Promise<Class[]> {
         const isPersonalReq = options?.isPersonal || false;
-        const CACHE_KEY = `classes_${SCHOOL_ID}_${CURRENT_YEAR}_${isPersonalReq}_${options?.ownerId || 'all'}`;
+        const currentYear = await resolveCurrentYear();
+        const CACHE_KEY = `classes_${SCHOOL_ID}_${currentYear}_${isPersonalReq}_${options?.ownerId || 'all'}`;
         const cached = getCached<Class[]>(CACHE_KEY);
         if (cached) return cached;
 
+        if (!db) return [];
         await this.ensureAuth();
         // Cấu trúc mới: schools/{schoolId}/years/{year}/classes
-        let colRef: any = collection(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'classes');
+        let colRef: any = collection(db, 'schools', SCHOOL_ID, 'years', currentYear, 'classes');
 
         // Optimize using firestore query if needing personal classes
         if (isPersonalReq && options?.ownerId) {
@@ -107,12 +113,14 @@ export class FirebaseAdapter implements DbAdapter {
 
     async getClass(id: string): Promise<Class | null> {
         await this.ensureAuth();
-        const docRef = doc(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'classes', id);
+        const currentYear = await resolveCurrentYear();
+        const docRef = doc(db, 'schools', SCHOOL_ID, 'years', currentYear, 'classes', id);
         const snap = await getDoc(docRef);
         return snap.exists() ? (snap.data() as Class) : null;
     }
 
     async createClass(cls: Class): Promise<void> {
+        if (!db) return;
         await this.ensureAuth();
         const docRef = doc(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'classes', cls.id);
         await setDoc(docRef, cls);
@@ -218,52 +226,56 @@ export class FirebaseAdapter implements DbAdapter {
 
     async getMonthlyAttendance(classId: string, month: number, year: number): Promise<any[]> {
         await this.ensureAuth();
-        // Để hỗ trợ cả V1 (1 record = 1 class) và V3 (nhiều record học sinh / class),
-        // ta query Collection records theo classId
-
-        const promises = [];
         const daysInMonth = new Date(year, month, 0).getDate();
-
-        // Optimization: Không fetch những ngày ở tương lai
         const today = new Date();
         const maxDay = (today.getFullYear() === year && today.getMonth() + 1 === month)
             ? Math.min(daysInMonth, today.getDate())
             : daysInMonth;
 
-        const fetchDateRecords = async (dateStr: string) => {
-            const colRef = collection(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'attendance', dateStr, 'records');
-            const q = query(colRef, where('classId', '==', classId));
-            const snap = await getDocs(q);
+        console.log(`[getMonthlyAttendance] Fetching month ${month}/${year} for class ${classId}. Max days: ${maxDay}`);
 
-            // Nếu có 1 doc ID khớp classId -> Có thể đây là V1
-            const v1Doc = snap.docs.find(d => d.id === classId);
-            if (v1Doc) {
-                return v1Doc.data();
-            }
-
-            // Nếu không có, đây là mảng các record V3. 
-            // Ta build ảo lại thành 1 record giả dạng V1 chứa mảng absences để tương thích component.
-            const records = snap.docs.map(d => d.data());
-            if (records.length === 0) return null;
-
-            const absencesMap: Record<string, string> = {};
-            records.forEach((r: any) => {
-                if (r.studentId && r.status) {
-                    absencesMap[r.studentId] = r.status;
-                }
-            });
-
-            return {
-                id: classId,
-                classId: classId,
-                date: dateStr,
-                absences: absencesMap
-            };
-        };
-
+        const promises = [];
         for (let d = 1; d <= maxDay; d++) {
             const dateStr = `${year}-${month.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
-            promises.push(fetchDateRecords(dateStr));
+            
+            const fetchDay = async () => {
+                // Tối ưu: Dùng doc() thẳng đến classId thay vì getDocs(query)
+                // Cả V1 và V3 đều hỗ trợ docId là classId (V1) hoặc recordId (V3)
+                // Tuy nhiên V3 recordId phức tạp hơn. Ta dùng query where('classId') là an toàn nhất nhưng getDocs tốn hơn.
+                // Nhưng với cấu trúc attendance/{date}/records, mỗi doc trong đó là 1 exception của lớp.
+                // Nếu ta dùng collection query where('classId' == classId), Firestore chỉ tính 1 read nếu có kq, 0 nếu không.
+                const colRef = collection(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'attendance', dateStr, 'records');
+                const q = query(colRef, where('classId', '==', classId));
+                const snap = await getDocs(q);
+                
+                if (snap.empty) return null;
+
+                // Map results
+                const records = snap.docs.map(d => d.data());
+                
+                // Nếu là V1 (1 doc cho cả lớp)
+                if (records.length === 1 && records[0].absences) {
+                    return { ...records[0], date: dateStr };
+                }
+
+                // Nếu là V3 (nhiều doc lẻ), gộp lại thành format tương thích
+                const absencesMap: Record<string, string> = {};
+                records.forEach((r: any) => {
+                    if (r.studentId && r.status) {
+                        absencesMap[r.studentId] = r.status;
+                    }
+                });
+
+                return {
+                    id: classId,
+                    classId: classId,
+                    date: dateStr,
+                    absences: absencesMap,
+                    _v3Records: records // Giữ lại để xử lý chi tiết nếu cần
+                };
+            };
+            
+            promises.push(fetchDay());
         }
 
         const results = await Promise.all(promises);
@@ -292,31 +304,41 @@ export class FirebaseAdapter implements DbAdapter {
         // chứ không còn là 1 document = 1 lớp như bản V1 cũ. Do đó, ta phải fetch getAllDocuments cho collection
         // sau đó filter theo classIds ở client, vì Firestore where(in) bị giới hạn 30 item và không hỗ trợ full filter dễ.
 
-        const fetchAllForDate = async (date: string) => {
+        const fetchForDate = async (date: string, requestedClassIds?: string[]) => {
             try {
                 const colRef = collection(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'attendance', date, 'records');
-                const snap = await getDocs(colRef);
-                // Ép Kiểu về Any vì Record V3 và V1 có trường khác nhau, 
-                // Inject biến date vào từng record để map ngược sang Report.ts 
-                return snap.docs.map(d => ({ ...d.data(), date }) as any);
+                
+                if (!requestedClassIds || requestedClassIds.length === 0) {
+                    // Admin view: fetch all
+                    const snap = await getDocs(colRef);
+                    return snap.docs.map(d => ({ ...d.data(), date }) as any);
+                }
+
+                // Optimization: Query specifically for classIds
+                // Firestore 'in' limitation: 30 items
+                const chunks = [];
+                for (let i = 0; i < requestedClassIds.length; i += 30) {
+                    chunks.push(requestedClassIds.slice(i, i + 30));
+                }
+
+                const results: any[] = [];
+                for (const chunk of chunks) {
+                    const q = query(colRef, where('classId', 'in', chunk));
+                    const snap = await getDocs(q);
+                    results.push(...snap.docs.map(d => ({ ...d.data(), date }) as any));
+                }
+                return results;
+
             } catch (e) {
                 console.error("Error fetching report data for date", date, e);
                 return [];
             }
         };
 
-        // Chạy Promise song song lấy dữ liệu các ngày
-        const promises = dates.map(async (date) => {
-            let records = await fetchAllForDate(date);
+        console.log(`[getReportData] Optimization: Fetching for ${dates.length} dates, classIds: ${classIds?.length || 'ALL'}`);
 
-            // Lọc theo classIds nếu người dùng chọn cụ thể các lớp
-            if (classIds && classIds.length > 0) {
-                records = records.filter(r => {
-                    // Cả V1 và V3 đều có trường classId
-                    return classIds.includes(r.classId);
-                });
-            }
-            return records;
+        const promises = dates.map(async (date) => {
+            return await fetchForDate(date, classIds);
         });
 
         const dailyResults = await Promise.all(promises);
@@ -414,36 +436,15 @@ export class FirebaseAdapter implements DbAdapter {
     }
 
     async clearAttendanceData(startDate?: string, endDate?: string, classIds?: string[]): Promise<void> {
+        // ... (giữ nguyên logic cũ)
         await this.ensureAuth();
-
-        // If no range, delete ALL? Hard in Firestore structure {year}/attendance/{date}/records
-        // Must iterate all known dates? Or delete 'attendance' collection (requires Admin SDK).
-        // User client SDK: Must know paths.
-
-        // Strategy: Iterate reasonable date range.
-        // If startDate/endDate not provided, assume "Current School Year" cleaning -> heavy.
-
-        const start = startDate || '2025-08-01'; // Start of school year
-        const end = endDate || new Date().toISOString().split('T')[0]; // Today
-
-        const getDates = (s: string, e: string) => {
-            const arr = [];
-            let dt = new Date(s);
-            const en = new Date(e);
-            while (dt <= en) {
-                arr.push(new Date(dt).toISOString().split('T')[0]);
-                dt.setDate(dt.getDate() + 1);
-            }
-            return arr;
-        };
+        const start = startDate || '2025-08-01';
+        const end = endDate || new Date().toISOString().split('T')[0];
         const dates = getDates(start, end);
-
-        console.log(`Clearing attendance for ${dates.length} days...`);
 
         for (const date of dates) {
             const colRef = collection(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'attendance', date, 'records');
             const snap = await getDocs(colRef);
-
             const batch = writeBatch(db);
             let count = 0;
             snap.docs.forEach(d => {
@@ -453,9 +454,32 @@ export class FirebaseAdapter implements DbAdapter {
                     count++;
                 }
             });
-            if (count > 0) {
-                await batch.commit();
-            }
+            if (count > 0) await batch.commit();
         }
+    }
+
+    async updateManualClassSizes(year: string, updates: { id: string, manualStudentCount: number }[]): Promise<void> {
+        console.log(`[FirebaseAdapter] updateManualClassSizes - SCHOOL_ID: ${SCHOOL_ID}, Year: ${year}`);
+        if (!db) {
+            console.error("[FirebaseAdapter] Firestore db is NOT initialized (null)");
+            throw new Error("Firestore database not initialized.");
+        }
+        await this.ensureAuth();
+        console.log(`[FirebaseAdapter] Auth ensured. User: ${auth?.currentUser?.uid || 'anonymous'}`);
+
+        const batch = writeBatch(db);
+        const colRef = collection(db, 'schools', SCHOOL_ID, 'years', year, 'classes');
+        console.log(`[FirebaseAdapter] Base Path: schools/${SCHOOL_ID}/years/${year}/classes`);
+        
+        updates.forEach(u => {
+            const docRef = doc(colRef, u.id);
+            console.log(`[FirebaseAdapter] Queuing update for class: ${u.id} -> ${u.manualStudentCount}`);
+            batch.set(docRef, { manualStudentCount: u.manualStudentCount }, { merge: true });
+        });
+        
+        console.log(`[FirebaseAdapter] Committing batch...`);
+        await batch.commit();
+        console.log(`[FirebaseAdapter] Batch committed successfully!`);
+        invalidateCachePrefix(`classes_${SCHOOL_ID}`);
     }
 }

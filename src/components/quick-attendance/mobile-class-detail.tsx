@@ -33,6 +33,12 @@ export function MobileClassDetail({ classId, className, date, session, onDateCha
     const [changes, setChanges] = useState<Record<string, {
         status?: AttendanceStatus;
         note?: string;
+        missedPeriods?: number[];
+        violation?: boolean;
+        violationNote?: string;
+        violationPeriods?: number[];
+        reward?: boolean;
+        rewardNote?: string;
         custom?: Record<string, boolean>;
     }>>({});
 
@@ -55,13 +61,12 @@ export function MobileClassDetail({ classId, className, date, session, onDateCha
         }
     };
 
-    const handleUpdateStatus = (studentCode: string, status: AttendanceStatus, note?: string) => {
+    const handleUpdateAll = (studentCode: string, data: any) => {
         setChanges(prev => ({
             ...prev,
             [studentCode]: {
                 ...prev[studentCode],
-                status,
-                note
+                ...data
             }
         }));
     };
@@ -91,24 +96,29 @@ export function MobileClassDetail({ classId, className, date, session, onDateCha
 
             studentCodes.forEach(code => {
                 const change = changes[code];
+                const student = students.find(s => (s.student.code || s.student.id) === code);
+                if (!student) return;
 
-                // Core
-                if (change.status !== undefined || change.note !== undefined) {
-                    // We need status. If status is undefined in change, use current from records?
-                    // `updateBatchAttendance` expects status.
-                    // If we only changed note, we should pass current status.
-                    // Find student
-                    const student = students.find(s => (s.student.code || s.student.id) === code);
-                    const currentStatus = change.status ?? student?.status ?? 'Present'; // Default?
-                    // Actually if student.status is empty string, it means Present?
-                    // Let's ensure we pass core status.
-                    // If change.status is undefined, use existing status from `students` prop.
+                // Core + Details
+                const hasImpactfulChange = change.status !== undefined || 
+                                          change.note !== undefined || 
+                                          change.violation !== undefined || 
+                                          change.reward !== undefined ||
+                                          change.missedPeriods !== undefined;
 
+                if (hasImpactfulChange) {
                     coreUpdates.push({
                         studentCode: code,
-                        status: currentStatus as AttendanceStatus,
-                        note: change.note
-                    });
+                        studentName: student.student.fullName,
+                        status: (change.status ?? student.status ?? '') as AttendanceStatus,
+                        note: change.note ?? student.note,
+                        missedPeriods: change.missedPeriods ?? student.missedPeriods,
+                        violation: change.violation ?? student.violation,
+                        violationNote: change.violationNote ?? student.violationNote,
+                        violationPeriods: change.violationPeriods ?? student.violationPeriods,
+                        reward: change.reward ?? student.reward,
+                        rewardNote: change.rewardNote ?? student.rewardNote
+                    } as any);
                 }
 
                 // Custom
@@ -119,8 +129,12 @@ export function MobileClassDetail({ classId, className, date, session, onDateCha
                 }
             });
 
+            const allStudentIds = students.map(s => s.student.code || s.student.id);
+
             await Promise.all([
-                coreUpdates.length > 0 ? updateBatchAttendance(classId, date, coreUpdates) : Promise.resolve(),
+                coreUpdates.length > 0 
+                    ? updateBatchAttendance(classId, date, session, coreUpdates, allStudentIds) 
+                    : Promise.resolve(),
                 ...customUpdates
             ]);
 
@@ -204,9 +218,16 @@ export function MobileClassDetail({ classId, className, date, session, onDateCha
                                 code: studentCode,
                                 stt: detail.student.order
                             }}
-                            status={currentStatus as AttendanceStatus}
-                            note={currentNote}
-                            onUpdateStatus={(s, n) => handleUpdateStatus(studentCode, s, n)}
+                            status={(change?.status ?? detail.status ?? '') as AttendanceStatus}
+                            note={change?.note ?? detail.note}
+                            missedPeriods={change?.missedPeriods ?? detail.missedPeriods}
+                            violation={change?.violation ?? detail.violation}
+                            violationNote={change?.violationNote ?? detail.violationNote}
+                            violationPeriods={change?.violationPeriods ?? detail.violationPeriods}
+                            reward={change?.reward ?? detail.reward}
+                            rewardNote={change?.rewardNote ?? detail.rewardNote}
+                            
+                            onUpdateAll={(data) => handleUpdateAll(studentCode, data)}
                             // New Props
                             visibleStatuses={settings.visibleDefaultColumns}
                             customColumns={rowCustomColumns}

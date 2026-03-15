@@ -39,7 +39,7 @@ export function buildExportData(
         meta: {
             schoolName: process.env.NEXT_PUBLIC_SCHOOL_NAME || 'Unknown',
             schoolCode: process.env.NEXT_PUBLIC_SCHOOL_CODE || '',
-            year: '2025-2026',
+            year: classes.length > 0 ? classes[0].academicYear || '2025-2026' : '2025-2026',
             exportDate: new Date().toISOString(),
             exportedBy,
             version: '3.0',
@@ -122,49 +122,66 @@ export async function buildExcelWorkbook(
     sheet2.getRow(1).font = { bold: true };
     sheet2.views = [{ state: 'frozen', ySplit: 1, xSplit: 3 }];
 
-    // Build attendance map: studentId → date → status
+    // Build attendance maps: studentCode → date → status/note
     const attendanceMap = new Map<string, Map<string, string>>();
+    const notesMap = new Map<string, Map<string, string>>();
+
     for (const [date, records] of Object.entries(data.attendance)) {
         for (const record of records) {
-            if (!attendanceMap.has(record.studentId)) {
-                attendanceMap.set(record.studentId, new Map());
+            const sKey = record.studentId; // This is student_code in Supabase branch
+            if (!attendanceMap.has(sKey)) {
+                attendanceMap.set(sKey, new Map());
+                notesMap.set(sKey, new Map());
             }
+            
             let statusCode = '';
-            if (record.status === 'absent') statusCode = 'K';
-            else if (record.status === 'excused') statusCode = 'P';
-            else if (record.status === 'late') {
+            let cellNote = record.note || record.violationNote || '';
+
+            // Map status codes
+            const s = record.status;
+            if (s === 'absent' || s === 'K' || s === 'V') statusCode = 'K';
+            else if (s === 'excused' || s === 'P') statusCode = 'P';
+            else if (s === 'late' || s === 'T') {
                 statusCode = 'T';
                 if (record.missedPeriods && record.missedPeriods.length > 0) {
-                    statusCode = `T (T${record.missedPeriods.join(', ')})`;
+                    cellNote = `Vắng tiết: ${record.missedPeriods.join(', ')}. ${cellNote}`;
                 }
             }
-
-            // Nếu có vi phạm, ghi thêm vào mã (cho export v3)
-            if (record.violation) {
-                statusCode = statusCode ? `${statusCode}, VP` : 'VP';
+            else if (s === 'violation' || s === 'VP') {
+                statusCode = 'VP';
             }
-            if (record.praise) {
-                statusCode = statusCode ? `${statusCode}, KH` : 'KH';
+            else if (s === 'praise' || s === 'KH') {
+                statusCode = 'KH';
             }
 
-            attendanceMap.get(record.studentId)!.set(date, statusCode);
+            // Flag-based V3 priority
+            if (record.violation) statusCode = 'VP';
+            if (record.reward || record.praise) statusCode = 'KH';
+
+            attendanceMap.get(sKey)!.set(date, statusCode);
+            if (cellNote) notesMap.get(sKey)!.set(date, cellNote);
         }
     }
 
     data.students.forEach(s => {
-        const row: Record<string, unknown> = {
-            order: s.order,
-            fullName: s.fullName,
-            classId: s.classId,
-        };
-        let totalAbsent = 0;
-        for (const date of dates) {
-            const val = attendanceMap.get(s.id)?.get(date) || '';
-            row[date] = val;
-            if (val === 'V') totalAbsent++;
-        }
-        row['totalAbsent'] = totalAbsent;
-        sheet2.addRow(row);
+        const sKey = s.code || s.id; // Fallback to id if code not present (legacy)
+        const rowData: any[] = [s.order, s.fullName, s.classId || ''];
+        
+        dates.forEach(date => {
+            rowData.push(attendanceMap.get(sKey)?.get(date) || '');
+        });
+
+        // Add row to sheet
+        const row = sheet2.addRow(rowData);
+
+        // Add notes (comments) to cells
+        dates.forEach((date, idx) => {
+            const note = notesMap.get(sKey)?.get(date);
+            if (note) {
+                const cell = row.getCell(4 + idx); // 1:order, 2:name, 3:class, 4+:dates
+                cell.note = note;
+            }
+        });
     });
 
     // === Sheet 3: Thời Khoá Biểu ===

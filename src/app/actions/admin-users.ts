@@ -1,10 +1,10 @@
 'use server';
 
-import { adminDb as db, adminAuth as auth } from '@/lib/firebase-admin';
-import { revalidatePath } from 'next/cache';
+const isSupabase = process.env.NEXT_PUBLIC_USE_SUPABASE === 'true';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 
 /**
- * Xoá tài khoản người dùng cả ở Firestore và Firebase Auth
+ * Xoá tài khoản người dùng cả ở DB và Auth
  * CHỈ dành cho Admin
  */
 export async function deleteUserAccount(targetUid: string) {
@@ -14,19 +14,27 @@ export async function deleteUserAccount(targetUid: string) {
             return { success: false, message: 'ID người dùng không hợp lệ.' };
         }
 
-        // 2. Thực hiện xoá ở Firebase Auth
-        try {
-            await auth.deleteUser(targetUid);
-        } catch (error: any) {
-            // Nếu không tìm thấy user ở Auth thì vẫn tiếp tục xoá ở Firestore
-            if (error.code !== 'auth/user-not-found') {
-                console.error('Lỗi khi xoá User Auth:', error);
-                return { success: false, message: 'Lỗi khi xoá tài khoản xác thực: ' + error.message };
+        if (isSupabase) {
+            // 2. Thực hiện xoá ở Supabase Auth
+            const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(targetUid);
+            if (authError && (authError as any).status !== 404) {
+                 return { success: false, message: 'Lỗi khi xoá tài khoản xác thực Supabase: ' + authError.message };
             }
+            // 3. Thực hiện xoá ở profiles (RLS hoặc cascade sẽ lo, nhưng ta làm tường minh)
+            await supabaseAdmin.from('profiles').delete().eq('id', targetUid);
+        } else {
+            // 2. Thực hiện xoá ở Firebase Auth
+            try {
+                await auth.deleteUser(targetUid);
+            } catch (error: any) {
+                if (error.code !== 'auth/user-not-found') {
+                    console.error('Lỗi khi xoá User Auth:', error);
+                    return { success: false, message: 'Lỗi khi xoá tài khoản xác thực: ' + error.message };
+                }
+            }
+            // 3. Thực hiện xoá ở Firestore
+            await adminDb.doc(`schools/default/users/${targetUid}`).delete();
         }
-
-        // 3. Thực hiện xoá ở Firestore (users/{uid})
-        await db.doc(`users/${targetUid}`).delete();
 
         // 4. Làm mới cache trang settings
         revalidatePath('/settings');

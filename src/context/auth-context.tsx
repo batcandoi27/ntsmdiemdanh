@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import {
     onAuthStateChanged,
     signInWithEmailAndPassword,
@@ -12,6 +12,8 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
+import { supabase } from '@/lib/supabase';
+import { supabaseAuth } from '@/services/supabase-auth-service';
 import { AppUser } from '@/types/models';
 
 // ============================================
@@ -71,6 +73,8 @@ if (typeof window !== 'undefined') {
     });
 }
 
+const isSupabase = process.env.NEXT_PUBLIC_USE_SUPABASE === 'true';
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
     const [appUser, setAppUser] = useState<AppUser | null>(null);
@@ -78,8 +82,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // Load AppUser profile
+    // Bug 1 Fix: Track user presence via ref to avoid stale closure in onAuthStateChange
+    const hasUserRef = useRef(false);
+
+    // Load AppUser profile (Legacy Firebase)
     const loadUserProfile = useCallback(async (user: FirebaseUser) => {
+        if (isSupabase || !db) return; // Không chạy khi dùng Supabase
         try {
             const getDocPromise = getDoc(doc(db, 'users', user.uid));
             const timeoutPromise = new Promise<any>((_, reject) =>
@@ -97,50 +105,167 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     lastLoginAt: new Date().toISOString(),
                 }).catch(() => { /* ignore */ });
             } else {
-                // Đã login Google nhưng chưa có Profile -> yêu cầu nhập mã Role
                 setAppUser(null);
                 setNeedsRoleCode(true);
             }
         } catch (err) {
-            console.error('Lỗi tải thông tin người dùng:', err);
+            console.error('Lỗi tải thông tin người dùng từ Firebase:', err);
             setError('Không thể tải thông tin người dùng.');
             setAppUser(null);
         }
     }, []);
 
-    // Listen Firebase Auth state
-    useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (user) => {
-            setFirebaseUser(user);
-            setError(null);
+    const loadingProfile = useRef<string | null>(null);
 
-            if (user) {
-                await loadUserProfile(user);
+    // Load AppUser profile (Supabase)
+    const loadSupabaseProfile = useCallback(async (userId: string, email?: string, createdAt?: string) => {
+        if (loadingProfile.current === userId) return;
+        loadingProfile.current = userId;
+
+        try {
+            const profile = await supabaseAuth.getProfileOnly(userId);
+            
+            if (profile) {
+                const profileData = profile as any;
+                setAppUser({
+                    uid: userId,
+                    email: email || '',
+                    displayName: profile.full_name || email?.split('@')[0],
+                    role: profile.role || 'teacher',
+                    isActive: profile.is_active ?? true,
+                    assignedClassIds: profileData.assignedClassIds || [], 
+                    homeroomClassId: profileData.homeroomClassId,
+                    permissions: profile.role === 'admin' ? { canEditAttendance: true, canEditStudentStatus: true, canCreateAccounts: true, canViewAllClasses: true, canExportData: true, canManageTimetable: true, canAccessAPI: true } : { canEditAttendance: true, canEditStudentStatus: false, canCreateAccounts: false, canViewAllClasses: profile.role === 'supervisor' || profile.role === 'principal', canExportData: true, canManageTimetable: false, canAccessAPI: false },
+                    editWindowMinutes: profile.role === 'admin' ? -1 : 1440,
+                    createdAt: createdAt || new Date().toISOString()
+                } as any);
+                setNeedsRoleCode(false);
             } else {
                 setAppUser(null);
-                setNeedsRoleCode(false);
+                setNeedsRoleCode(true);
             }
-            setLoading(false);
-        });
+        } catch (err: any) {
+            console.error('Lỗi tải profile từ Supabase:', err);
+            setAppUser(null);
+            setNeedsRoleCode(true);
+        } finally {
+            loadingProfile.current = null;
+        }
+    }, []);
 
-        return () => unsubscribe();
-    }, [loadUserProfile]);
+    // Listen Auth state (Hybrid)
+    useEffect(() => {
+        let unsubscribeFirebase: (() => void) | undefined;
+        let subscriptionSupabase: any | undefined;
+
+        if (isSupabase) {
+            // Supabase: Kiểm tra session hiện tại ngay lập tức
+            const checkInitialSession = async () => {
+                try {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (session?.user) {
+                        setFirebaseUser({
+                            ...session.user,
+                            uid: session.user.id
+                        } as any);
+                        hasUserRef.current = true;
+                        await loadSupabaseProfile(session.user.id, session.user.email, session.user.created_at);
+                    }
+                } catch (err) {
+                    console.error('Lỗi khởi tạo session:', err);
+                } finally {
+                    setLoading(false);
+                }
+            };
+            checkInitialSession();
+
+            // Supabase Listener
+            const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+                // Bug 1 Fix: Chỉ log event không phải TOKEN_REFRESHED để giảm spam console
+                if (event !== 'TOKEN_REFRESHED') {
+                    console.log('Supabase Auth Event:', event);
+                }
+                
+                try {
+                    if (session?.user) {
+                        // Bug 1 Fix: Dùng hasUserRef (ref) thay vì firebaseUser (stale closure)
+                        // TOKEN_REFRESHED khi đã có user → skip hoàn toàn, không setLoading
+                        if (event === 'TOKEN_REFRESHED' && hasUserRef.current) {
+                            return; // Silent refresh, không cần làm gì
+                        }
+
+                        const isCriticalEvent = event === 'SIGNED_IN' || event === 'INITIAL_SESSION';
+                        if (isCriticalEvent && !hasUserRef.current) {
+                            setLoading(true);
+                        }
+                        
+                        setFirebaseUser({
+                            ...session.user,
+                            uid: session.user.id
+                        } as any);
+                        hasUserRef.current = true;
+                        
+                        // Chỉ load profile nếu chưa có hoặc event là SIGNED_IN
+                        if (isCriticalEvent || !hasUserRef.current) {
+                            await loadSupabaseProfile(session.user.id, session.user.email, session.user.created_at);
+                        }
+                    } else {
+                        hasUserRef.current = false;
+                        setFirebaseUser(null);
+                        setAppUser(null);
+                        setNeedsRoleCode(false);
+                    }
+                } catch (err) {
+                    console.error('Lỗi trong Auth Listener:', err);
+                } finally {
+                    if (event !== 'TOKEN_REFRESHED') {
+                        setLoading(false);
+                    }
+                }
+            });
+            subscriptionSupabase = data.subscription;
+        } else if (auth) {
+            // Firebase Listener
+            unsubscribeFirebase = onAuthStateChanged(auth, async (user) => {
+                setFirebaseUser(user);
+                setError(null);
+                if (user) {
+                    await loadUserProfile(user);
+                } else {
+                    setAppUser(null);
+                    setNeedsRoleCode(false);
+                }
+                setLoading(false);
+            });
+        } else {
+            setLoading(false);
+        }
+
+        return () => {
+            if (unsubscribeFirebase) unsubscribeFirebase();
+            if (subscriptionSupabase) {
+                subscriptionSupabase.unsubscribe();
+            }
+        };
+    }, [loadUserProfile, loadSupabaseProfile]);
 
     // Xử lý kết quả Google Redirect khi quay về trang
     useEffect(() => {
-        getRedirectResult(auth).then((result) => {
-            if (result?.user) {
-                // onAuthStateChanged đã xử lý rồi, chỉ cần tắt loading
+        if (!isSupabase && auth) {
+            getRedirectResult(auth).then((result) => {
+                if (result?.user) {
+                    // onAuthStateChanged đã xử lý rồi, chỉ cần tắt loading
+                    setLoading(false);
+                }
+            }).catch((err) => {
+                const firebaseError = err as { code?: string; message?: string };
+                if (firebaseError.code !== 'auth/popup-closed-by-user') {
+                    console.error('Google redirect error:', firebaseError);
+                    setError('Lỗi đăng nhập Google: ' + (firebaseError.message || ''));
+                }
                 setLoading(false);
-            }
-        }).catch((err) => {
-            const firebaseError = err as { code?: string; message?: string };
-            if (firebaseError.code !== 'auth/popup-closed-by-user') {
-                console.error('Google redirect error:', firebaseError);
-                setError('Lỗi đăng nhập Google: ' + (firebaseError.message || ''));
-            }
-            setLoading(false);
-        });
+            });
+        }
     }, []);
 
     // Sign in
@@ -148,79 +273,81 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setError(null);
         setLoading(true);
         try {
-            let email = emailOrCode;
-            const normalizedInput = emailOrCode.toLowerCase().trim();
+            if (isSupabase) {
+                const { error } = await supabaseAuth.signIn(emailOrCode, password);
+                if (error) throw error;
+            } else {
+                if (!auth) throw new Error("Firebase Auth not initialized");
+                let email = emailOrCode;
+                const normalizedInput = emailOrCode.toLowerCase().trim();
 
-            // Hỗ trợ đăng nhập nhanh cho các tài khoản admin
-            if (['admin', 'admintbc'].includes(normalizedInput)) {
-                email = `${normalizedInput}@diemdanh.kgvh.io.vn`;
-            }
-            // Nếu là mã HS (không có @), convert sang email format
-            else if (isStudentCode(emailOrCode)) {
-                email = studentCodeToEmail(emailOrCode);
-            }
+                if (['admin', 'admintbc'].includes(normalizedInput)) {
+                    email = `${normalizedInput}@diemdanh.kgvh.io.vn`;
+                }
+                else if (isStudentCode(emailOrCode)) {
+                    email = studentCodeToEmail(emailOrCode);
+                }
 
-            await signInWithEmailAndPassword(auth, email, password);
-            // onAuthStateChanged sẽ tự động load profile
-        } catch (err: unknown) {
-            const firebaseError = err as { code?: string; message?: string };
-            switch (firebaseError.code) {
-                case 'auth/user-not-found':
-                case 'auth/wrong-password':
-                case 'auth/invalid-credential':
-                    setError('Email/mã HS hoặc mật khẩu không đúng.');
-                    break;
-                case 'auth/too-many-requests':
-                    setError('Đăng nhập thất bại quá nhiều lần. Vui lòng thử lại sau.');
-                    break;
-                case 'auth/user-disabled':
-                    setError('Tài khoản đã bị vô hiệu hoá. Liên hệ Admin.');
-                    break;
-                default:
-                    setError('Lỗi đăng nhập: ' + (firebaseError.message || 'Không xác định'));
+                await signInWithEmailAndPassword(auth, email, password);
             }
+        } catch (err: any) {
+            setError(err.message || 'Lỗi đăng nhập');
             setLoading(false);
             throw err;
         }
     }, []);
 
-    // Sign in with Google (Redirect - không hiện popup Firebase domain)
+    // Sign in with Google (Hybrid)
     const signInWithGoogle = useCallback(async () => {
         setError(null);
         setLoading(true);
         try {
-            const provider = new GoogleAuthProvider();
-            provider.setCustomParameters({
-                prompt: 'select_account',
-            });
-
-            // Dùng Popup thay vì Redirect để tránh các vấn đề về chặn cookie/redirect ở trình duyệt hiện đại
-            await signInWithPopup(auth, provider);
-        } catch (err: unknown) {
-            const firebaseError = err as { code?: string; message?: string };
-            if (firebaseError.code !== 'auth/popup-closed-by-user') {
-                console.error('Lỗi đăng nhập Google:', firebaseError);
-                setError('Lỗi đăng nhập Google: ' + (firebaseError.message || 'Không xác định'));
+            if (isSupabase) {
+                const { supabase } = await import('@/lib/supabase');
+                const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: window.location.origin + '/auth/callback',
+                        queryParams: {
+                            access_type: 'offline',
+                            prompt: 'select_account',
+                        }
+                    }
+                });
+                if (error) throw error;
+            } else {
+                if (!auth) return;
+                const provider = new GoogleAuthProvider();
+                provider.setCustomParameters({ prompt: 'select_account' });
+                await signInWithPopup(auth, provider);
+            }
+        } catch (err: any) {
+            if (err.code !== 'auth/popup-closed-by-user') {
+                console.error('Lỗi đăng nhập Google:', err);
+                setError('Lỗi đăng nhập Google: ' + (err.message || 'Không xác định'));
             }
             setLoading(false);
             throw err;
         }
-    }, []);
+    }, [isSupabase]);
 
     // Sign out
     const signOut = useCallback(async () => {
         try {
-            await firebaseSignOut(auth);
+            if (isSupabase) {
+                await supabaseAuth.signOut();
+            } else if (auth) {
+                await firebaseSignOut(auth);
+            }
+            
             setAppUser(null);
             setFirebaseUser(null);
             setNeedsRoleCode(false);
             setError(null);
 
-            // Xóa triệt để các trạng thái có thể bị lưu tạm ở trình duyệt (ngăn chặn dính cache tài khoản)
             if (typeof window !== 'undefined') {
                 window.localStorage.clear();
                 window.sessionStorage.clear();
-                // Ép trình duyệt tải lại hoàn toàn (hard reload) để rũ bỏ toàn bộ memory / context cũ
                 window.location.href = '/login';
             }
         } catch (err) {

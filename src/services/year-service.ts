@@ -8,11 +8,7 @@
  * Spark quota: ~35 writes tạo năm mới (thay vì 15K-25K writes copy).
  */
 
-import {
-    doc, setDoc, getDoc, updateDoc, getDocs,
-    collection, query, where, writeBatch,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db } from './db';
 import { AppUser, AppSettings } from '@/types/models';
 
 // ============================================
@@ -20,8 +16,13 @@ import { AppUser, AppSettings } from '@/types/models';
 // ============================================
 
 export async function getAppSettings(): Promise<AppSettings | null> {
-    const snap = await getDoc(doc(db, 'settings', 'app'));
-    return snap.exists() ? snap.data() as AppSettings : null;
+    try {
+        const settings = await db.getSettings();
+        return settings;
+    } catch (e) {
+        console.error("Error getAppSettings:", e);
+        return null;
+    }
 }
 
 export async function getActiveYear(): Promise<string> {
@@ -67,7 +68,7 @@ export async function createNewYear(
 
     // 2. Copy class structure (names only, no students)
     if (options.copyClassStructure) {
-        const oldClasses = await getDocs(collection(db, `years/${oldYear}/classes`));
+        const oldClasses = await getDocs(collection(db, `schools/default/years/${oldYear}/classes`));
         for (const classDoc of oldClasses.docs) {
             const data = classDoc.data();
             // Skip grade 12 if autoGraduate (they graduate)
@@ -77,7 +78,7 @@ export async function createNewYear(
             // Bump grade: 8A1 → 9A1, 6A2 → 7A2
             const newClassName = bumpGrade(data.className || classDoc.id);
             if (newClassName) {
-                batch.set(doc(db, `years/${newYear}/classes`, newClassName), {
+                batch.set(doc(db, `schools/default/years/${newYear}/classes`, newClassName), {
                     className: newClassName,
                     studentCount: 0,
                     actualStudentCount: 0,
@@ -91,10 +92,10 @@ export async function createNewYear(
 
     // 3. Auto graduate lớp 12
     if (options.autoGraduateGrade12) {
-        const students = await getDocs(collection(db, `years/${oldYear}/students`));
+        const students = await getDocs(collection(db, `schools/default/years/${oldYear}/students`));
         for (const sDoc of students.docs) {
             const student = sDoc.data();
-            const classSnap = await getDoc(doc(db, `years/${oldYear}/classes`, student.classId));
+            const classSnap = await getDoc(doc(db, `schools/default/years/${oldYear}/classes`, student.classId));
             if (classSnap.exists() && isGrade12(classSnap.data().className || student.classId)) {
                 batch.update(sDoc.ref, {
                     statusV3: 'graduated',
@@ -175,7 +176,7 @@ export async function purgeYear(
     const collections = ['classes', 'students', 'timetables'];
 
     for (const col of collections) {
-        const snap = await getDocs(collection(db, `years/${yearToPurge}/${col}`));
+        const snap = await getDocs(collection(db, `schools/default/years/${yearToPurge}/${col}`));
         const batch = writeBatch(db);
         snap.docs.forEach(d => {
             batch.delete(d.ref);

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Class } from '@/types/models';
-import { FirebaseAdapter } from '@/services/firebase-adapter';
+import { db } from '@/services/db';
 import { Check, Search, Save, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
@@ -29,8 +29,7 @@ export function MyClassesTab() {
         setLoading(true);
         try {
             // 1. Load all classes
-            const adapter = new FirebaseAdapter();
-            const allClasses = await adapter.getClasses();
+            const allClasses = await db.getClasses();
 
             // Sort by name
             allClasses.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
