@@ -313,7 +313,7 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
                         width: 420,
                         height: 160,
                         margins: { inset: [0.4, 0.3, 0.4, 0.3], insetmode: 'custom' }
-                    };
+                    } as any;
                 }
                 cell.border = BORDER_STYLE;
                 cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };

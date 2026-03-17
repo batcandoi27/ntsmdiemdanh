@@ -138,7 +138,7 @@ export async function buildExcelWorkbook(
             let cellNote = record.note || record.violationNote || record.rewardNote || '';
 
             // Map status codes
-            const s = record.status;
+            const s = record.status as string;
             if (s === 'absent' || s === 'K' || s === 'V') statusCode = 'K';
             else if (s === 'excused' || s === 'P') statusCode = 'P';
             else if (s === 'late' || s === 'T') {
@@ -156,7 +156,7 @@ export async function buildExcelWorkbook(
 
             // Flag-based V3 priority (Ghi đè/Bổ sung nếu có flag explicit)
             if (record.violation) statusCode = 'VP';
-            if (record.reward || record.praise) statusCode = 'KH';
+            if (record.reward || (record as any).praise) statusCode = 'KH';
 
             if (statusCode) {
                 const currentVal = attendanceMap.get(sKey)!.get(date) || '';

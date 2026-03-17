@@ -133,7 +133,7 @@ export function MobileClassDetail({ classId, className, date, session, onDateCha
 
             await Promise.all([
                 coreUpdates.length > 0 
-                    ? updateBatchAttendance(classId, date, session, coreUpdates, allStudentIds) 
+                    ? updateBatchAttendance(null, classId, date, session, coreUpdates, allStudentIds) 
                     : Promise.resolve(),
                 ...customUpdates
             ]);

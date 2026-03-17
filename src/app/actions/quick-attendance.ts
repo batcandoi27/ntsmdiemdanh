@@ -49,6 +49,7 @@ export interface StudentAttendanceDetail {
     violationPeriods?: number[];
     reward?: boolean;
     rewardNote?: string;
+    missedPeriods?: number[];
 }
 
 export interface DailyAttendanceData {

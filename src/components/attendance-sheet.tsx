@@ -222,6 +222,7 @@ interface AttendanceSheetProps {
 }
 
 export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose }: AttendanceSheetProps) {
+    const { settings } = useAppSettings();
     const [date, setDate] = useState(dateStr || new Date().toISOString().split('T')[0]);
     const [period, setPeriod] = useState<number | null>(null);
     const [cls, setCls] = useState<Class | null>(null);
@@ -553,7 +554,7 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                         ĐIỂM DANH LỚP {cls.name}
                     </h3>
                     <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded-full">
-                        Sĩ số: {countPresent}/{cls ? getClassSize(cls, settings) : students.length} HS
+                        Sĩ số: {countPresent}/{cls ? getClassSize(cls) : students.length} HS
                     </span>
                 </div>
 
@@ -625,7 +626,6 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                             isLeave={isLeave}
                             settings={settings}
                             customColumns={customColumns}
-                            customRecords={customRecords}
                             customRecords={customRecords}
                             latePeriods={latePeriods[hs.code]}
                             handleStatusChange={handleStatusChange}

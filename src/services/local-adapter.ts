@@ -250,4 +250,8 @@ export class LocalCsvAdapter implements DbAdapter {
 
         fs.writeFileSync(filePath, JSON.stringify(allRecords, null, 2), 'utf8');
     }
+
+    async updateManualClassSizes(year: string, updates: { id: string, manualStudentCount?: number, adjustmentCount?: number }[]): Promise<void> {
+        console.log("updateManualClassSizes not implemented for CSV adapter yet");
+    }
 }

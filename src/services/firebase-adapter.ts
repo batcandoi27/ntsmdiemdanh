@@ -437,6 +437,17 @@ export class FirebaseAdapter implements DbAdapter {
 
     async clearAttendanceData(startDate?: string, endDate?: string, classIds?: string[]): Promise<void> {
         // ... (giữ nguyên logic cũ)
+        const getDates = (start: string, end: string) => {
+            const arr = [];
+            let dt = new Date(start);
+            const e = new Date(end);
+            while (dt <= e) {
+                arr.push(new Date(dt).toISOString().split('T')[0]);
+                dt.setDate(dt.getDate() + 1);
+            }
+            return arr;
+        };
+
         await this.ensureAuth();
         const start = startDate || '2025-08-01';
         const end = endDate || new Date().toISOString().split('T')[0];

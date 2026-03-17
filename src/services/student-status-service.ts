@@ -127,6 +127,7 @@ export async function changeStudentStatus(
             console.error('Lỗi changeStudentStatus (Supabase):', err);
         }
     } else {
+        const studentRef = doc(db, `${fullYearPath}/students`, input.studentId);
         await updateDoc(studentRef, {
             statusV3: input.newStatus,
             statusNote: input.note,

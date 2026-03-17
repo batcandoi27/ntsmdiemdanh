@@ -27,6 +27,8 @@ import { auth, db } from '@/lib/firebase';
 import {
     DEFAULT_PERMISSIONS,
     DEFAULT_EDIT_WINDOW,
+    UserRole,
+    AppUser,
 } from '@/types/models';
 // import { studentCodeToEmail } from '@/context/auth-context'; // Xóa để tránh circular
 import { supabase } from '@/lib/supabase';

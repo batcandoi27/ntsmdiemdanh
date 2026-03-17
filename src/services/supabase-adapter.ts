@@ -8,6 +8,7 @@ import { StudentStatus } from '@/types/models';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 export class SupabaseAdapter implements DbAdapter {
 
@@ -320,7 +321,7 @@ export class SupabaseAdapter implements DbAdapter {
             updatedBy: data[0].marked_by || 'system',
             updatedAt: data[0].created_at,
             syncStatus: 'synced'
-        });
+        } as any) as any;
     }
 
     async saveAttendance(record: AttendanceRecord): Promise<void> {
@@ -363,8 +364,8 @@ export class SupabaseAdapter implements DbAdapter {
                     status_id: statusId,
                     date: record.date,
                     marked_by: markedBy,
-                    session: record.session || 'morning',
-                    note: record.note || null
+                    session: (record as any).session || 'morning',
+                    note: (record as any).note || null
                 };
             }
             return null;
@@ -402,7 +403,7 @@ export class SupabaseAdapter implements DbAdapter {
             updatedBy: 'system',
             updatedAt: new Date().toISOString(),
             syncStatus: 'synced'
-        }));
+        } as any)) as any;
     }
 
     async getReportData(startDate: string, endDate: string, classIds?: string[]): Promise<AttendanceRecord[]> {
@@ -448,8 +449,8 @@ export class SupabaseAdapter implements DbAdapter {
                     note: r.note,
                     markedBy: r.marked_by,
                     timestamp: r.created_at
-                });
-            });
+                } as any);
+            }) as any;
         } finally {
             this.emitLoadingEnd();
         }

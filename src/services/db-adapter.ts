@@ -1,6 +1,8 @@
-import { Class, Student, User, AttendanceRecord, AttendanceStatus } from "@/types/models";
+import { Class, Student, User, AttendanceRecord, AttendanceStatus, AppSettings } from "@/types/models";
 
 export interface DbAdapter {
+    getSettings?(): Promise<AppSettings | null>;
+
     // Lớp học
     getClasses(options?: { isPersonal?: boolean; ownerId?: string }): Promise<Class[]>;
     getClass(id: string): Promise<Class | null>;

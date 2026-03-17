@@ -8,8 +8,10 @@
  * Spark quota: ~35 writes tạo năm mới (thay vì 15K-25K writes copy).
  */
 
-import { db } from './db';
+import { db as dbAdapter } from './db';
+import { db } from '@/lib/firebase';
 import { AppUser, AppSettings } from '@/types/models';
+import { writeBatch, doc, getDocs, collection, getDoc } from 'firebase/firestore';
 
 // ============================================
 // Settings
@@ -17,7 +19,7 @@ import { AppUser, AppSettings } from '@/types/models';
 
 export async function getAppSettings(): Promise<AppSettings | null> {
     try {
-        const settings = await db.getSettings();
+        const settings = await dbAdapter.getSettings?.() || null;
         return settings;
     } catch (e) {
         console.error("Error getAppSettings:", e);
