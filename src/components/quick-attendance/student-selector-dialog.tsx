@@ -520,7 +520,7 @@ export function StudentSelectorDialog({
                                                     ))}
                                                     
                                                     <div className="space-y-2">
-                                                        {((targetStatus === 'P' || targetStatus === 'K' || targetStatus === 'T' || targetStatus === 'V') && (['P', 'K', 'T', 'V'].includes(currentStatus || ''))) && (
+                                                        {((targetStatus === 'P' || targetStatus === 'K' || targetStatus === 'T' || (targetStatus as any) === 'V') && (['P', 'K', 'T', 'V'].includes(currentStatus || ''))) && (
                                                             <div className="space-y-1">
                                                                 <label className="text-[10px] font-bold text-sky-600 uppercase">Ghi chú Điểm danh (Trễ/Vắng/Phép):</label>
                                                                 <input
