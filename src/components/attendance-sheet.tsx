@@ -237,6 +237,7 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
     const [customRecords, setCustomRecords] = useState<Record<string, Record<string, boolean>>>({}); // studentCode -> colId -> checked
 
     const { showLoading, hideLoading } = useLoading();
+    const { appUser } = useAuth();
     const [loading, setLoading] = useState(true);
     const [isSaving, startTransition] = useTransition();
     const [msg, setMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -309,7 +310,7 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                         attMap[r.studentId] = uiStatus as AttendanceStatus;
                     } else if (r.violation) {
                         attMap[r.studentId] = 'VP';
-                    } else if (r.praise) {
+                    } else if ((r as any).praise) {
                         attMap[r.studentId] = 'KH';
                     }
 

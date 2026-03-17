@@ -551,7 +551,7 @@ export async function getMonthlyReportData(classId: string, month: number, year:
                             absences[dateKey] = current ? `${current}, ${vpLabel}` : vpLabel;
                         }
                     }
-                    if (r.praise) {
+                    if ((r as any).praise) {
                         const current = absences[dateKey];
                         if (!current.includes('KH')) absences[dateKey] = `${current}, KH`;
                     }
@@ -647,7 +647,7 @@ export async function getAdvancedReportData(
             else if (record.studentId && record.status) {
                 const normRecord = normalizeAttendanceRecord(record);
                 const studentCode = normRecord.studentId;
-                let status = normRecord.status;
+                let status: any = normRecord.status;
 
                 // Map status sang mã ngắn
                 if (status === 'absent') status = 'K';

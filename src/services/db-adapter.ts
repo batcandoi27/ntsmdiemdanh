@@ -33,5 +33,5 @@ export interface DbAdapter {
     // Debug / Tools
     mockGenerateAttendance(startDate: string, endDate: string, classIds?: string[]): Promise<void>;
     clearAttendanceData(startDate?: string, endDate?: string, classIds?: string[]): Promise<void>;
-    updateManualClassSizes(year: string, updates: { id: string, manualStudentCount: number }[]): Promise<void>;
+    updateManualClassSizes(year: string, updates: { id: string, manualStudentCount?: number, adjustmentCount?: number }[]): Promise<void>;
 }

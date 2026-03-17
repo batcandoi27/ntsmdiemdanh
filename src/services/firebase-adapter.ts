@@ -458,7 +458,7 @@ export class FirebaseAdapter implements DbAdapter {
         }
     }
 
-    async updateManualClassSizes(year: string, updates: { id: string, manualStudentCount: number }[]): Promise<void> {
+    async updateManualClassSizes(year: string, updates: { id: string, manualStudentCount?: number, adjustmentCount?: number }[]): Promise<void> {
         console.log(`[FirebaseAdapter] updateManualClassSizes - SCHOOL_ID: ${SCHOOL_ID}, Year: ${year}`);
         if (!db) {
             console.error("[FirebaseAdapter] Firestore db is NOT initialized (null)");

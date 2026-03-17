@@ -553,7 +553,7 @@ export default function QuickAttendancePage() {
                                                                     {item.studentLists.P.map(s => {
                                                                         const shortName = s.name.split(' ').slice(-2).join(' ');
                                                                         return (
-                                                                            <span key={s.id || s.name} className="text-yellow-600">
+                                                                            <span key={s.stt || s.name} className="text-yellow-600">
                                                                                 {s.note ? `${shortName} (${s.note})` : shortName}
                                                                             </span>
                                                                         );
@@ -579,7 +579,7 @@ export default function QuickAttendancePage() {
                                                                     {item.studentLists.K.map(s => {
                                                                         const shortName = s.name.split(' ').slice(-2).join(' ');
                                                                         return (
-                                                                            <span key={s.id || s.name} className="text-red-600">
+                                                                            <span key={s.stt || s.name} className="text-red-600">
                                                                                 {s.note ? `${shortName} (${s.note})` : shortName}
                                                                             </span>
                                                                         );
@@ -605,7 +605,7 @@ export default function QuickAttendancePage() {
                                                                     {item.studentLists.T.map(s => {
                                                                         const shortName = s.name.split(' ').slice(-2).join(' ');
                                                                         return (
-                                                                            <span key={s.id || s.name} className="text-blue-600">
+                                                                            <span key={s.stt || s.name} className="text-blue-600">
                                                                                 {s.note ? `${shortName} (${s.note})` : shortName}
                                                                             </span>
                                                                         );
@@ -631,7 +631,7 @@ export default function QuickAttendancePage() {
                                                                     {item.studentLists.VP.map(s => {
                                                                         const shortName = s.name.split(' ').slice(-2).join(' ');
                                                                         return (
-                                                                            <span key={s.id || s.name} className="text-purple-600">
+                                                                            <span key={s.stt || s.name} className="text-purple-600">
                                                                                 {s.note ? `${shortName} (${s.note})` : shortName}
                                                                             </span>
                                                                         );
@@ -657,7 +657,7 @@ export default function QuickAttendancePage() {
                                                                     {item.studentLists.KH.map(s => {
                                                                         const shortName = s.name.split(' ').slice(-2).join(' ');
                                                                         return (
-                                                                            <span key={s.id || s.name} className="text-orange-600">
+                                                                            <span key={s.stt || s.name} className="text-orange-600">
                                                                                 {s.note ? `${shortName} (${s.note})` : shortName}
                                                                             </span>
                                                                         );
