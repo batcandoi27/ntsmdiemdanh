@@ -77,14 +77,28 @@ export async function changeStudentStatus(
     // 1. Check quyền truy cập lớp
     checkClassAccess(user, input.classId);
 
-    // 2. Load student hiện tại
-    const studentRef = doc(db, `${fullYearPath}/students`, input.studentId);
-    const studentSnap = await getDoc(studentRef);
-    if (!studentSnap.exists()) throw new Error('Không tìm thấy học sinh.');
-    const student = studentSnap.data() as Student;
+    let currentStatus: StudentStatus;
 
-    // 3. Check quyền đổi status
-    const currentStatus = getEffectiveStatus(student);
+    if (isSupabase) {
+        const { data, error } = await supabase
+            .from('students')
+            .select('status')
+            .eq('id', input.studentId)
+            .single();
+        
+        if (error || !data) throw new Error('Không tìm thấy học sinh trong Supabase.');
+        currentStatus = data.status as StudentStatus;
+    } else {
+        // 2. Load student hiện tại (Firebase)
+        const studentRef = doc(db, `${fullYearPath}/students`, input.studentId);
+        const studentSnap = await getDoc(studentRef);
+        if (!studentSnap.exists()) throw new Error('Không tìm thấy học sinh.');
+        const student = studentSnap.data() as Student;
+        
+        // 3. Check quyền đổi status
+        currentStatus = getEffectiveStatus(student);
+    }
+
     checkStatusChangePermission(user, currentStatus, input.newStatus);
 
     // 4. Tạo history entry
@@ -165,7 +179,7 @@ export async function recalculateActualCount(
         } catch (err) {
             console.error('Lỗi recalculateActualCount (Supabase):', err);
         }
-    } else {
+    } else if (db) {
         const fullYearPath = `${BASE_PATH}/${yearPath}`;
         const studentsRef = collection(db, `${fullYearPath}/students`);
         const q = query(studentsRef, where('classId', '==', classId));
@@ -266,8 +280,8 @@ export async function getActualStudentCount(
  * Lấy sĩ số chuẩn của lớp dựa trên cấu hình hệ thống
  */
 export function getClassSize(cls: Class, settings?: AppSettings | null): number {
-    if (settings?.classSizeMethod === 'manual') {
-        return cls.manualStudentCount || cls.totalStudents || cls.actualStudentCount || 0;
-    }
-    return cls.actualStudentCount || cls.totalStudents || cls.manualStudentCount || 0;
+    // Logic mới: Sĩ số thực tế = Sĩ số theo danh sách + Biến động (+/-)
+    const listCount = cls.actualStudentCount || 0;
+    const adjustment = cls.adjustmentCount || 0;
+    return listCount + adjustment;
 }

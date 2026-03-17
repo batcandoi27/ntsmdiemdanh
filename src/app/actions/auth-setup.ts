@@ -54,16 +54,16 @@ export async function setupRoleWithoutCode(
         };
 
         if (isSupabase) {
-            // Kiểm tra xem profile đã tồn tại và đã active chưa
+            // 1. Kiểm tra profile hiện tại
             const { data: existingProfile } = await supabaseAdmin
                 .from('profiles')
-                .select('is_active, role')
+                .select('id, is_active, role')
                 .eq('email', email)
-                .single();
+                .maybeSingle();
 
             const shouldBeActive = existingProfile?.is_active || requestedRole === 'admin' || requestedRole === 'principal';
-
-            // Update Supabase profiles table
+            
+            // 2. Upsert profile
             const { error: dbError } = await supabaseAdmin
                 .from('profiles')
                 .upsert({
@@ -71,10 +71,39 @@ export async function setupRoleWithoutCode(
                     email,
                     full_name: displayName,
                     role: requestedRole,
-                    is_active: shouldBeActive // Giữ nguyên active nếu đã có hoặc là sếp
-                }, { onConflict: 'email' });
+                    is_active: shouldBeActive
+                }, { onConflict: 'id' });
             
             if (dbError) throw dbError;
+
+            // 3. Tự động gán lớp (Logic mới)
+            let classesToAssign = assignedClassIds;
+            
+            // Nếu là Giám thị -> Tự động lấy TẤT CẢ các lớp lẻ
+            if (requestedRole === 'supervisor') {
+                const { data: allClasses } = await supabaseAdmin.from('classes').select('id');
+                if (allClasses) {
+                    classesToAssign = allClasses.map(c => c.id);
+                }
+            }
+
+            // Gán vào bảng teacher_classes
+            if (classesToAssign.length > 0) {
+                // Xóa cũ (nếu có - trường hợp đăng ký lại)
+                await supabaseAdmin.from('teacher_classes').delete().eq('teacher_id', uid);
+
+                const assignments = classesToAssign.map(cid => ({
+                    teacher_id: uid,
+                    class_id: cid,
+                    is_homeroom: false // Mặc định là bộ môn, Admin sẽ chỉnh Homeroom sau nếu là GVCN
+                }));
+
+                const { error: assignError } = await supabaseAdmin
+                    .from('teacher_classes')
+                    .insert(assignments);
+                
+                if (assignError) console.error('[auth-setup] Lỗi gán lớp tự động:', assignError);
+            }
         } else {
             // Update Firebase Firestore
             await db.doc(`users/${uid}`).set(newUserProfile);

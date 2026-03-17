@@ -3,8 +3,10 @@
 import { useState, useEffect, useTransition } from 'react';
 import { Student, AttendanceStatus, Class, Column } from '@/types/models';
 import { batchMarkAttendance, getClassAttendance } from '@/services/attendance-v3-service';
+import { saveDailyRecord, getDailyRecords, deleteRecord } from '@/services/record-service';
 import { AttendanceStatusV3 } from '@/types/attendance-v3';
 import { useAuth } from '@/context/auth-context';
+import { useLoading } from '@/context/loading-context';
 import { getColumnsByFrequency } from '@/services/column-service';
 import { getClassAndStudents } from '@/app/actions/common';
 import { useAppSettings } from '@/hooks/use-settings';
@@ -62,14 +64,14 @@ interface SwipeableStudentRowProps {
     latePeriods?: number[];
     handleStatusChange: (code: string, st: AttendanceStatus) => void;
     handleCustomChange: (code: string, colId: string, checked: boolean) => void;
-    handleLatePeriodToggle: (code: string, periodNumber: number) => void;
+    handlePeriodToggle: (code: string, periodNumber: number) => void;
     onOpenViolation: () => void;
     onOpenNote: () => void;
 }
 
 function SwipeableStudentRow({
     hs, status, violationNote, isLeave, settings, customColumns, customRecords, latePeriods,
-    handleStatusChange, handleCustomChange, handleLatePeriodToggle, onOpenViolation, onOpenNote
+    handleStatusChange, handleCustomChange, handlePeriodToggle, onOpenViolation, onOpenNote
 }: SwipeableStudentRowProps) {
     const [swipeOffset, setSwipeOffset] = useState(0);
 
@@ -180,27 +182,27 @@ function SwipeableStudentRow({
                     </div>
                 </div>
 
-                {/* LATE PERIODS ACCORDION */}
-                {status === 'T' && (
+                {/* FIVE PERIODS ACCORDION - Hiện cho mọi trạng thái ngoại trừ 'Có mặt' hoặc đã là tiết lẻ cụ thể */}
+                {status !== '' && status !== 'C' && (
                     <div className="mt-3 pt-3 border-t border-blue-50 relative animate-in slide-in-from-top-2 duration-200">
                         <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-white px-2 text-[10px] text-gray-500 font-medium whitespace-nowrap">
-                            Đánh dấu tiết vắng <span className="text-gray-400 font-normal">({(!latePeriods || latePeriods.length === 0) ? "Đang chọn: Trễ đầu giờ" : "Vắng/Cúp giữa chừng"})</span>
+                            Đánh dấu tiết học <span className="text-gray-400 font-normal">({(!latePeriods || latePeriods.length === 0) ? "Đang chọn: Trọn cả buổi" : "Đã chọn một số tiết lẻ"})</span>
                         </div>
                         <div className="flex gap-2 justify-between mt-1 px-1">
                             {[1, 2, 3, 4, 5].map(p => {
-                                const isMissed = latePeriods?.includes(p);
+                                const isSelected = latePeriods?.includes(p);
                                 return (
                                     <button
                                         key={p}
-                                        onClick={() => handleLatePeriodToggle(hs.code, p)}
+                                        onClick={() => handlePeriodToggle(hs.code, p)}
                                         className={cn(
                                             "flex-1 py-1.5 rounded-md text-xs font-bold border transition-all active:scale-95",
-                                            isMissed
-                                                ? "bg-red-50 border-red-200 text-red-600 shadow-sm"
-                                                : "bg-green-50 border-green-200 text-green-600 hover:bg-green-100"
+                                            isSelected
+                                                ? "bg-blue-500 border-blue-600 text-white shadow-sm"
+                                                : "bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-100"
                                         )}
                                     >
-                                        T{p}
+                                        Tiết {p}
                                     </button>
                                 );
                             })}
@@ -234,9 +236,7 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
     const [customColumns, setCustomColumns] = useState<Column[]>([]);
     const [customRecords, setCustomRecords] = useState<Record<string, Record<string, boolean>>>({}); // studentCode -> colId -> checked
 
-    const { settings } = useAppSettings();
-    const { appUser } = useAuth();
-
+    const { showLoading, hideLoading } = useLoading();
     const [loading, setLoading] = useState(true);
     const [isSaving, startTransition] = useTransition();
     const [msg, setMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -359,10 +359,18 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
             setViolationInput(notes[studentCode] || '');
             setViolationModal({ isOpen: true, studentCode });
         } else {
+            // Khi thay đổi trạng thái cả buổi -> Xóa sạch các tiết lẻ đã chọn trước đó
+            setLatePeriods(prev => {
+                const newState = { ...prev };
+                delete newState[studentCode];
+                return newState;
+            });
+
             setAttendance(prev => ({
                 ...prev,
                 [studentCode]: prev[studentCode] === status ? '' : status
             }));
+            
             if (attendance[studentCode] === 'VP') {
                 const newNotes = { ...notes };
                 delete newNotes[studentCode];
@@ -398,123 +406,119 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
         }));
     };
 
-    const handleLatePeriodToggle = (studentCode: string, periodNumber: number) => {
+    const handlePeriodToggle = (studentCode: string, periodNumber: number) => {
         triggerHapticFeedback();
         setLatePeriods(prev => {
             const current = prev[studentCode] || [];
+            let next;
             if (current.includes(periodNumber)) {
-                return { ...prev, [studentCode]: current.filter(p => p !== periodNumber) };
+                next = current.filter(p => p !== periodNumber);
             } else {
-                return { ...prev, [studentCode]: [...current, periodNumber].sort() };
+                next = [...current, periodNumber].sort();
             }
+            
+            // Nếu không còn tiết lẻ nào -> Coi như không điểm danh tiết lẻ
+            if (next.length === 0) {
+                const newState = { ...prev };
+                delete newState[studentCode];
+                return newState;
+            }
+
+            return { ...prev, [studentCode]: next };
         });
     };
 
     const handleSave = () => {
         triggerHapticFeedback();
+        showLoading('Đang lưu dữ liệu điểm danh...');
         startTransition(async () => {
-            if (!appUser) {
-                setMsg({ type: 'error', text: 'Vui lòng đăng nhập lại để lưu điểm danh.' });
-                return;
-            }
-
-            // Generate marks payload for V3 API
-            const marks: any[] = [];
-            Object.entries(attendance).forEach(([code, status]) => {
-                let v3Status: AttendanceStatusV3 | '' = '';
-                let violation = false;
-                let reward = false;
-
-                if (status === 'P') v3Status = 'excused';
-                else if (status === 'K' || status === 'V') v3Status = 'absent';
-                else if (status === 'T') v3Status = 'late';
-                else if (status === 'VP') {
-                    v3Status = 'violation' as any; // Legacy compatibility
-                    violation = true;
-                } else if (status === 'KH') {
-                    v3Status = 'praise' as any; // Legacy compatibility
-                    reward = true;
-                }
-
-                if (v3Status !== '' || violation || reward) {
-                    marks.push({
-                        studentId: code,
-                        studentName: students.find(s => s.code === code)?.fullName || code,
-                        status: v3Status as AttendanceStatusV3,
-                        note: notes[code] || '',
-                        missedPeriods: (v3Status === 'late' || v3Status === 'excused' || v3Status === 'absent') ? latePeriods[code] : undefined,
-                        violation,
-                        violationNote: violation ? (notes[code] || '') : undefined,
-                        reward,
-                        rewardNote: reward ? (notes[code] || '') : undefined
-                    });
-                }
-            });
-
-            const allStudentIds = students.map(s => s.code);
-            let coreSuccess = true;
-
             try {
-                await batchMarkAttendance(appUser, {
-                    classId,
-                    session,
-                    period,
-                    marks
-                }, allStudentIds, new Date(date));
-            } catch (err: any) {
-                coreSuccess = false;
-                setMsg({ type: 'error', text: err.message || 'Lỗi lưu điểm danh cơ bản.' });
-            }
+                if (!appUser) {
+                    setMsg({ type: 'error', text: 'Vui lòng đăng nhập lại để lưu điểm danh.' });
+                    hideLoading();
+                    return;
+                }
 
-            // Save custom columns
-            // We need to diff? Or just save everything for the current view?
-            // To be efficient, we should only save if changed, but for now let's save all active checks (idempotent)
-            // Actually record-service `saveDailyRecord` is for one record.
-            // We might need a batch save logic or loop.
+                // Generate marks payload for V3 API
+                const marks: any[] = [];
+                Object.entries(attendance).forEach(([code, status]) => {
+                    let v3Status: AttendanceStatusV3 | '' = '';
+                    let violation = false;
+                    let reward = false;
 
-            const customUpdates: Promise<void>[] = [];
+                    if (status === 'P') v3Status = 'excused';
+                    else if (status === 'K' || status === 'V') v3Status = 'absent';
+                    else if (status === 'T') v3Status = 'late';
+                    else if (status === 'VP') {
+                        v3Status = 'violation' as any; // Legacy compatibility
+                        violation = true;
+                    } else if (status === 'KH') {
+                        v3Status = 'praise' as any; // Legacy compatibility
+                        reward = true;
+                    }
 
-            // Iterate over all students and columns
-            for (const student of students) {
-                for (const col of customColumns) {
-                    const isChecked = customRecords[student.code]?.[col.id] || false;
-                    // We need to know previous state to delete?
-                    // Let's implement toggle logic similar to mobile
+                    if (v3Status !== '' || violation || reward) {
+                        marks.push({
+                            studentId: code,
+                            studentName: students.find(s => s.code === code)?.fullName || code,
+                            status: v3Status as AttendanceStatusV3,
+                            note: notes[code] || '',
+                            missedPeriods: (v3Status === 'late' || v3Status === 'excused' || v3Status === 'absent') ? latePeriods[code] : undefined,
+                            violation,
+                            violationNote: violation ? (notes[code] || '') : undefined,
+                            reward,
+                            rewardNote: reward ? (notes[code] || '') : undefined
+                        });
+                    }
+                });
 
-                    // Optimization: In real app, we should track dirty state.
-                    // For now, let's just save valid true records and delete false records?
-                    // `deleteRecord` needs the ID.
-                    // `saveDailyRecord` overwrites.
+                const allStudentIds = students.map(s => s.code);
+                let coreSuccess = true;
 
-                    if (isChecked) {
-                        customUpdates.push(saveDailyRecord({
-                            classId,
-                            columnId: col.id,
-                            studentCode: student.code,
-                            date: date,
-                            selectedSuggestions: ['True'],
-                            note: ''
-                        }).then());
-                    } else {
-                        // Attempt delete if it existed?
-                        // We don't track if it existed before locally perfect without another state.
-                        // But `deleteRecord` shouldn't fail if not found (firestore delete is idempotent-ish if we know ID).
-                        const recId = `${col.id}_${date}_${student.code}`;
-                        // We can blindly delete unchecked ones? A bit heavy.
-                        // Maybe only delete if we know it was true?
-                        // Let's rely on the fact that we loaded `customRecords` from DB.
-                        // But we didn't keep a `initialCustomRecords` to diff.
-                        // Let's just blindly delete for now for correctness.
-                        customUpdates.push(deleteRecord(col.id, recId));
+                try {
+                    await batchMarkAttendance(appUser, {
+                        classId,
+                        session,
+                        period,
+                        marks
+                    }, allStudentIds, new Date(date));
+                } catch (err: any) {
+                    coreSuccess = false;
+                    setMsg({ type: 'error', text: err.message || 'Lỗi lưu điểm danh cơ bản.' });
+                }
+
+                // Save custom columns
+                const customUpdates: Promise<void>[] = [];
+                for (const student of students) {
+                    for (const col of customColumns) {
+                        const isChecked = customRecords[student.code]?.[col.id] || false;
+                        if (isChecked) {
+                            customUpdates.push(saveDailyRecord({
+                                classId,
+                                columnId: col.id,
+                                studentCode: student.code,
+                                date: date,
+                                selectedSuggestions: ['True'],
+                                note: ''
+                            }).then());
+                        } else {
+                            const recId = `${col.id}_${date}_${student.code}`;
+                            customUpdates.push(deleteRecord(col.id, recId));
+                        }
                     }
                 }
-            }
 
-            await Promise.all(customUpdates);
+                await Promise.all(customUpdates);
 
-            if (coreSuccess) {
-                setMsg({ type: 'success', text: 'Đã lưu điểm danh thành công!' });
-                setTimeout(() => setMsg(null), 3000);
+                if (coreSuccess) {
+                    setMsg({ type: 'success', text: 'Đã lưu điểm danh thành công!' });
+                    setTimeout(() => setMsg(null), 3000);
+                }
+            } catch (err) {
+                console.error(err);
+                setMsg({ type: 'error', text: 'Có lỗi không xác định xảy ra.' });
+            } finally {
+                hideLoading();
             }
         });
     };
@@ -621,10 +625,11 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                             settings={settings}
                             customColumns={customColumns}
                             customRecords={customRecords}
+                            customRecords={customRecords}
                             latePeriods={latePeriods[hs.code]}
                             handleStatusChange={handleStatusChange}
                             handleCustomChange={handleCustomChange}
-                            handleLatePeriodToggle={handleLatePeriodToggle}
+                            handlePeriodToggle={handlePeriodToggle}
                             onOpenViolation={() => {
                                 setViolationInput(notes[hs.code] || '');
                                 setViolationModal({ isOpen: true, studentCode: hs.code });

@@ -3,10 +3,11 @@ import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
 import { vi } from "date-fns/locale";
 import { useState, useEffect } from "react";
-import { Plus, X, Loader2 } from "lucide-react";
+import { Plus, X, Loader2, MessageSquare } from "lucide-react";
 import { getClassAndStudents } from "@/app/actions/common";
 import { Student } from "@/types/models";
 import { useAuth } from "@/context/auth-context";
+import { ReportMessageModal } from "./report-message-modal";
 
 interface ReportsListViewProps {
     data: AbsenceDetail[];
@@ -17,16 +18,26 @@ interface ReportsListViewProps {
 }
 
 export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns, onRefresh }: ReportsListViewProps) {
+    console.log('[ReportsListView] Rendering with data count:', data.length, 'Visible columns:', visibleColumns);
     const { appUser } = useAuth();
     const [editCell, setEditCell] = useState<{ classId: string, studentCode: string, studentName: string, date: string, currentStatus: string, rect: { top: number, left: number } } | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [addModalConfig, setAddModalConfig] = useState<{ className: string, date?: string } | null>(null);
 
+    const [showMessageModal, setShowMessageModal] = useState<{ classId: string, className: string, absences: AbsenceDetail[] } | null>(null);
+
     const handleSaveStatus = async (newStatus: string) => {
         if (!editCell) return;
         setIsSaving(true);
+        console.log('[ReportsListView] handleSaveStatus:', {
+            classId: editCell.classId,
+            studentCode: editCell.studentCode,
+            date: editCell.date,
+            newStatus
+        });
         try {
             const res = await updateReportAttendance(appUser, editCell.classId, editCell.studentCode, editCell.studentName, editCell.date, newStatus as any);
+            console.log('[ReportsListView] updateReportAttendance result:', res);
             if (!res.success) {
                 alert(res.message);
             } else {
@@ -34,7 +45,7 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                 if (onRefresh) onRefresh();
             }
         } catch (error) {
-            console.error(error);
+            console.error('[ReportsListView] Save Error:', error);
             alert("Lỗi cập nhật!");
         } finally {
             setIsSaving(false);
@@ -67,8 +78,8 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
     const groups: Record<string, AbsenceDetail[]> = {};
 
     data.forEach(item => {
-        const baseCode = item.status.split(' ')[0];
-        if (!visibleColumns.includes(baseCode)) return; // Filter
+        const statuses = item.status.split(', ');
+        if (!statuses.some(st => visibleColumns.includes(st.split(' ')[0]))) return; // Filter
         const key = groupBy === 'DATE' ? item.date : item.className;
         if (!groups[key]) groups[key] = [];
         groups[key].push(item);
@@ -124,7 +135,7 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                 return (
                     <div key={key} className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
                         {/* Group Header */}
-                        <div className={cn("px-4 py-3 border-b flex items-center", headerStyle)}>
+                        <div className={cn("px-4 py-3 border-b flex items-center justify-between", headerStyle)}>
                             <div className="flex items-center gap-2">
                                 <div className={cn("w-1 h-6 rounded-full", barColor)}></div>
                                 <h3 className="font-bold uppercase flex items-center gap-2">
@@ -138,7 +149,13 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                         // Tìm 1 classId bất kỳ của Lớp trong items để lookup size
                                         const classId = items.find(i => i.className === key)?.classId;
                                         const totalStudents = classId ? (classSizes[classId] || 0) : 0;
-                                        const vCount = items.length; // Tổng vắng trong view này
+                                        
+                                        // Hiệu chỉnh logic: Chỉ đếm Vắng (P hoặc K)
+                                        const vCount = items.filter(item => {
+                                            const statuses = item.status.split(', ').map(s => s.split(' ')[0]);
+                                            return statuses.includes('P') || statuses.includes('K');
+                                        }).length;
+
                                         // Hiển thị "(SS: 51, V: 5)"
                                         return (
                                             <span className="ml-2 text-xs font-medium opacity-80 bg-white/30 px-2 py-0.5 rounded-full inline-block mt-[-2px]">
@@ -146,18 +163,30 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                             </span>
                                         );
                                     })()}
-                                    {/* Nút Cộng Chỉ Hiện Khi Group By LỚP */}
-                                    {groupBy === 'CLASS' && (
-                                        <button
-                                            onClick={() => setAddModalConfig({ className: key })}
-                                            className="bg-white/30 hover:bg-white/60 text-emerald-900 border border-emerald-700/30 p-1 rounded shadow-sm transition-colors"
-                                            title={`Thêm học sinh vắng Lớp ${key}`}
-                                        >
-                                            <Plus size={14} className="stroke-[3px]" />
-                                        </button>
-                                    )}
                                 </h3>
                             </div>
+                            {groupBy === 'CLASS' && (
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setAddModalConfig({ className: key })}
+                                        className="bg-white/30 hover:bg-white/60 text-emerald-900 border border-emerald-700/30 p-1 rounded shadow-sm transition-colors"
+                                        title={`Thêm học sinh vắng Lớp ${key}`}
+                                    >
+                                        <Plus size={14} className="stroke-[3px]" />
+                                    </button>
+                                    <button
+                                        onClick={() => setShowMessageModal({ 
+                                            classId: items[0]?.classId, 
+                                            className: key, 
+                                            absences: items 
+                                        })}
+                                        className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white px-3 py-1 rounded-lg text-xs font-black shadow-sm transition-all active:scale-95"
+                                    >
+                                        <MessageSquare size={14} />
+                                        <span className="hidden sm:inline">Soạn tin nhắn</span>
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         {/* Content: Table-like list */}
@@ -174,26 +203,66 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                 {sortedSubKeys.map(subKey => {
                                     const subGroupItems = subGroups[subKey];
 
-                                    // Consolidate students for SC (Sáng Chiều)
-                                    // Map: studentCode -> { name, status, count, id }
-                                    const consolidatedMap: Record<string, { name: string, status: string, count: number, id: string, classId: string, date: string }> = {};
+                                    // Map: studentCode -> { name, status, count, id, notes }
+                                    const consolidatedMap: Record<string, { name: string, status: string, count: number, id: string, classId: string, date: string, notes?: string }> = {};
                                     subGroupItems.forEach(item => {
-                                        if (!consolidatedMap[item.studentCode]) {
-                                            consolidatedMap[item.studentCode] = {
+                                        const studentKey = item.studentCode; // Gộp theo mã HS để tính SC
+                                        if (!consolidatedMap[studentKey]) {
+                                            consolidatedMap[studentKey] = {
                                                 name: item.studentName,
                                                 status: item.status,
                                                 count: 1,
                                                 id: item.id,
                                                 classId: item.classId,
-                                                date: item.date
+                                                date: item.date,
+                                                notes: item.notes
                                             };
                                         } else {
-                                            consolidatedMap[item.studentCode].count++;
+                                            consolidatedMap[studentKey].count++;
+                                            consolidatedMap[studentKey].status += `, ${item.status}`;
+                                            if (item.notes && !consolidatedMap[studentKey].notes?.includes(item.notes)) {
+                                                consolidatedMap[studentKey].notes = consolidatedMap[studentKey].notes 
+                                                    ? `${consolidatedMap[studentKey].notes}; ${item.notes}` 
+                                                    : item.notes;
+                                            }
                                         }
                                     });
-                                    const consolidatedStudents = Object.entries(consolidatedMap).map(([code, info]) => ({
-                                        code, ...info
-                                    })).sort((a, b) => a.name.localeCompare(b.name));
+                                    
+                                    // Debug consolidatedMap to see status count
+                                    // console.log('[ReportsListView] consolidatedMap for', subKey, consolidatedMap);
+
+                                    const consolidatedStudents = Object.entries(consolidatedMap)
+                                        .map(([code, info]) => {
+                                            // Split by comma or space to handle various status strings
+                                            const rawStatuses = info.status.split(/[,]+/).map(s => s.trim()).filter(Boolean);
+                                            
+                                            let pCount = 0;
+                                            let kCount = 0;
+                                            const displayStatuses = new Set<string>();
+
+                                            rawStatuses.forEach(st => {
+                                                const base = st.split(' ')[0].toUpperCase();
+                                                if (base.startsWith('P')) pCount++;
+                                                else if (base.startsWith('K')) kCount++;
+                                                displayStatuses.add(st);
+                                            });
+                                            
+                                            const isSC = (pCount + kCount) >= 2;
+
+                                            const filteredStatuses = Array.from(displayStatuses).filter(st => {
+                                                const baseCode = st.split(' ')[0];
+                                                return visibleColumns.includes(baseCode);
+                                            });
+
+                                            return {
+                                                code,
+                                                ...info,
+                                                status: filteredStatuses.join(', '),
+                                                isSC: isSC // Explicitly pass isSC
+                                            };
+                                        })
+                                        .filter(s => s.status !== "") // Only show if they have at least one visible status
+                                        .sort((a, b) => a.name.localeCompare(b.name));
 
                                     return (
                                         <div key={subKey} className="bg-white border border-gray-100 rounded-lg p-3 grid grid-cols-12 gap-4 items-start shadow-sm hover:shadow-md transition-shadow">
@@ -204,7 +273,7 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                                     <span className="text-sm font-bold text-gray-700 bg-gray-100 flex items-center rounded overflow-hidden shadow-sm border border-gray-200">
                                                         <span className="px-2 py-1 flex items-center gap-2">
                                                             {(() => {
-                                                                const d = new Date(subKey);
+                                                                const d = new Date(subKey.split('_')[0]);
                                                                 const dayName = d.getDay() === 0 ? 'CN' : `T${d.getDay() + 1}`;
                                                                 return `${dayName} - ${format(d, 'dd/MM/yyyy', { locale: vi })}`;
                                                             })()}
@@ -212,7 +281,13 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                                                 // SS and V for 'CLASS' group -> Date subGroup
                                                                 const classId = items[0]?.classId;
                                                                 const ss = classId ? (classSizes[classId] || 0) : 0;
-                                                                const v = consolidatedStudents.length; // Count unique students
+                                                                
+                                                                // Chỉ đếm học sinh có P hoặc K
+                                                                const v = consolidatedStudents.filter(s => {
+                                                                    const statuses = s.status.split(', ').map(st => st.split(' ')[0]);
+                                                                    return statuses.includes('P') || statuses.includes('K');
+                                                                }).length;
+
                                                                 return (
                                                                     <span className="text-[10px] font-bold flex gap-1">
                                                                         <span className="text-blue-600 bg-blue-50 px-1 rounded border border-blue-100">SS: {ss || '?'}</span>
@@ -231,7 +306,13 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                                                     // SS and V for 'DATE' group -> Class subGroup
                                                                     const classId = subGroupItems[0]?.classId;
                                                                     const ss = classId ? classSizes[classId] : 0;
-                                                                    const v = consolidatedStudents.length; // Count unique students
+                                                                    
+                                                                    // Chỉ đếm học sinh có P hoặc K
+                                                                    const v = consolidatedStudents.filter(s => {
+                                                                        const statuses = s.status.split(', ').map(st => st.split(' ')[0]);
+                                                                        return statuses.includes('P') || statuses.includes('K');
+                                                                    }).length;
+
                                                                     return (
                                                                         <span className="text-[10px] font-bold flex gap-1 bg-white px-1.5 py-0.5 rounded shadow-sm opacity-90 whitespace-nowrap">
                                                                             <span className="text-blue-600">SS: {ss || '?'}</span>
@@ -254,30 +335,58 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
 
                                             {/* Right Column: List of Students */}
                                             <div className="col-span-12 md:col-span-10 flex flex-wrap gap-2">
-                                                {consolidatedStudents.map(student => (
-                                                    <div
-                                                        key={student.id}
-                                                        className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 px-2 py-1 rounded-md text-sm text-gray-700 hover:bg-white hover:border-gray-300 transition-colors cursor-pointer hover:shadow-sm"
-                                                        onClick={(e) => {
-                                                            const rect = e.currentTarget.getBoundingClientRect();
-                                                            setEditCell({
-                                                                classId: student.classId,
-                                                                studentCode: student.code,
-                                                                studentName: student.name,
-                                                                date: student.date,
-                                                                currentStatus: student.status,
-                                                                rect: { top: rect.bottom + window.scrollY, left: rect.left + window.scrollX }
-                                                            });
-                                                        }}
-                                                    >
-                                                        <span className="font-bold text-gray-500 text-xs">{student.code.split('_').pop()}</span>
-                                                        <span className="font-medium">
-                                                            {student.name}
-                                                            {student.count > 1 && <span className="text-red-600 font-black ml-1">(SC)</span>}
-                                                        </span>
-                                                        <CompactStatusBadge status={student.status} />
-                                                    </div>
-                                                ))}
+                                                {consolidatedStudents.map(student => {
+                                                    const statuses = student.status.split(', ');
+                                                    return (
+                                                        <div
+                                                            key={student.id}
+                                                            className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 px-2 py-1 rounded-md text-sm text-gray-700 hover:bg-white hover:border-gray-300 transition-colors cursor-pointer hover:shadow-sm group/student relative"
+                                                            onClick={(e) => {
+                                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                                setEditCell({
+                                                                    classId: student.classId,
+                                                                    studentCode: student.code,
+                                                                    studentName: student.name,
+                                                                    date: student.date,
+                                                                    currentStatus: student.status,
+                                                                    rect: { top: rect.bottom + window.scrollY, left: rect.left + window.scrollX }
+                                                                });
+                                                            }}
+                                                        >
+                                                            <span className="font-bold text-gray-400 text-[10px] w-4 text-right flex-shrink-0">
+                                                                {student.code.includes('_') ? student.code.split('_').pop() : student.code.slice(-2)}
+                                                            </span>
+                                                            <span className={cn(
+                                                                "font-medium truncate max-w-[150px]",
+                                                                statuses[0]?.startsWith('P') ? "text-yellow-600" :
+                                                                statuses[0]?.startsWith('K') ? "text-red-600" :
+                                                                statuses[0]?.startsWith('T') ? "text-blue-600" :
+                                                                statuses[0]?.startsWith('VP') ? "text-purple-600" :
+                                                                statuses[0]?.startsWith('KH') ? "text-pink-600" :
+                                                                "text-slate-700"
+                                                            )}>
+                                                                {student.name}
+                                                            </span>
+                                                            {(student as any).isSC && <span className="text-red-600 font-extrabold text-[10px] leading-none tracking-tighter flex-shrink-0">(SC)</span>}
+
+                                                            {student.notes && (
+                                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/student:block z-[100] pointer-events-none animate-in fade-in slide-in-from-bottom-1 duration-200">
+                                                                    <div className="bg-gray-900 border border-gray-700 px-2 py-1.5 rounded-lg shadow-2xl z-[100] max-w-xs break-words text-center relative leading-tight">
+                                                                        <span className="text-sky-400 font-bold block mb-1">Ghi chú:</span>
+                                                                        <span className="text-white text-[11px]">{student.notes}</span>
+                                                                        <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 -mt-1 border-r border-b border-gray-700"></div>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            <div className="flex gap-1 flex-shrink-0">
+                                                                {statuses.map((st, i) => (
+                                                                    <CompactStatusBadge key={i} status={st} />
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     );
@@ -334,6 +443,22 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                         </button>
                     </div>
                 </>
+            )}
+
+            {/* Report Message Modal */}
+            {showMessageModal && (
+                <ReportMessageModal
+                    isOpen={!!showMessageModal}
+                    onClose={() => setShowMessageModal(null)}
+                    classId={showMessageModal.classId}
+                    className={showMessageModal.className}
+                    dateRange={{
+                        start: showMessageModal.absences.reduce((min, p) => p.date < min ? p.date : min, showMessageModal.absences[0].date),
+                        end: showMessageModal.absences.reduce((max, p) => p.date > max ? p.date : max, showMessageModal.absences[0].date)
+                    }}
+                    absences={showMessageModal.absences}
+                    totalStudents={classSizes[showMessageModal.classId] || 0}
+                />
             )}
 
             {/* Add Attendance Modal scoped to this view */}
@@ -477,19 +602,31 @@ function AddAttendanceModal({ className, defaultDate, onClose, onRefresh }: { cl
 }
 
 function CompactStatusBadge({ status }: { status: string }) {
+    const baseCode = status.split(' ')[0];
+    const hasDetail = status.includes('(');
+    const detail = hasDetail ? status.substring(status.indexOf('(') + 1, status.lastIndexOf(')')) : '';
+
     const map = {
-        'P': { text: 'P', color: 'text-yellow-600' },
-        'K': { text: 'K', color: 'text-red-600' },
-        'V': { text: 'V', color: 'text-gray-600' },
-        'T': { text: 'T', color: 'text-blue-600' },
-        'VP': { text: 'VP', color: 'text-purple-600' },
-        'KH': { text: 'KH', color: 'text-pink-600' },
+        'P': { text: 'P', color: 'text-yellow-600', size: 'text-[15px] font-black' },
+        'K': { text: 'K', color: 'text-red-600', size: 'text-[15px] font-black' },
+        'V': { text: 'V', color: 'text-gray-600', size: 'text-xs font-bold' },
+        'T': { text: 'T', color: 'text-blue-600', size: 'text-[15px] font-black' },
+        'VP': { text: 'VP', color: 'text-purple-600', size: 'text-[15px] font-black' },
+        'KH': { text: 'KH', color: 'text-pink-600', size: 'text-[15px] font-black' },
     };
-    const style = map[status as keyof typeof map] || { text: status, color: 'text-gray-600' };
+    const style = map[baseCode as keyof typeof map] || { text: baseCode, color: 'text-gray-600', size: 'text-xs' };
 
     return (
-        <span className={cn("font-extrabold text-xs uppercase", style.color)}>
+        <span className={cn("uppercase group/badge relative inline-flex items-center justify-center", style.color, style.size)}>
             {style.text}
+            {hasDetail && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/badge:block z-[9999] pointer-events-none">
+                    <div className="bg-gray-900 text-white text-[11px] px-3 py-1.5 rounded-lg shadow-2xl w-max min-w-[80px] text-center border border-gray-700 font-bold animate-in fade-in slide-in-from-bottom-1 duration-200">
+                        {detail}
+                    </div>
+                    <div className="w-2 h-2 bg-gray-900 rotate-45 mx-auto -mt-1 border-r border-b border-gray-700"></div>
+                </div>
+            )}
         </span>
     );
 }

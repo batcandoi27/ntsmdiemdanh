@@ -14,8 +14,10 @@ import { startOfWeek, endOfWeek, format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/auth-context';
 import { useFeatureFlags } from '@/context/feature-flags-context';
+import { useLoading } from '@/context/loading-context';
 
 export default function ReportsPage() {
+    const { showLoading, hideLoading } = useLoading();
     const { flags, loading: flagsLoading } = useFeatureFlags();
     const { appUser } = useAuth();
     const [loading, setLoading] = useState(false);
@@ -82,7 +84,15 @@ export default function ReportsPage() {
             alert('Vui lòng chọn ít nhất một lớp để xem báo cáo.');
             return;
         }
+
+        // Cảnh báo hạn ngạch cho Giáo viên
+        if ((appUser?.role === 'teacher' || appUser?.role === 'gvbm') && selectedClasses.length > 10) {
+            alert(`Bạn đã chọn ${selectedClasses.length} lớp. Giáo viên chỉ được phép báo cáo tối đa 10 lớp mỗi lần để đảm bảo hiệu năng.`);
+            return;
+        }
+
         setLoading(true);
+        showLoading('Đang tải dữ liệu báo cáo...');
         setIsFilterActive(true);
         try {
             const targetClassIds = selectedClasses;
@@ -96,6 +106,7 @@ export default function ReportsPage() {
             alert('Lỗi tải báo cáo: ' + (error as Error).message);
         } finally {
             setLoading(false);
+            hideLoading();
         }
     };
 
@@ -106,6 +117,7 @@ export default function ReportsPage() {
         }
         if (exportLoading) return;
         setExportLoading(true);
+        showLoading('Đang chuẩn bị dữ liệu Excel...');
         try {
             const targetClassIds = selectedClasses;
             const data = await getExcelExportData(dateRange.start, dateRange.end, targetClassIds, isCompact, appUser?.role);
@@ -120,6 +132,7 @@ export default function ReportsPage() {
             alert('Lỗi xuất báo cáo: ' + (error as Error).message);
         } finally {
             setExportLoading(false);
+            hideLoading();
         }
     };
 
@@ -130,6 +143,7 @@ export default function ReportsPage() {
         }
         if (exportLoading) return;
         setExportLoading(true);
+        showLoading('Đang xử lý báo cáo tổng hợp (vui lòng chờ)...');
         try {
             const targetClassIds = selectedClasses;
             const data = await getAdvancedReportData(dateRange.start, dateRange.end, targetClassIds, appUser?.uid, appUser?.role);
@@ -144,6 +158,7 @@ export default function ReportsPage() {
             alert('Có lỗi khi xuất báo cáo: ' + (error as Error).message);
         } finally {
             setExportLoading(false);
+            hideLoading();
         }
     };
 

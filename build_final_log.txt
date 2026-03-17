@@ -1,0 +1,22 @@
+
+> app-diemdanh@02.2026 build
+> next build
+
+   ▲ Next.js 14.1.0
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+Failed to compile.
+
+./src/app/actions/report.ts:621:42
+Type error: Type '"K"' is not assignable to type 'AttendanceStatusV3'.
+
+[0m [90m 619 |[39m[0m
+[0m [90m 620 |[39m                 [90m// Map status sang mã ngắn[39m[0m
+[0m[31m[1m>[22m[39m[90m 621 |[39m                 [36mif[39m (status [33m===[39m [32m'absent'[39m) status [33m=[39m [32m'K'[39m[33m;[39m[0m
+[0m [90m     |[39m                                          [31m[1m^[22m[39m[0m
+[0m [90m 622 |[39m                 [36melse[39m [36mif[39m (status [33m===[39m [32m'excused'[39m) status [33m=[39m [32m'P'[39m[33m;[39m[0m
+[0m [90m 623 |[39m                 [36melse[39m [36mif[39m (status [33m===[39m [32m'late'[39m) status [33m=[39m [32m'T'[39m[33m;[39m[0m
+[0m [90m 624 |[39m[0m

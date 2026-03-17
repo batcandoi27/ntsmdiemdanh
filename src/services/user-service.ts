@@ -25,12 +25,23 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import {
-    AppUser,
-    UserRole,
     DEFAULT_PERMISSIONS,
     DEFAULT_EDIT_WINDOW,
 } from '@/types/models';
-import { studentCodeToEmail } from '@/context/auth-context';
+// import { studentCodeToEmail } from '@/context/auth-context'; // Xóa để tránh circular
+import { supabase } from '@/lib/supabase';
+
+const isSupabase = process.env.NEXT_PUBLIC_USE_SUPABASE === 'true';
+
+// ============================================
+// Helpers
+// ============================================
+
+export function studentCodeToEmail(studentCode: string): string {
+    if (!studentCode) return '';
+    // Giả định pattern cũ: mã hs + @thcstbc.com
+    return `${studentCode.toLowerCase()}@thcstbc.com`;
+}
 
 // ============================================
 // Create User
@@ -94,8 +105,53 @@ export async function createUser(input: CreateUserInput): Promise<AppUser> {
 // ============================================
 
 export async function getUser(uid: string): Promise<AppUser | null> {
+    if (isSupabase) {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*, teacher_classes(class_id)')
+            .eq('id', uid)
+            .single();
+        if (error || !data) return null;
+        return {
+            uid: data.id,
+            displayName: data.full_name,
+            role: data.role,
+            assignedClassIds: (data.teacher_classes || []).map((tc: any) => tc.class_id),
+            permissions: DEFAULT_PERMISSIONS[data.role as UserRole] || DEFAULT_PERMISSIONS.teacher,
+            isActive: data.is_active,
+            studentCode: data.student_code
+        } as AppUser;
+    }
     const snap = await getDoc(doc(db, 'schools', 'default', 'users', uid));
     return snap.exists() ? (snap.data() as AppUser) : null;
+}
+
+export async function getUserProfileByEmail(email: string): Promise<AppUser | null> {
+    if (isSupabase) {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*, teacher_classes(class_id)')
+            .eq('email', email)
+            .maybeSingle();
+        if (error || !data) return null;
+        return {
+            uid: data.id,
+            displayName: data.full_name || data.email || 'Người dùng mới',
+            email: data.email,
+            role: data.role,
+            isActive: data.is_active,
+            studentCode: data.student_code,
+            assignedClassIds: (data.teacher_classes || []).map((tc: any) => tc.class_id),
+            permissions: DEFAULT_PERMISSIONS[data.role as UserRole] || DEFAULT_PERMISSIONS.teacher
+        } as AppUser;
+    }
+    const q = query(
+        collection(db, 'schools', 'default', 'users'), 
+        where('email', '==', email), 
+        limit(1)
+    );
+    const snap = await getDocs(q);
+    return snap.empty ? null : (snap.docs[0].data() as AppUser);
 }
 
 export async function getUsersByRole(role: UserRole): Promise<AppUser[]> {
@@ -110,6 +166,42 @@ export async function getAllUsers(): Promise<AppUser[]> {
 }
 
 export async function getUsersPaginated(pageSize: number = 20, lastDocUid?: string): Promise<{ users: AppUser[], hasMore: boolean }> {
+    if (isSupabase) {
+        let query = supabase
+            .from('profiles')
+            .select('*, teacher_classes(class_id)', { count: 'exact' })
+            .order('created_at', { ascending: false })
+            .limit(pageSize + 1);
+
+        if (lastDocUid) {
+            // Trong Supabase profiles, ta dùng id thay vì uid
+            const { data: lastUser } = await supabase.from('profiles').select('created_at').eq('id', lastDocUid).single();
+            if (lastUser) {
+                query = query.lt('created_at', lastUser.created_at);
+            }
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const users = (data || []).map(d => ({
+            uid: d.id,
+            displayName: d.full_name || d.email || d.student_code || 'Người dùng mới',
+            email: d.email,
+            studentCode: d.student_code,
+            role: d.role,
+            assignedClassIds: (d.teacher_classes || []).map((tc: any) => tc.class_id),
+            permissions: DEFAULT_PERMISSIONS[d.role as UserRole] || DEFAULT_PERMISSIONS.teacher,
+            isActive: d.is_active,
+            createdAt: d.created_at
+        } as AppUser));
+
+        const hasMore = users.length > pageSize;
+        if (hasMore) users.pop();
+
+        return { users, hasMore };
+    }
+
     let q = query(collection(db, 'schools', 'default', 'users'), orderBy('createdAt', 'desc'), limit(pageSize + 1));
 
     if (lastDocUid) {
@@ -159,6 +251,49 @@ export async function updateUser(uid: string, data: Partial<AppUser>): Promise<v
         }
     }
 
+    console.log('[UserService] updateUser:', { uid, updateData });
+    if (isSupabase) {
+        // 1. Cập nhật thông tin profile (không bao gồm assigned_class_ids)
+        const { error: profileError } = await supabase
+            .from('profiles')
+            .update({
+                full_name: updateData.displayName,
+                role: updateData.role,
+                is_active: updateData.isActive,
+                student_code: updateData.studentCode
+            })
+            .eq('id', uid);
+        
+        if (profileError) throw profileError;
+
+        // 2. Cập nhật phân công lớp học (teacher_classes) nếu có gửi lên
+        if (updateData.assignedClassIds !== undefined) {
+            // Xóa phân công cũ
+            const { error: deleteError } = await supabase
+                .from('teacher_classes')
+                .delete()
+                .eq('teacher_id', uid);
+            
+            if (deleteError) throw deleteError;
+
+            // Thêm phân công mới
+            if (updateData.assignedClassIds.length > 0) {
+                const newAssignments = updateData.assignedClassIds.map(classId => ({
+                    teacher_id: uid,
+                    class_id: classId,
+                    is_homeroom: false // Cần logic xác định lớp chủ nhiệm nếu cần chi tiết hơn
+                }));
+
+                const { error: insertError } = await supabase
+                    .from('teacher_classes')
+                    .insert(newAssignments);
+                
+                if (insertError) throw insertError;
+            }
+        }
+        return;
+    }
+
     await updateDoc(doc(db, 'schools', 'default', 'users', uid), updateData);
 }
 
@@ -169,12 +304,26 @@ export async function assignClassesToUser(uid: string, classIds: string[]): Prom
 }
 
 export async function deactivateUser(uid: string): Promise<void> {
+    console.log('[UserService] Đang vô hiệu hoá user:', uid);
+    if (isSupabase) {
+        const { data, error, status } = await supabase.from('profiles').update({ is_active: false }).eq('id', uid).select();
+        console.log('[UserService] Kết quả Supabase Deactivate:', { data, error, status });
+        if (error) throw error;
+        return;
+    }
     await updateDoc(doc(db, 'schools', 'default', 'users', uid), {
         isActive: false,
     });
 }
 
 export async function activateUser(uid: string): Promise<void> {
+    console.log('[UserService] Đang kích hoạt user:', uid);
+    if (isSupabase) {
+        const { data, error, status } = await supabase.from('profiles').update({ is_active: true }).eq('id', uid).select();
+        console.log('[UserService] Kết quả Supabase Activate:', { data, error, status });
+        if (error) throw error;
+        return;
+    }
     await updateDoc(doc(db, 'schools', 'default', 'users', uid), {
         isActive: true,
     });

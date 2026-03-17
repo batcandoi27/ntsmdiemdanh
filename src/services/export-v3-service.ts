@@ -135,7 +135,7 @@ export async function buildExcelWorkbook(
             }
             
             let statusCode = '';
-            let cellNote = record.note || record.violationNote || '';
+            let cellNote = record.note || record.violationNote || record.rewardNote || '';
 
             // Map status codes
             const s = record.status;
@@ -150,16 +150,30 @@ export async function buildExcelWorkbook(
             else if (s === 'violation' || s === 'VP') {
                 statusCode = 'VP';
             }
-            else if (s === 'praise' || s === 'KH') {
+            else if (s === 'praise' || s === 'KH' || s === 'reward') {
                 statusCode = 'KH';
             }
 
-            // Flag-based V3 priority
+            // Flag-based V3 priority (Ghi đè/Bổ sung nếu có flag explicit)
             if (record.violation) statusCode = 'VP';
             if (record.reward || record.praise) statusCode = 'KH';
 
-            attendanceMap.get(sKey)!.set(date, statusCode);
-            if (cellNote) notesMap.get(sKey)!.set(date, cellNote);
+            if (statusCode) {
+                const currentVal = attendanceMap.get(sKey)!.get(date) || '';
+                const parts = currentVal ? currentVal.split(', ') : [];
+                if (!parts.includes(statusCode)) {
+                    parts.push(statusCode);
+                    // Sort order: P, K, T, VP, KH (tùy chọn)
+                    attendanceMap.get(sKey)!.set(date, parts.join(', '));
+                }
+            }
+
+            if (cellNote) {
+                const currentNote = notesMap.get(sKey)!.get(date) || '';
+                if (!currentNote.includes(cellNote)) {
+                    notesMap.get(sKey)!.set(date, currentNote ? `${currentNote} | ${cellNote}` : cellNote);
+                }
+            }
         }
     }
 

@@ -26,6 +26,7 @@ interface ClassOption {
     id: string;
     name: string;
     grade: number;
+    teacherName?: string;
 }
 
 import { useRouter } from 'next/navigation';
@@ -64,9 +65,18 @@ export default function LoginPage() {
     const [homeroomClassId, setHomeroomClassId] = useState('');          // Lớp CN (GVCN)
     const [subjectClassIds, setSubjectClassIds] = useState<string[]>([]); // Lớp BM (GVCN + GVBM)
 
+    // Đồng bộ: Nếu chọn Lớp Chủ nhiệm, nó phải có trong subjectClassIds (lớp tôi dạy)
+    useEffect(() => {
+        if (homeroomClassId) {
+            setSubjectClassIds(prev => Array.from(new Set([...prev, homeroomClassId])));
+        }
+    }, [homeroomClassId]);
+
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [localError, setLocalError] = useState('');
     const [successMsg, setSuccessMsg] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [showNewPassword, setShowNewPassword] = useState(false);
 
     // Fetch danh sách lớp khi cần
     useEffect(() => {
@@ -82,8 +92,9 @@ export default function LoginPage() {
             const listData = await dbInstance.getClasses();
             const list = listData.map(cls => ({
                 id: cls.id,
-                name: cls.className,
+                name: cls.name, // Sửa cls.className thành cls.name vì model Class dùng 'name'
                 grade: cls.grade || 0,
+                teacherName: cls.teacherName
             }));
 
             // Sort màng bằng JavaScript (grade tăng dần, name tăng dần)
@@ -91,7 +102,8 @@ export default function LoginPage() {
                 if (a.grade !== b.grade) return a.grade - b.grade;
                 const nameA = a.name || '';
                 const nameB = b.name || '';
-                return nameA.localeCompare(nameB);
+                // Sử dụng numeric: true để 7A2 đứng trước 7A10
+                return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
             });
 
             setAllClasses(list);
@@ -169,6 +181,23 @@ export default function LoginPage() {
 
         setIsSubmitting(true);
         try {
+            // 1. Cập nhật mật khẩu nếu có
+            if (newPassword) {
+                if (newPassword.length < 6) {
+                    setLocalError('Mật khẩu phải có ít nhất 6 ký tự.');
+                    setIsSubmitting(false);
+                    return;
+                }
+                const { supabaseAuth } = await import('@/services/supabase-auth-service');
+                const { error: pwdError } = await supabaseAuth.updatePassword(newPassword);
+                if (pwdError) {
+                    setLocalError('Lỗi cập nhật mật khẩu: ' + pwdError.message);
+                    setIsSubmitting(false);
+                    return;
+                }
+            }
+
+            // 2. Thiết lập profile
             // Tổng hợp danh sách lớp
             const assignedIds = Array.from(new Set([
                 ...(homeroomClassId ? [homeroomClassId] : []),
@@ -223,7 +252,7 @@ export default function LoginPage() {
                 {/* Logo */}
                 <div className="text-center mb-8">
                     <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl shadow-lg shadow-blue-600/30 mb-4">
-                        <School size={32} className="text-white" />
+                        <School size={32} className="text-blue-50" />
                     </div>
                     <h1 className="text-2xl font-bold text-gray-900">
                         {process.env.NEXT_PUBLIC_SCHOOL_NAME || 'Hệ Thống Điểm Danh'}
@@ -302,6 +331,36 @@ export default function LoginPage() {
                                     </p>
                                 </div>
 
+                                {/* Nhập mật khẩu mới */}
+                                <div className="pt-2 border-t border-gray-100">
+                                    <label htmlFor="newPassword" className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                                        <KeySquare size={16} className="text-blue-600" />
+                                        Thiết lập mật khẩu mới
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            id="newPassword"
+                                            type={showNewPassword ? 'text' : 'password'}
+                                            value={newPassword}
+                                            onChange={(e) => setNewPassword(e.target.value)}
+                                            placeholder="Tối thiểu 6 ký tự"
+                                            className="w-full px-4 py-3 pr-12 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-gray-900 placeholder:text-gray-400 transition-all font-mono"
+                                            autoComplete="new-password"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowNewPassword(!showNewPassword)}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                            tabIndex={-1}
+                                        >
+                                            {showNewPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                                        </button>
+                                    </div>
+                                    <p className="text-[10px] text-amber-600 mt-2 font-medium bg-amber-50 p-2 rounded-lg border border-amber-100">
+                                        💡 Thiết lập mật khẩu này giúp bạn có thể đăng nhập bằng Email trực tiếp sau này mà không cần bấm nút Google.
+                                    </p>
+                                </div>
+
                                 <button
                                     type="button"
                                     onClick={handleNextStep}
@@ -348,13 +407,15 @@ export default function LoginPage() {
                                                 <select
                                                     value={homeroomClassId}
                                                     onChange={(e) => setHomeroomClassId(e.target.value)}
-                                                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-green-500 focus:ring-2 focus:ring-green-500/20 outline-none text-blue-700 font-bold hover:bg-blue-50 bg-white transition-all cursor-pointer"
+                                                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none text-teal-700 font-bold hover:bg-teal-50 bg-white transition-all cursor-pointer"
                                                 >
                                                     <option value="">-- Chọn lớp chủ nhiệm --</option>
                                                     {Object.entries(classesByGrade).map(([grade, classes]) => (
                                                         <optgroup key={grade} label={`Khối ${grade}`}>
                                                             {classes.map(cls => (
-                                                                <option key={cls.id} value={cls.id}>{cls.name}</option>
+                                                                <option key={cls.id} value={cls.id}>
+                                                                    {cls.name} {cls.teacherName ? `— GV: ${cls.teacherName}` : ''}
+                                                                </option>
                                                             ))}
                                                         </optgroup>
                                                     ))}
@@ -375,21 +436,28 @@ export default function LoginPage() {
                                                 ) : (
                                                     Object.entries(classesByGrade).map(([grade, classes]) => (
                                                         <div key={grade}>
-                                                            <div className="px-3 py-1.5 bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100">
+                                                            <div className="px-3 py-1.5 bg-teal-50 text-xs font-bold text-teal-700 uppercase tracking-wider border-b border-teal-100 italic">
                                                                 Khối {grade}
                                                             </div>
-                                                            {classes.map(cls => (
+                                                            {classes
+                                                                .filter(cls => cls.id !== homeroomClassId) // ẨN LỚP CHỦ NHIỆM KHỎI DANH SÁCH BỘ MÔN
+                                                                .map(cls => (
                                                                 <label
                                                                     key={cls.id}
-                                                                    className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-blue-50 transition-colors border-b border-gray-50 last:border-0 ${subjectClassIds.includes(cls.id) ? 'bg-blue-50' : ''}`}
+                                                                    className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-teal-50 transition-colors border-b border-gray-50 last:border-0 ${subjectClassIds.includes(cls.id) ? 'bg-teal-50/50' : ''}`}
                                                                 >
                                                                     <input
                                                                         type="checkbox"
                                                                         checked={subjectClassIds.includes(cls.id)}
                                                                         onChange={() => toggleSubjectClass(cls.id)}
-                                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                                        className="w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
                                                                     />
-                                                                    <span className="text-sm text-gray-800">{cls.name}</span>
+                                                                    <span className="text-sm">
+                                                                        <span className="font-bold text-sky-600">{cls.name}</span>
+                                                                        {cls.teacherName && (
+                                                                            <span className="text-xs text-sky-400 ml-2">— GV: {cls.teacherName}</span>
+                                                                        )}
+                                                                    </span>
                                                                 </label>
                                                             ))}
                                                         </div>
@@ -397,7 +465,7 @@ export default function LoginPage() {
                                                 )}
                                             </div>
                                             {subjectClassIds.length > 0 && (
-                                                <p className="text-xs text-blue-600 mt-1.5">
+                                                <p className="text-xs text-teal-700 font-medium mt-1.5">
                                                     Đã chọn {subjectClassIds.length} lớp bộ môn
                                                 </p>
                                             )}

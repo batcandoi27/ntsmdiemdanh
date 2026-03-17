@@ -4,6 +4,7 @@ import { useState, useEffect, useTransition, useCallback } from 'react';
 import { Class, AttendanceStatus } from '@/types/models';
 import { getAllClasses } from '@/app/actions/common';
 import { getGradeAttendanceSummary, getClassesAttendanceSummary, BlockAttendanceItem } from '@/app/actions/quick-attendance';
+import { getLocalCache, setLocalCache } from '@/services/client-cache-service';
 import { SessionType } from '@/types/timetable';
 import { AttendanceSheet } from '@/components/attendance-sheet';
 import { StudentSelectorDialog } from '@/components/quick-attendance/student-selector-dialog';
@@ -72,7 +73,15 @@ export default function QuickAttendancePage() {
     const [targetStatus, setTargetStatus] = useState<AttendanceStatus>('P');
 
     useEffect(() => {
-        getAllClasses().then(setClasses);
+        // Tải từ cache trước để hiển thị tức thì
+        const cached = getLocalCache<Class[]>('classes_list');
+        if (cached) setClasses(cached);
+
+        // Luôn fetch mới để cập nhật dữ liệu ngầm
+        getAllClasses().then(data => {
+            setClasses(data);
+            setLocalCache('classes_list', data);
+        });
     }, []);
 
     const filteredClasses = classes.filter(c => {
@@ -543,8 +552,12 @@ export default function QuickAttendancePage() {
                                                                 <div className="text-[11px] font-medium text-gray-700 leading-snug break-words">
                                                                     {item.studentLists.P.map(s => {
                                                                         const shortName = s.name.split(' ').slice(-2).join(' ');
-                                                                        return s.note ? `${shortName} (${s.note})` : shortName;
-                                                                    }).join(', ')}
+                                                                        return (
+                                                                            <span key={s.id || s.name} className="text-yellow-600">
+                                                                                {s.note ? `${shortName} (${s.note})` : shortName}
+                                                                            </span>
+                                                                        );
+                                                                    }).reduce((prev, curr) => [prev, ', ', curr] as any)}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -565,8 +578,12 @@ export default function QuickAttendancePage() {
                                                                 <div className="text-[11px] font-medium text-gray-700 leading-snug break-words">
                                                                     {item.studentLists.K.map(s => {
                                                                         const shortName = s.name.split(' ').slice(-2).join(' ');
-                                                                        return s.note ? `${shortName} (${s.note})` : shortName;
-                                                                    }).join(', ')}
+                                                                        return (
+                                                                            <span key={s.id || s.name} className="text-red-600">
+                                                                                {s.note ? `${shortName} (${s.note})` : shortName}
+                                                                            </span>
+                                                                        );
+                                                                    }).reduce((prev, curr) => [prev, ', ', curr] as any)}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -587,8 +604,12 @@ export default function QuickAttendancePage() {
                                                                 <div className="text-[11px] font-medium text-gray-700 leading-snug break-words">
                                                                     {item.studentLists.T.map(s => {
                                                                         const shortName = s.name.split(' ').slice(-2).join(' ');
-                                                                        return s.note ? `${shortName} (${s.note})` : shortName;
-                                                                    }).join(', ')}
+                                                                        return (
+                                                                            <span key={s.id || s.name} className="text-blue-600">
+                                                                                {s.note ? `${shortName} (${s.note})` : shortName}
+                                                                            </span>
+                                                                        );
+                                                                    }).reduce((prev, curr) => [prev, ', ', curr] as any)}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -609,8 +630,12 @@ export default function QuickAttendancePage() {
                                                                 <div className="text-[11px] font-medium text-gray-700 leading-snug break-words">
                                                                     {item.studentLists.VP.map(s => {
                                                                         const shortName = s.name.split(' ').slice(-2).join(' ');
-                                                                        return s.note ? `${shortName} (${s.note})` : shortName;
-                                                                    }).join(', ')}
+                                                                        return (
+                                                                            <span key={s.id || s.name} className="text-purple-600">
+                                                                                {s.note ? `${shortName} (${s.note})` : shortName}
+                                                                            </span>
+                                                                        );
+                                                                    }).reduce((prev, curr) => [prev, ', ', curr] as any)}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -631,8 +656,12 @@ export default function QuickAttendancePage() {
                                                                 <div className="text-[11px] font-medium text-gray-700 leading-snug break-words">
                                                                     {item.studentLists.KH.map(s => {
                                                                         const shortName = s.name.split(' ').slice(-2).join(' ');
-                                                                        return s.note ? `${shortName} (${s.note})` : shortName;
-                                                                    }).join(', ')}
+                                                                        return (
+                                                                            <span key={s.id || s.name} className="text-orange-600">
+                                                                                {s.note ? `${shortName} (${s.note})` : shortName}
+                                                                            </span>
+                                                                        );
+                                                                    }).reduce((prev, curr) => [prev, ', ', curr] as any)}
                                                                 </div>
                                                             )}
                                                         </div>

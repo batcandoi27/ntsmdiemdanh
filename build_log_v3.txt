@@ -1,0 +1,23 @@
+
+> app-diemdanh@02.2026 build
+> next build
+
+   ▲ Next.js 14.1.0
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+Compiler edge-server unexpectedly exited with code: null and signal: SIGTERM
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+Failed to compile.
+
+./src/app/actions/quick-attendance.ts:137:49
+Type error: This comparison appears to be unintentional because the types '"absent" | "late" | "present"' and '"P"' have no overlap.
+
+[0m [90m 135 |[39m                     [36mconst[39m itemWithNote [33m=[39m { [33m...[39mitem[33m,[39m note }[33m;[39m[0m
+[0m [90m 136 |[39m[0m
+[0m[31m[1m>[22m[39m[90m 137 |[39m                     [36mif[39m (status [33m===[39m [32m'excused'[39m [33m||[39m status [33m===[39m [32m'P'[39m) { counts[33m.[39m[33mP[39m[33m++[39m[33m;[39m lists[33m.[39m[33mP[39m[33m.[39mpush(itemWithNote)[33m;[39m }[0m
+[0m [90m     |[39m                                                 [31m[1m^[22m[39m[0m
+[0m [90m 138 |[39m                     [36melse[39m [36mif[39m (status [33m===[39m [32m'absent'[39m [33m||[39m status [33m===[39m [32m'K'[39m) { counts[33m.[39m[33mK[39m[33m++[39m[33m;[39m lists[33m.[39m[33mK[39m[33m.[39mpush(itemWithNote)[33m;[39m }[0m
+[0m [90m 139 |[39m                     [36melse[39m [36mif[39m (status [33m===[39m [32m'late'[39m [33m||[39m status [33m===[39m [32m'T'[39m) { counts[33m.[39m[33mT[39m[33m++[39m[33m;[39m lists[33m.[39m[33mT[39m[33m.[39mpush(itemWithNote)[33m;[39m }[0m
+[0m [90m 140 |[39m                     [36melse[39m [36mif[39m (status [33m===[39m [32m'absent_unknown'[39m [33m||[39m status [33m===[39m [32m'V'[39m) { counts[33m.[39m[33mV[39m[33m++[39m[33m;[39m lists[33m.[39m[33mV[39m[33m.[39mpush(itemWithNote)[33m;[39m }[0m

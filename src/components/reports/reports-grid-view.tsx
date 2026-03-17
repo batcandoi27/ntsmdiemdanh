@@ -35,10 +35,10 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
         // ...
         absences.forEach(record => {
             const status = record.status;
-            const baseCode = status.split(' ')[0];
+            const statuses = status.split(', ');
             
-            // Filter by visible columns using base code
-            if (!visibleColumns.includes(baseCode)) return;
+            // Filter by visible columns using base code - check if ANY of the statuses are visible
+            if (!statuses.some(st => visibleColumns.includes(st.split(' ')[0]))) return;
 
             const clsId = record.classId;
             // Filter by selectedClasses if set
@@ -60,7 +60,11 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                 };
             }
 
-            groups[clsId].students[record.studentCode].absences[record.date] = status;
+            if (!groups[clsId].students[record.studentCode].absences[record.date]) {
+                groups[clsId].students[record.studentCode].absences[record.date] = status;
+            } else {
+                groups[clsId].students[record.studentCode].absences[record.date] += `, ${status}`;
+            }
         });
 
         return groups;
@@ -111,8 +115,15 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
     const handleSaveStatus = async (newStatus: string) => {
         if (!editCell) return;
         setIsSaving(true);
+        console.log('[ReportsGridView] handleSaveStatus:', {
+            classId: editCell.classId,
+            studentCode: editCell.studentCode,
+            date: editCell.date,
+            newStatus
+        });
         try {
             const res = await updateReportAttendance(appUser, editCell.classId, editCell.studentCode, editCell.studentName, editCell.date, newStatus as any);
+            console.log('[ReportsGridView] updateReportAttendance result:', res);
             if (!res.success) {
                 alert(res.message);
             } else {
@@ -120,7 +131,7 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                 if (onRefresh) onRefresh();
             }
         } catch (error) {
-            console.error(error);
+            console.error('[ReportsGridView] Save Error:', error);
             alert("Lỗi cập nhật!");
         } finally {
             setIsSaving(false);
@@ -156,8 +167,8 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                             </h3>
                         </div>
 
-                        {/* Scrollable Container */}
-                        <div className="overflow-auto max-h-[75vh] relative scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-gray-200">
+                        {/* Scrollable Container - Chỉnh thành overflow-x-auto, overflow-y-visible để tip không bị che */}
+                        <div className="overflow-x-auto overflow-y-visible relative scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-gray-200">
                             <table className="w-full text-sm border-collapse min-w-max">
                                 <thead className="bg-gray-300 border-b border-gray-500 text-xs sticky top-0 z-40 shadow-md">
                                     <tr className="bg-gray-300">
@@ -211,7 +222,37 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                                         return (
                                             <tr key={student.code} className="hover:bg-blue-100 transition-colors border-b border-gray-400 font-bold text-black">
                                                 <td className="p-2 border border-gray-400 text-center text-xs font-black text-black bg-white sticky left-0 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.2)]">{student.stt}</td>
-                                                <td className="p-2 border border-gray-400 text-black font-bold whitespace-nowrap bg-white sticky left-12 z-30 shadow-[4px_0_10px_-2px_rgba(0,0,0,0.25)]">{student.name}</td>
+                                                <td className={cn(
+                                                    "p-2 border border-gray-400 font-bold whitespace-nowrap bg-white sticky left-12 z-30 shadow-[4px_0_10px_-2px_rgba(0,0,0,0.25)] flex items-center gap-1",
+                                                    (() => {
+                                                        const allStatusValues = Object.values(student.absences || {});
+                                                        const firstStatus = allStatusValues.find(s => s) as string;
+                                                        if (!firstStatus) return "text-black";
+                                                        const base = firstStatus.split(', ')[0].split(' ')[0];
+                                                        return base === 'P' ? "text-yellow-600" :
+                                                               base === 'K' ? "text-red-600" :
+                                                               base === 'T' ? "text-blue-600" :
+                                                               base === 'VP' ? "text-purple-600" :
+                                                               base === 'KH' ? "text-pink-600" : "text-black";
+                                                    })()
+                                                )}>
+                                                    <span className="truncate">{student.name}</span>
+                                                    {(() => {
+                                                        // Tính SC: Tổng P + K trên tất cả các ngày đang hiển thị
+                                                        let pkCount = 0;
+                                                        dates.forEach(d => {
+                                                            const ds = format(d, 'yyyy-MM-dd');
+                                                            const st = student.absences[ds];
+                                                            if (st) {
+                                                                const parts = st.split(/[,]+/).map(p => p.trim().split(' ')[0].toUpperCase()).filter(Boolean);
+                                                                pkCount += parts.filter(p => p.startsWith('P') || p.startsWith('K')).length;
+                                                            }
+                                                        });
+                                                        return pkCount >= 2 ? (
+                                                            <span className="text-red-600 font-black text-[10px] leading-none tracking-tighter shrink-0 border border-red-200 bg-red-50 px-0.5 rounded" title="Nghỉ cả sáng và chiều">(SC)</span>
+                                                        ) : null;
+                                                    })()}
+                                                </td>
 
                                                 {dates.map(date => {
                                                     const dateStr = format(date, 'yyyy-MM-dd');
@@ -223,20 +264,22 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                                                     const colClass = isSat ? "bg-orange-50" : isSun ? "bg-red-50" : "bg-white";
 
                                                     const status = student.absences[dateStr];
-                                                    const baseStatus = status ? status.split(' ')[0] : '';
+                                                    const statuses = status ? status.split(/[,]+/).map(s => s.trim()).filter(Boolean) : [];
                                                     
-                                                    if (baseStatus === 'P') rowStats.P++;
-                                                    if (baseStatus === 'K') rowStats.K++;
-                                                    if (baseStatus === 'T') rowStats.T++;
-                                                    if (baseStatus === 'VP') rowStats.VP++;
-                                                    if (baseStatus === 'KH') rowStats.KH++;
+                                                    statuses.forEach(st => {
+                                                        const base = st.split(' ')[0].toUpperCase();
+                                                        if (base.startsWith('P')) rowStats.P++;
+                                                        else if (base.startsWith('K')) rowStats.K++;
+                                                        else if (base.startsWith('T')) rowStats.T++;
+                                                        else if (base.startsWith('VP')) rowStats.VP++;
+                                                        else if (base.startsWith('KH')) rowStats.KH++;
+                                                    });
 
                                                     return (
                                                         <td key={dateStr} className={cn("p-0 border border-gray-400 text-center relative h-full align-top", colClass)}>
                                                             <div
-                                                                className={cn("w-full h-full min-h-[32px] flex items-center justify-center m-0 p-1 transition-all", status ? "cursor-pointer hover:bg-black/5 hover:opacity-80" : "")}
+                                                                className={cn("w-full h-full min-h-[32px] flex items-center justify-center m-0 p-1 transition-all cursor-pointer hover:bg-black/5 hover:opacity-80")}
                                                                 onClick={(e) => {
-                                                                    if (!status) return;
                                                                     const rect = e.currentTarget.getBoundingClientRect();
                                                                     setEditCell({
                                                                         classId: clsId,
@@ -272,8 +315,11 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                                             let count = 0;
                                             students.forEach(s => {
                                                 const status = s.absences[dateStr];
-                                                if (status && (status === 'P' || status === 'K')) {
-                                                    count++;
+                                                if (status) {
+                                                    const bases = status.split(', ').map(st => st.split(' ')[0]);
+                                                    if (bases.includes('P') || bases.includes('K')) {
+                                                        count++;
+                                                    }
                                                 }
                                             });
                                             return (
@@ -284,27 +330,27 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                                         })}
                                         {visibleColumns.includes('P') && (
                                             <td className="p-1 border border-gray-500 text-center text-base bg-yellow-300">
-                                                {students.reduce((sum, s) => sum + Object.values(s.absences || {}).filter(st => st === 'P').length, 0) || ''}
+                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(', ').filter(x => x.split(' ')[0] === 'P').length : 0), 0), 0) || ''}
                                             </td>
                                         )}
                                         {visibleColumns.includes('K') && (
                                             <td className="p-1 border border-gray-500 text-center text-base bg-red-300 text-white">
-                                                {students.reduce((sum, s) => sum + Object.values(s.absences || {}).filter(st => st === 'K').length, 0) || ''}
+                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(', ').filter(x => x.split(' ')[0] === 'K').length : 0), 0), 0) || ''}
                                             </td>
                                         )}
                                         {visibleColumns.includes('T') && (
                                             <td className="p-1 border border-gray-500 text-center text-base bg-blue-300">
-                                                {students.reduce((sum, s) => sum + Object.values(s.absences || {}).filter(st => st === 'T').length, 0) || ''}
+                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(', ').filter(x => x.split(' ')[0] === 'T').length : 0), 0), 0) || ''}
                                             </td>
                                         )}
                                         {visibleColumns.includes('VP') && (
                                             <td className="p-1 border border-gray-500 text-center text-base bg-purple-300 text-white">
-                                                {students.reduce((sum, s) => sum + Object.values(s.absences || {}).filter(st => st === 'VP').length, 0) || ''}
+                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(', ').filter(x => x.split(' ')[0] === 'VP').length : 0), 0), 0) || ''}
                                             </td>
                                         )}
                                         {visibleColumns.includes('KH') && (
                                             <td className="p-1 border border-gray-500 text-center text-base bg-pink-300">
-                                                {students.reduce((sum, s) => sum + Object.values(s.absences || {}).filter(st => st === 'KH').length, 0) || ''}
+                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(', ').filter(x => x.split(' ')[0] === 'KH').length : 0), 0), 0) || ''}
                                             </td>
                                         )}
                                     </tr>
@@ -531,14 +577,13 @@ function AddAttendanceModal({ classId, className, onClose, onRefresh }: { classI
 }
 
 function GridCell({ status, visibleColumns }: { status: string, visibleColumns: string[] }) {
-    if (!status) return null;
+    const allStatuses = (status || '').split(', ').filter(Boolean);
+    const displayStatuses = allStatuses.filter(st => {
+        const baseCode = st.split(' ')[0];
+        return visibleColumns.includes(baseCode);
+    });
 
-    const baseCode = status.split(' ')[0];
-    const hasNote = status.includes('(');
-    const note = hasNote ? status.substring(status.indexOf('(') + 1, status.lastIndexOf(')')) : '';
-
-    // Filter by visibility 
-    if (!visibleColumns.includes(baseCode)) return null;
+    if (displayStatuses.length === 0) return null;
 
     const map = {
         'P': "bg-yellow-400 text-black border border-yellow-600",
@@ -548,22 +593,34 @@ function GridCell({ status, visibleColumns }: { status: string, visibleColumns: 
         'KH': "bg-pink-500 text-white border border-pink-700",
     };
 
-    const style = map[baseCode as keyof typeof map];
-    if (!style) return null;
-
     return (
-        <div 
-            className={cn("w-7 h-7 mx-auto rounded-md flex items-center justify-center text-xs font-black shadow-sm group relative cursor-help", style)}
-        >
-            {baseCode}
-            {hasNote && (
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-[100] pointer-events-none">
-                    <div className="bg-gray-900 text-white text-[11px] px-2 py-1.5 rounded-lg shadow-2xl whitespace-nowrap border border-gray-700 font-bold">
-                        {note}
+        <div className="flex flex-wrap gap-0.5 justify-center">
+            {displayStatuses.map((st, i) => {
+                const baseCode = st.split(' ')[0];
+                const hasNote = st.includes('(');
+                const note = hasNote ? st.substring(st.indexOf('(') + 1, st.lastIndexOf(')')) : '';
+                const style = map[baseCode as keyof typeof map] || "bg-gray-400 text-white border-gray-600";
+
+                return (
+                    <div 
+                        key={i}
+                        className={cn("w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-black shadow-sm group relative cursor-help", style)}
+                    >
+                        {baseCode}
+                        {hasNote && (
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover:block z-[9999] pointer-events-none">
+                                {/* Arrow (mũi tên chỉ xuống) */}
+                                <div className="w-3 h-3 bg-gray-900 rotate-45 mx-auto mt-[-6px] border-r border-b border-gray-700"></div>
+                                
+                                {/* Nội dung tooltip */}
+                                <div className="bg-gray-900 text-white text-[11px] font-medium px-3 py-2 rounded-lg shadow-2xl min-w-[120px] max-w-[260px] w-max whitespace-normal break-words leading-relaxed border border-gray-700 text-center animate-in fade-in slide-in-from-bottom-1 duration-200">
+                                    {note}
+                                </div>
+                            </div>
+                        )}
                     </div>
-                    <div className="w-2 h-2 bg-gray-900 rotate-45 mx-auto -mt-1 border-r border-b border-gray-700"></div>
-                </div>
-            )}
+                );
+            })}
         </div>
     );
 }

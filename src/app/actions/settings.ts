@@ -5,7 +5,10 @@ import { revalidatePath } from 'next/cache';
 import { adminDb } from '@/lib/firebase-admin';
 import { AppSettings, Class, AttendanceRecord } from '@/types/models';
 import { SCHOOL_ID } from '@/config/constants';
- // Keep this import for now, as the instruction implies it's no longer needed but doesn't explicitly remove it. The change is about removing the *call* to initAdmin().
+import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getUsersPaginated } from '@/services/user-service';
+
+const isSupabase = process.env.NEXT_PUBLIC_USE_SUPABASE === 'true';
 
 export async function generateMockData(startDate: string, endDate: string, classIds: string[]) {
     try {
@@ -30,13 +33,11 @@ export async function clearAttendance(startDate?: string, endDate?: string, clas
     }
 }
 
-const isSupabase = process.env.NEXT_PUBLIC_USE_SUPABASE === 'true';
-import { supabaseAdmin } from '@/lib/supabase-admin';
 
 export async function getRoleCodes() {
     try {
         if (isSupabase) {
-            const { data } = await supabase.from('settings').select('value').eq('key', 'role_codes').single();
+            const { data } = await supabaseAdmin.from('settings').select('value').eq('key', 'role_codes').single();
             return { success: true, roleCodes: data?.value || {} };
         } else {
             const docSnap = await adminDb.doc('settings/app_config').get();
@@ -57,7 +58,7 @@ export async function saveRoleCodes(roleCodes: Record<string, string>, updaterRo
     }
     try {
         if (isSupabase) {
-            await supabase.from('settings').upsert({ key: 'role_codes', value: roleCodes });
+            await supabaseAdmin.from('settings').upsert({ key: 'role_codes', value: roleCodes });
         } else {
             await adminDb.doc('settings/app_config').set({ roleCodes }, { merge: true });
         }
@@ -68,7 +69,6 @@ export async function saveRoleCodes(roleCodes: Record<string, string>, updaterRo
     }
 }
 
-import { getUsersPaginated } from '@/services/user-service';
 
 export async function loadUsersPaginated(pageSize: number, lastUid?: string) {
     try {
@@ -85,7 +85,7 @@ export async function loadUsersPaginated(pageSize: number, lastUid?: string) {
 export async function fetchAppSettings() {
     try {
         if (isSupabase) {
-            const { data } = await supabase.from('settings').select('value').eq('key', 'app_settings').single();
+            const { data } = await supabaseAdmin.from('settings').select('value').eq('key', 'app_settings').single();
             if (data) {
                 return { success: true, settings: data.value as AppSettings };
             }
@@ -105,9 +105,9 @@ export async function fetchAppSettings() {
 export async function updateAppSettings(settings: Partial<AppSettings>) {
     try {
         if (isSupabase) {
-             const { data: existing } = await supabase.from('settings').select('value').eq('key', 'app_settings').single();
+             const { data: existing } = await supabaseAdmin.from('settings').select('value').eq('key', 'app_settings').single();
              const newValue = { ...(existing?.value || {}), ...settings, updatedAt: new Date().toISOString() };
-             await supabase.from('settings').upsert({ key: 'app_settings', value: newValue });
+             await supabaseAdmin.from('settings').upsert({ key: 'app_settings', value: newValue });
         } else {
             await adminDb.doc('settings/app').set({
                 ...settings,
@@ -169,10 +169,33 @@ export async function getClassesList() {
     }
 }
 
-export async function updateManualClassSizes(year: string, updates: { id: string, manualStudentCount: number }[], storagePath?: string) {
+export async function updateManualClassSizes(year: string, updates: { id: string, manualStudentCount?: number, adjustmentCount?: number }[], storagePath?: string) {
     try {
         console.log(`[updateManualClassSizes] START - Year: ${year}, Updates: ${updates.length}`);
-        await db.updateManualClassSizes(year, updates);
+        
+        if (isSupabase) {
+            // Sử dụng supabaseAdmin để có quyền bypass RLS khi cập nhật bảng classes
+            for (const update of updates) {
+                const up: any = {};
+                if (update.adjustmentCount !== undefined) up.adjustment_count = update.adjustmentCount;
+                if (update.manualStudentCount !== undefined) up.manual_student_count = update.manualStudentCount;
+                
+                if (Object.keys(up).length > 0) {
+                    console.log(`[updateManualClassSizes] Admin Updating class ${update.id}:`, up);
+                    const { error } = await supabaseAdmin.from('classes').update(up).eq('id', update.id);
+                    if (error) {
+                        console.error(`[updateManualClassSizes] Admin Update Error:`, error);
+                        return { success: false, message: `Lỗi Admin: ${error.message}` };
+                    }
+                }
+            }
+            // Invalidate cache
+            const { invalidateCachePrefix } = require("@/services/cache-service");
+            invalidateCachePrefix('supabase_classes');
+        } else {
+            await db.updateManualClassSizes(year, updates);
+        }
+        
         console.log(`[updateManualClassSizes] SUCCESS`);
         revalidatePath('/settings');
         return { success: true, message: `Đã cập nhật sĩ số cho ${updates.length} lớp.` };

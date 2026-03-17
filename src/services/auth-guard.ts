@@ -29,12 +29,16 @@ export class AccessDeniedError extends Error {
  * - supervisor, teacher, class_monitor: classId phải nằm trong assignedClassIds
  */
 export function checkClassAccess(user: AppUser, classId: string): void {
-    if (user.permissions.canViewAllClasses) return;
-    if (!user.assignedClassIds.includes(classId)) {
-        throw new AccessDeniedError(
-            `Không có quyền truy cập lớp "${classId}". Liên hệ Admin để được phân công.`
-        );
-    }
+    // Ưu tiên 1: Chấp nhận nếu có quyền canViewAllClasses (Admin, Principal, Supervisor)
+    if (user.permissions?.canViewAllClasses) return;
+
+    // Ưu tiên 2: Chấp nhận nếu classId nằm trong assignedClassIds
+    if (user.assignedClassIds && user.assignedClassIds.includes(classId)) return;
+
+    // Trường hợp còn lại: Chặn
+    throw new AccessDeniedError(
+        `Bạn không có quyền truy cập lớp học này. Liên hệ Admin để được phân công.`
+    );
 }
 
 /**

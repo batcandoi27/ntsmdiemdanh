@@ -1,0 +1,22 @@
+
+> app-diemdanh@02.2026 build
+> next build
+
+   ▲ Next.js 14.1.0
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+Failed to compile.
+
+./src/app/actions/quick-attendance.ts:119:47
+Type error: Property 'studentId' does not exist on type 'Promise<AttendanceRecordV3>'.
+
+[0m [90m 117 |[39m             classRecords[33m.[39mforEach(r [33m=>[39m {[0m
+[0m [90m 118 |[39m                 [36mconst[39m normR [33m=[39m normalizeAttendanceRecord(r)[33m;[39m[0m
+[0m[31m[1m>[22m[39m[90m 119 |[39m                 [36mif[39m ([33m![39mstudentRecords[33m.[39mhas(normR[33m.[39mstudentId)) studentRecords[33m.[39m[36mset[39m(normR[33m.[39mstudentId[33m,[39m [])[33m;[39m[0m
+[0m [90m     |[39m                                               [31m[1m^[22m[39m[0m
+[0m [90m 120 |[39m                 studentRecords[33m.[39m[36mget[39m(normR[33m.[39mstudentId)[33m![39m[33m.[39mpush(normR)[33m;[39m[0m
+[0m [90m 121 |[39m             })[33m;[39m[0m
+[0m [90m 122 |[39m[0m

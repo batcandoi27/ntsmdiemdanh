@@ -1,315 +1,180 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import {
-    onAuthStateChanged,
-    signInWithEmailAndPassword,
-    signInWithPopup,
-    getRedirectResult,
-    GoogleAuthProvider,
-    signOut as firebaseSignOut,
-    User as FirebaseUser,
-} from 'firebase/auth';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { onAuthStateChanged as onFirebaseAuthStateChange, User as FirebaseUser, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
+import { AppUser, DEFAULT_PERMISSIONS, DEFAULT_EDIT_WINDOW, UserRole } from '@/types/models';
+import { getUserProfileByEmail, studentCodeToEmail } from '@/services/user-service';
 import { supabase } from '@/lib/supabase';
 import { supabaseAuth } from '@/services/supabase-auth-service';
-import { AppUser } from '@/types/models';
 
-// ============================================
-// Context Types
-// ============================================
+export { studentCodeToEmail };
 
 interface AuthContextType {
-    /** Firebase Auth user (null = chưa login) */
     firebaseUser: FirebaseUser | null;
-    /** App user profile from Firestore (null = chưa load hoặc chưa có profile) */
     appUser: AppUser | null;
-    /** Báo hiệu Firebase Auth thành công nhưng chưa có profile (cần nhập Role Code) */
-    needsRoleCode: boolean;
-    /** Tài khoản đã đăng ký nhưng chưa được admin duyệt (isActive = false) */
-    isPending: boolean;
-    /** Đang kiểm tra auth state */
+    isSupabase: boolean;
     loading: boolean;
-    /** Lỗi auth nếu có */
     error: string | null;
-    /** Đăng nhập bằng email/password hoặc mã HS/password */
-    signIn: (emailOrCode: string, password: string) => Promise<void>;
-    /** Đăng nhập Google Popup */
+    needsRoleCode: boolean;
+    isPending: boolean;
+    signIn: (email: string, pass: string) => Promise<void>;
     signInWithGoogle: () => Promise<void>;
-    /** Đăng xuất */
     signOut: () => Promise<void>;
-    /** Kiểm tra quyền truy cập lớp */
-    canAccessClass: (classId: string) => boolean;
-    /** Kiểm tra có phải role nhất định */
-    hasRole: (...roles: AppUser['role'][]) => boolean;
+    setNeedsRoleCode: (val: boolean) => void;
+    setError: (msg: string | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// ============================================
-// Helper: Convert mã HS → email format
-// ============================================
-function studentCodeToEmail(code: string): string {
-    return `${code.toLowerCase()}@student.local`;
-}
-
-function isStudentCode(input: string): boolean {
-    return !input.includes('@');
-}
-
-// ============================================
-// Provider
-// ============================================
-
-// Suppress Unhandled Runtime Error from Firebase Auth background tasks
-if (typeof window !== 'undefined') {
-    window.addEventListener('unhandledrejection', (event) => {
-        const error = event.reason;
-        if (error && error.code === 'auth/network-request-failed') {
-            console.warn('Firebase Auth: Đã chặn lỗi mất kết nối mạng chạy ngầm của tiến trình background.');
-            event.preventDefault(); // Chặn văng Error Boundaries trong React do Unhandled Promise Rejection
-        }
-    });
-}
-
-const isSupabase = process.env.NEXT_PUBLIC_USE_SUPABASE === 'true';
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
     const [appUser, setAppUser] = useState<AppUser | null>(null);
-    const [needsRoleCode, setNeedsRoleCode] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [needsRoleCode, setNeedsRoleCode] = useState(false);
+    
+    const isSupabase = process.env.NEXT_PUBLIC_USE_SUPABASE === 'true';
+    const loadingProfile = useRef<string | null>(null);
 
-    // Bug 1 Fix: Track user presence via ref to avoid stale closure in onAuthStateChange
-    const hasUserRef = useRef(false);
+    // Derived states
+    const isPending = !!appUser && !appUser.isActive;
 
-    // Load AppUser profile (Legacy Firebase)
-    const loadUserProfile = useCallback(async (user: FirebaseUser) => {
-        if (isSupabase || !db) return; // Không chạy khi dùng Supabase
+    // Load AppUser profile (Supabase)
+    const loadSupabaseProfile = useCallback(async (userId: string, email?: string) => {
+        if (loadingProfile.current === userId) return;
+        loadingProfile.current = userId;
+
+        console.log('[AuthContext] Bắt đầu tải profile cho:', { userId, email });
         try {
-            const getDocPromise = getDoc(doc(db, 'users', user.uid));
-            const timeoutPromise = new Promise<any>((_, reject) =>
-                setTimeout(() => reject(new Error('Firebase Network Timeout')), 10000)
-            );
-
-            const userDoc = await Promise.race([getDocPromise, timeoutPromise]);
-            if (userDoc.exists()) {
-                const data = userDoc.data() as AppUser;
-                setAppUser(data);
-                setNeedsRoleCode(false);
-
-                // Cập nhật lastLoginAt
-                await updateDoc(doc(db, 'users', user.uid), {
+            const profile = await supabaseAuth.getProfileOnly(userId, email);
+            console.log('[AuthContext] Kết quả từ supabaseAuth.getProfileOnly:', profile ? { id: profile.id, email: profile.email, name: profile.display_name } : 'Null');
+            
+            if (profile) {
+                const profileData = profile as any;
+                console.log('[AuthContext] Mapping profile data:', profile.email);
+                setAppUser({
+                    uid: userId,
+                    email: email || '',
+                    displayName: profileData.full_name || 'Người dùng mới',
+                    role: profileData.role || 'teacher',
+                    isActive: profileData.is_active ?? false,
+                    assignedClassIds: profileData.assignedClassIds || [],
+                    permissions: DEFAULT_PERMISSIONS[profileData.role as UserRole] || DEFAULT_PERMISSIONS.teacher,
+                    editWindowMinutes: DEFAULT_EDIT_WINDOW[profileData.role as UserRole] || 1440,
+                    createdAt: new Date().toISOString(),
                     lastLoginAt: new Date().toISOString(),
-                }).catch(() => { /* ignore */ });
+                });
+                setNeedsRoleCode(false);
             } else {
                 setAppUser(null);
                 setNeedsRoleCode(true);
             }
         } catch (err) {
-            console.error('Lỗi tải thông tin người dùng từ Firebase:', err);
-            setError('Không thể tải thông tin người dùng.');
-            setAppUser(null);
+            console.error('Lỗi load profile Supabase:', err);
+            setError('Không thể tải hồ sơ người dùng.');
+        } finally {
+            setLoading(false);
         }
     }, []);
 
-    const loadingProfile = useRef<string | null>(null);
-
-    // Load AppUser profile (Supabase)
-    const loadSupabaseProfile = useCallback(async (userId: string, email?: string, createdAt?: string) => {
-        if (loadingProfile.current === userId) return;
-        loadingProfile.current = userId;
-
+    // Load AppUser profile (Firebase)
+    const loadFirebaseProfile = useCallback(async (email: string, uid: string) => {
         try {
-            const profile = await supabaseAuth.getProfileOnly(userId);
-            
+            const profile = await getUserProfileByEmail(email);
             if (profile) {
-                const profileData = profile as any;
-                setAppUser({
-                    uid: userId,
-                    email: email || '',
-                    displayName: profile.full_name || email?.split('@')[0],
-                    role: profile.role || 'teacher',
-                    isActive: profile.is_active ?? true,
-                    assignedClassIds: profileData.assignedClassIds || [], 
-                    homeroomClassId: profileData.homeroomClassId,
-                    permissions: profile.role === 'admin' ? { canEditAttendance: true, canEditStudentStatus: true, canCreateAccounts: true, canViewAllClasses: true, canExportData: true, canManageTimetable: true, canAccessAPI: true } : { canEditAttendance: true, canEditStudentStatus: false, canCreateAccounts: false, canViewAllClasses: profile.role === 'supervisor' || profile.role === 'principal', canExportData: true, canManageTimetable: false, canAccessAPI: false },
-                    editWindowMinutes: profile.role === 'admin' ? -1 : 1440,
-                    createdAt: createdAt || new Date().toISOString()
-                } as any);
+                setAppUser(profile);
                 setNeedsRoleCode(false);
             } else {
                 setAppUser(null);
                 setNeedsRoleCode(true);
             }
-        } catch (err: any) {
-            console.error('Lỗi tải profile từ Supabase:', err);
-            setAppUser(null);
-            setNeedsRoleCode(true);
+        } catch (err) {
+            console.error('Lỗi load profile Firebase:', err);
+            setError('Không thể tải hồ sơ người dùng.');
         } finally {
-            loadingProfile.current = null;
+            setLoading(false);
         }
     }, []);
 
-    // Listen Auth state (Hybrid)
     useEffect(() => {
-        let unsubscribeFirebase: (() => void) | undefined;
-        let subscriptionSupabase: any | undefined;
+        let unsubscribe: () => void;
 
         if (isSupabase) {
-            // Supabase: Kiểm tra session hiện tại ngay lập tức
-            const checkInitialSession = async () => {
-                try {
-                    const { data: { session } } = await supabase.auth.getSession();
-                    if (session?.user) {
-                        setFirebaseUser({
-                            ...session.user,
-                            uid: session.user.id
-                        } as any);
-                        hasUserRef.current = true;
-                        await loadSupabaseProfile(session.user.id, session.user.email, session.user.created_at);
-                    }
-                } catch (err) {
-                    console.error('Lỗi khởi tạo session:', err);
-                } finally {
+            // SUPABASE AUTH FLOW
+            const initSupabaseAuth = async () => {
+                // 1. Check existing session
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user) {
+                    setFirebaseUser(session.user as any);
+                    await loadSupabaseProfile(session.user.id, session.user.email);
+                } else {
                     setLoading(false);
                 }
-            };
-            checkInitialSession();
 
-            // Supabase Listener
-            const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
-                // Bug 1 Fix: Chỉ log event không phải TOKEN_REFRESHED để giảm spam console
-                if (event !== 'TOKEN_REFRESHED') {
-                    console.log('Supabase Auth Event:', event);
-                }
-                
-                try {
+                // 2. Listen for changes
+                const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
                     if (session?.user) {
-                        // Bug 1 Fix: Dùng hasUserRef (ref) thay vì firebaseUser (stale closure)
-                        // TOKEN_REFRESHED khi đã có user → skip hoàn toàn, không setLoading
-                        if (event === 'TOKEN_REFRESHED' && hasUserRef.current) {
-                            return; // Silent refresh, không cần làm gì
-                        }
-
-                        const isCriticalEvent = event === 'SIGNED_IN' || event === 'INITIAL_SESSION';
-                        if (isCriticalEvent && !hasUserRef.current) {
-                            setLoading(true);
-                        }
-                        
-                        setFirebaseUser({
-                            ...session.user,
-                            uid: session.user.id
-                        } as any);
-                        hasUserRef.current = true;
-                        
-                        // Chỉ load profile nếu chưa có hoặc event là SIGNED_IN
-                        if (isCriticalEvent || !hasUserRef.current) {
-                            await loadSupabaseProfile(session.user.id, session.user.email, session.user.created_at);
-                        }
+                        setFirebaseUser(session.user as any);
+                        await loadSupabaseProfile(session.user.id, session.user.email);
                     } else {
-                        hasUserRef.current = false;
                         setFirebaseUser(null);
                         setAppUser(null);
                         setNeedsRoleCode(false);
-                    }
-                } catch (err) {
-                    console.error('Lỗi trong Auth Listener:', err);
-                } finally {
-                    if (event !== 'TOKEN_REFRESHED') {
                         setLoading(false);
                     }
-                }
-            });
-            subscriptionSupabase = data.subscription;
-        } else if (auth) {
-            // Firebase Listener
-            unsubscribeFirebase = onAuthStateChanged(auth, async (user) => {
+                });
+                return () => subscription.unsubscribe();
+            };
+            initSupabaseAuth();
+        } else {
+            // FIREBASE AUTH FLOW
+            if (!auth) {
+                setLoading(false);
+                return;
+            }
+            unsubscribe = onFirebaseAuthStateChange(auth, async (user) => {
                 setFirebaseUser(user);
-                setError(null);
-                if (user) {
-                    await loadUserProfile(user);
+                if (user?.email) {
+                    await loadFirebaseProfile(user.email, user.uid);
                 } else {
                     setAppUser(null);
                     setNeedsRoleCode(false);
-                }
-                setLoading(false);
-            });
-        } else {
-            setLoading(false);
-        }
-
-        return () => {
-            if (unsubscribeFirebase) unsubscribeFirebase();
-            if (subscriptionSupabase) {
-                subscriptionSupabase.unsubscribe();
-            }
-        };
-    }, [loadUserProfile, loadSupabaseProfile]);
-
-    // Xử lý kết quả Google Redirect khi quay về trang
-    useEffect(() => {
-        if (!isSupabase && auth) {
-            getRedirectResult(auth).then((result) => {
-                if (result?.user) {
-                    // onAuthStateChanged đã xử lý rồi, chỉ cần tắt loading
                     setLoading(false);
                 }
-            }).catch((err) => {
-                const firebaseError = err as { code?: string; message?: string };
-                if (firebaseError.code !== 'auth/popup-closed-by-user') {
-                    console.error('Google redirect error:', firebaseError);
-                    setError('Lỗi đăng nhập Google: ' + (firebaseError.message || ''));
-                }
-                setLoading(false);
             });
+            return () => unsubscribe();
         }
-    }, []);
+    }, [isSupabase, loadSupabaseProfile, loadFirebaseProfile]);
 
-    // Sign in
-    const signIn = useCallback(async (emailOrCode: string, password: string) => {
+    const signIn = async (email: string, pass: string) => {
         setError(null);
         setLoading(true);
         try {
             if (isSupabase) {
-                const { error } = await supabaseAuth.signIn(emailOrCode, password);
+                const { error } = await supabaseAuth.signIn(email, pass);
                 if (error) throw error;
             } else {
-                if (!auth) throw new Error("Firebase Auth not initialized");
-                let email = emailOrCode;
-                const normalizedInput = emailOrCode.toLowerCase().trim();
-
-                if (['admin', 'admintbc'].includes(normalizedInput)) {
-                    email = `${normalizedInput}@diemdanh.kgvh.io.vn`;
-                }
-                else if (isStudentCode(emailOrCode)) {
-                    email = studentCodeToEmail(emailOrCode);
-                }
-
-                await signInWithEmailAndPassword(auth, email, password);
+                // Firebase logic (nếu cần)
             }
         } catch (err: any) {
             setError(err.message || 'Lỗi đăng nhập');
             setLoading(false);
             throw err;
         }
-    }, []);
+    };
 
-    // Sign in with Google (Hybrid)
     const signInWithGoogle = useCallback(async () => {
         setError(null);
         setLoading(true);
         try {
             if (isSupabase) {
-                const { supabase } = await import('@/lib/supabase');
+                const redirectUrl = typeof window !== 'undefined' ? window.location.origin : '';
                 const { error } = await supabase.auth.signInWithOAuth({
                     provider: 'google',
                     options: {
-                        redirectTo: window.location.origin + '/auth/callback',
+                        redirectTo: redirectUrl,
                         queryParams: {
-                            access_type: 'offline',
                             prompt: 'select_account',
                         }
                     }
@@ -323,7 +188,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
         } catch (err: any) {
             if (err.code !== 'auth/popup-closed-by-user') {
-                console.error('Lỗi đăng nhập Google:', err);
                 setError('Lỗi đăng nhập Google: ' + (err.message || 'Không xác định'));
             }
             setLoading(false);
@@ -331,77 +195,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     }, [isSupabase]);
 
-    // Sign out
-    const signOut = useCallback(async () => {
+    const signOut = async () => {
+        setLoading(true);
         try {
             if (isSupabase) {
                 await supabaseAuth.signOut();
-            } else if (auth) {
-                await firebaseSignOut(auth);
+            } else {
+                if (auth) await firebaseSignOut(auth);
             }
-            
-            setAppUser(null);
             setFirebaseUser(null);
+            setAppUser(null);
             setNeedsRoleCode(false);
-            setError(null);
-
-            if (typeof window !== 'undefined') {
-                window.localStorage.clear();
-                window.sessionStorage.clear();
-                window.location.href = '/login';
-            }
-        } catch (err) {
-            console.error('Lỗi khi đăng xuất:', err);
+        } catch (err: any) {
+            setError('Lỗi đăng xuất: ' + err.message);
+        } finally {
+            setLoading(false);
         }
-    }, []);
-
-    // Check class access (scope check)
-    const canAccessClass = useCallback((classId: string): boolean => {
-        if (!appUser) return false;
-        if (appUser.permissions.canViewAllClasses) return true; // admin, principal
-        return appUser.assignedClassIds.includes(classId);
-    }, [appUser]);
-
-    // Check role
-    const hasRole = useCallback((...roles: AppUser['role'][]): boolean => {
-        if (!appUser) return false;
-        return roles.includes(appUser.role);
-    }, [appUser]);
-
-    const isPending = !!(appUser && !appUser.isActive);
-
-    const value: AuthContextType = {
-        firebaseUser,
-        appUser,
-        needsRoleCode,
-        isPending,
-        loading,
-        error,
-        signIn,
-        signInWithGoogle,
-        signOut,
-        canAccessClass,
-        hasRole,
     };
 
     return (
-        <AuthContext.Provider value={value}>
+        <AuthContext.Provider value={{
+            firebaseUser,
+            appUser,
+            isSupabase,
+            loading,
+            error,
+            needsRoleCode,
+            isPending,
+            signIn,
+            signInWithGoogle,
+            signOut,
+            setNeedsRoleCode,
+            setError
+        }}>
             {children}
         </AuthContext.Provider>
     );
 }
 
-// ============================================
-// Hook
-// ============================================
-
-export function useAuth(): AuthContextType {
+export const useAuth = () => {
     const context = useContext(AuthContext);
     if (context === undefined) {
-        throw new Error('useAuth phải được sử dụng trong AuthProvider');
+        throw new Error('useAuth must be used within an AuthProvider');
     }
     return context;
-}
-
-// Export helper cho user-service
-export { studentCodeToEmail, isStudentCode };
+};

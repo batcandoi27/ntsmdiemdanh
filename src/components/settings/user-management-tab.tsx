@@ -123,7 +123,8 @@ export function UserManagementTab() {
     };
 
     const filteredUsers = users.filter(u => {
-        const matchSearch = u.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        const dName = u.displayName || '';
+        const matchSearch = dName.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (u.email && u.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
             (u.studentCode && u.studentCode.toLowerCase().includes(searchTerm.toLowerCase()));
         const matchRole = roleFilter === 'all' || u.role === roleFilter;

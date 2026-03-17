@@ -301,9 +301,18 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
                 }
 
                 // Thêm Comment nếu có chi tiết (VD: vắng tiết, lỗi vi phạm)
-                if (fullDetails.includes('(')) {
+                if (fullDetails.trim().includes('(')) {
                     cell.note = {
-                        texts: [{ text: fullDetails }]
+                        texts: [
+                            { 
+                                text: fullDetails, 
+                                font: { size: 8.5, name: 'Times New Roman' } 
+                            }
+                        ],
+                        // Kích thước chuẩn để không bị cắt nội dung dài
+                        width: 420,
+                        height: 160,
+                        margins: { inset: [0.4, 0.3, 0.4, 0.3], insetmode: 'custom' }
                     };
                 }
                 cell.border = BORDER_STYLE;

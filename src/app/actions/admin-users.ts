@@ -2,6 +2,8 @@
 
 const isSupabase = process.env.NEXT_PUBLIC_USE_SUPABASE === 'true';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { adminAuth, adminDb } from '@/lib/firebase-admin';
+import { revalidatePath } from 'next/cache';
 
 /**
  * Xoá tài khoản người dùng cả ở DB và Auth
@@ -25,7 +27,7 @@ export async function deleteUserAccount(targetUid: string) {
         } else {
             // 2. Thực hiện xoá ở Firebase Auth
             try {
-                await auth.deleteUser(targetUid);
+                await adminAuth.deleteUser(targetUid);
             } catch (error: any) {
                 if (error.code !== 'auth/user-not-found') {
                     console.error('Lỗi khi xoá User Auth:', error);

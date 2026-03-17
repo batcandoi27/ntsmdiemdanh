@@ -12,7 +12,7 @@ import { AttendanceStatusV3 } from "@/types/attendance-v3";
 import { SessionType } from "@/types/timetable";
 
 // Types
-type JsonStudent = { name: string; status: AttendanceStatusV3; note: string };
+type JsonStudent = { name: string; status: AttendanceStatusV3; note: string; missedPeriods?: number[] };
 type JsonClass = { className: string; totalStudents: number | null; absentCount: number; students: JsonStudent[] };
 type JsonRecord = { date: string; session: SessionType; classes: JsonClass[] };
 
@@ -23,6 +23,7 @@ type MatchedStudent = {
     originalNameStr: string; // From JSON
     status: AttendanceStatusV3;
     note: string;
+    missedPeriods?: number[];
     isMatched: boolean;
     suggestedMatches?: any[];
 };
@@ -306,6 +307,7 @@ export function ImportAttendanceDialog({ open, onOpenChange, onSuccess }: Import
                             originalNameStr: s.name,
                             status: s.status,
                             note: s.note,
+                            missedPeriods: s.missedPeriods || [],
                             isMatched,
                             suggestedMatches
                         };
@@ -324,6 +326,7 @@ export function ImportAttendanceDialog({ open, onOpenChange, onSuccess }: Import
                                 originalNameStr: "??????????",
                                 status: "absent",
                                 note: "",
+                                missedPeriods: [],
                                 isMatched: false,
                                 suggestedMatches: []
                             });
@@ -391,7 +394,8 @@ export function ImportAttendanceDialog({ open, onOpenChange, onSuccess }: Import
                             studentId: s.studentId!,
                             studentName: s.studentName,
                             status: s.status as AttendanceStatusV3,
-                            note: s.note || ''
+                            note: s.note || '',
+                            missedPeriods: s.missedPeriods || []
                         }));
 
                     if (studentsToUpdate.length > 0) {
@@ -429,7 +433,7 @@ export function ImportAttendanceDialog({ open, onOpenChange, onSuccess }: Import
                 setStep("review");
             }
         } catch (error: any) {
-            console.error("❌ Exception (Client Lỗi Cú Pháp):", error);
+            console.error("4. ❌ Exception (Client/Network Error):", error);
             toast.error(error.message || "Đã có lỗi không xác định.");
             setStep("review");
         } finally {
@@ -493,6 +497,7 @@ export function ImportAttendanceDialog({ open, onOpenChange, onSuccess }: Import
             originalNameStr: "Thêm thủ công",
             status: "absent",
             note: "",
+            missedPeriods: [],
             isMatched: false,
             suggestedMatches: []
         });
@@ -715,9 +720,15 @@ export function ImportAttendanceDialog({ open, onOpenChange, onSuccess }: Import
                                                                             </div>
                                                                         ) : (
                                                                             <div className="flex-1 flex items-center gap-2">
-                                                                                <CheckCircle2 className="w-4 h-4 text-green-500" />
-                                                                                <span className="text-sm font-black text-gray-800 flex-1">{s.studentName}</span>
-                                                                            </div>
+                                                                                 <span className="text-sm font-black text-gray-800 flex-1">
+                                                                                    {s.studentName}
+                                                                                    {s.missedPeriods && s.missedPeriods.length > 0 && (
+                                                                                        <span className="ml-2 text-[10px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded border border-red-100">
+                                                                                            T{s.missedPeriods.join(', ')}
+                                                                                        </span>
+                                                                                    )}
+                                                                                 </span>
+                                                                             </div>
                                                                         )}
 
                                                                         <div className="w-32">
@@ -736,6 +747,32 @@ export function ImportAttendanceDialog({ open, onOpenChange, onSuccess }: Import
                                                                                 <option value="violation">Vi Phạm</option>
                                                                             </select>
                                                                         </div>
+
+                                                                        <div className="w-40">
+                                                                             <div className="flex flex-wrap gap-1">
+                                                                                 {[1, 2, 3, 4, 5].map((p) => {
+                                                                                     const isChecked = s.missedPeriods?.includes(p);
+                                                                                     return (
+                                                                                         <button
+                                                                                             key={p}
+                                                                                             onClick={() => {
+                                                                                                 const newData = [...processedData];
+                                                                                                 const current = newData[rIdx].classes[cIdx].matchedStudents[sIdx].missedPeriods || [];
+                                                                                                 if (isChecked) {
+                                                                                                     newData[rIdx].classes[cIdx].matchedStudents[sIdx].missedPeriods = current.filter(id => id !== p);
+                                                                                                 } else {
+                                                                                                     newData[rIdx].classes[cIdx].matchedStudents[sIdx].missedPeriods = [...current, p];
+                                                                                                 }
+                                                                                                 setProcessedData(newData);
+                                                                                             }}
+                                                                                             className={`w-6 h-6 text-[10px] font-bold rounded border flex items-center justify-center transition-all ${isChecked ? 'bg-red-500 text-white border-red-600 shadow-sm' : 'bg-white text-gray-400 border-gray-200 hover:border-gray-400'}`}
+                                                                                         >
+                                                                                             {p}
+                                                                                         </button>
+                                                                                     );
+                                                                                 })}
+                                                                             </div>
+                                                                         </div>
 
                                                                         <div className="w-40">
                                                                             <input

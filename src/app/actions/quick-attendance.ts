@@ -8,9 +8,9 @@ import { fetchAppSettings } from './settings';
 import { 
     getClassAttendance, 
     getAttendanceByClasses, 
-    normalizeAttendanceRecord,
     batchMarkAttendance 
 } from '@/services/attendance-v3-service';
+import { normalizeAttendanceRecord } from '@/services/attendance-v3-utils';
 import { getColumnsByFrequency } from '@/services/column-service';
 import { getDailyRecords, saveDailyRecord, deleteRecord } from '@/services/record-service';
 
@@ -113,7 +113,7 @@ export async function getGradeAttendanceSummary(grade: number, dateStr: string, 
                 return parts.length > 1 ? parts[parts.length - 1] : '';
             };
 
-            const studentRecords = new Map<string, typeof classRecords>();
+            const studentRecords = new Map<string, any[]>();
             classRecords.forEach(r => {
                 const normR = normalizeAttendanceRecord(r);
                 if (!studentRecords.has(normR.studentId)) studentRecords.set(normR.studentId, []);
@@ -128,30 +128,80 @@ export async function getGradeAttendanceSummary(grade: number, dateStr: string, 
                 const stt = getSTT(student.code);
                 const item = { name, stt };
 
-                const mainRecord = records.find(r => r.period === null);
-                if (mainRecord) {
-                    const status = mainRecord.status;
-                    const note = mainRecord.note || '';
-                    const itemWithNote = { ...item, note };
+                // --- GỘP DỮ LIỆU TIẾT LẺ ---
+                // Chúng ta sẽ gộp các bản ghi có cùng student thành 1 thực thể ảo cho UI
+                const aggregated: any = {
+                    missedPeriods: [] as number[],
+                    violationPeriods: [] as number[],
+                    status: '' as string,
+                    note: '',
+                    violationNote: '',
+                    rewardNote: '',
+                    violation: false,
+                    reward: false
+                };
 
-                    if (status === 'excused' || status === 'P') { counts.P++; lists.P.push(itemWithNote); }
-                    else if (status === 'absent' || status === 'K') { counts.K++; lists.K.push(itemWithNote); }
-                    else if (status === 'late' || status === 'T') { counts.T++; lists.T.push(itemWithNote); }
-                    else if (status === 'absent_unknown' || status === 'V') { counts.V++; lists.V.push(itemWithNote); }
+                records.forEach(r => {
+                    // Chuyên cần
+                    if (['excused', 'absent', 'late', 'absent_unknown', 'P', 'K', 'T', 'V'].includes(r.status)) {
+                        aggregated.status = r.status;
+                        aggregated.note = r.note || aggregated.note;
+                        if (r.period) aggregated.missedPeriods.push(r.period);
+                        else if (r.period === null) aggregated.missedPeriods = [1, 2, 3, 4, 5];
+                    }
+                    // Vi phạm
+                    if (r.violation || r.status === 'violation' || r.status === 'VP') {
+                        aggregated.violation = true;
+                        aggregated.violationNote = r.violationNote || r.note || aggregated.violationNote;
+                        if (r.period) aggregated.violationPeriods.push(r.period);
+                        else if (r.period === null) aggregated.violationPeriods = [1, 2, 3, 4, 5];
+                    }
+                    // Khen thưởng
+                    if (r.reward || r.status === 'reward' || r.status === 'praise' || r.status === 'KH') {
+                        aggregated.reward = true;
+                        aggregated.rewardNote = r.rewardNote || r.note || aggregated.rewardNote;
+                        if (r.period) aggregated.rewardPeriods = Array.from(new Set([...(aggregated.rewardPeriods || []), r.period])).sort();
+                        else if (r.period === null) aggregated.rewardPeriods = [1, 2, 3, 4, 5];
+                    }
+                });
+                
+                // Chuẩn hóa mảng tiết
+                aggregated.missedPeriods = Array.from(new Set(aggregated.missedPeriods)).sort();
+                aggregated.violationPeriods = Array.from(new Set(aggregated.violationPeriods)).sort();
+                aggregated.rewardPeriods = Array.from(new Set(aggregated.rewardPeriods || [])).sort();
+
+                // Tạo Suffix hiển thị tiết lẻ
+                const getSuffix = (pArr: number[]) => {
+                    // Nếu vắng >= 5 tiết (hoặc đủ 5 tiết 1,2,3,4,5) thì coi như toàn buổi -> KHÔNG HIỆN
+                    if (pArr.length >= 5 || pArr.length === 0) return "";
+                    return ` (T${pArr.join(',')})`;
+                };
+
+                // 1. Chuyên cần chính
+                if (aggregated.status) {
+                    const status = aggregated.status;
+                    const suffix = getSuffix(aggregated.missedPeriods);
+                    const itemWithSuffix = { ...item, name: item.name + suffix, note: aggregated.note };
+
+                    if (status === 'excused' || status === 'P') { counts.P++; lists.P.push(itemWithSuffix); }
+                    else if (status === 'absent' || status === 'K') { counts.K++; lists.K.push(itemWithSuffix); }
+                    else if (status === 'late' || status === 'T') { counts.T++; lists.T.push(itemWithSuffix); }
+                    else if (status === 'absent_unknown' || status === 'V') { counts.V++; lists.V.push(itemWithSuffix); }
                 }
 
-                const violationRec = records.find(r => r.violation || r.status === 'VP' || r.status === 'violation');
-                if (violationRec) {
+                // 2. Vi phạm
+                if (aggregated.violation) {
                     counts.VP++;
-                    lists.VP.push({ ...item, note: violationRec.violationNote || violationRec.note || '' });
+                    const suffix = getSuffix(aggregated.violationPeriods);
+                    lists.VP.push({ ...item, name: item.name + suffix, note: aggregated.violationNote });
                 }
 
-                const rewardRec = records.find(r => r.reward || r.status === 'KH' || r.status === 'reward' || r.status === 'praise');
-                if (rewardRec) {
+                // 3. Khen thưởng
+                if (aggregated.reward) {
                     counts.KH++;
-                    lists.KH.push({ ...item, note: rewardRec.rewardNote || rewardRec.note || '' });
+                    const suffix = getSuffix(aggregated.rewardPeriods);
+                    lists.KH.push({ ...item, name: item.name + suffix, note: aggregated.rewardNote });
                 }
-
             });
 
             const sortFn = (a: { stt: string }, b: { stt: string }) => (parseInt(a.stt) || 0) - (parseInt(b.stt) || 0);
@@ -188,9 +238,40 @@ export async function getClassAttendanceDetails(classId: string, dateStr: string
         });
 
         const records = (await getClassAttendance(classId, dateStr, session)).map(r => normalizeAttendanceRecord(r));
-        const recordMap = new Map<string, typeof records[0]>();
+        const recordMap = new Map<string, any>();
+        
         records.forEach(r => {
-            if (r.studentId) recordMap.set(r.studentId, r);
+            const sid = r.studentId;
+            if (!sid) return;
+            
+            if (!recordMap.has(sid)) {
+                recordMap.set(sid, { 
+                    ...r, 
+                    missedPeriods: r.period ? [r.period] : (r.period === null ? [1,2,3,4,5] : []),
+                    violationPeriods: r.violation ? (r.period ? [r.period] : [1,2,3,4,5]) : []
+                });
+            } else {
+                const existing = recordMap.get(sid);
+                // Gộp Vi phạm
+                if (r.violation) {
+                    existing.violation = true;
+                    existing.violationNote = r.violationNote || r.note || existing.violationNote;
+                    if (r.period) existing.violationPeriods = Array.from(new Set([...(existing.violationPeriods || []), r.period])).sort();
+                    else if (r.period === null) existing.violationPeriods = [1,2,3,4,5];
+                }
+                // Gộp Khen thưởng
+                if (r.reward) {
+                    existing.reward = true;
+                    existing.rewardNote = r.rewardNote || r.note || existing.rewardNote;
+                }
+                // Gộp Chuyên cần & Tiết lẻ
+                if (['absent', 'late', 'excused'].includes(r.status)) {
+                    existing.status = r.status;
+                    if (!existing.note) existing.note = r.note;
+                    if (r.period) existing.missedPeriods = Array.from(new Set([...(existing.missedPeriods || []), r.period])).sort();
+                    else if (r.period === null) existing.missedPeriods = [1,2,3,4,5];
+                }
+            }
         });
 
         return students.map(s => {
@@ -215,7 +296,8 @@ export async function getClassAttendanceDetails(classId: string, dateStr: string
                     violationNote: record.violationNote,
                     violationPeriods: record.violationPeriods,
                     reward: record.reward,
-                    rewardNote: record.rewardNote
+                    rewardNote: record.rewardNote,
+                    missedPeriods: record.missedPeriods // Thêm field này để Dialog hiện lại đúng các tiết đã tích
                 };
             }
 
@@ -304,7 +386,7 @@ export async function getClassesAttendanceSummary(classIds: string[], dateStr: s
                 return parts.length > 1 ? parts[parts.length - 1] : '';
             };
 
-            const studentRecords = new Map<string, typeof classRecords>();
+            const studentRecords = new Map<string, any[]>();
             classRecords.forEach(r => {
                 const normR = normalizeAttendanceRecord(r);
                 if (!studentRecords.has(normR.studentId)) studentRecords.set(normR.studentId, []);
@@ -318,19 +400,64 @@ export async function getClassesAttendanceSummary(classIds: string[], dateStr: s
                 const stt = getSTT(student.code);
                 const item = { name: student.fullName, stt };
 
-                const mainRecord = records.find(r => r.period === null);
-                if (mainRecord) {
-                    const status = mainRecord.status;
-                    if (status === 'excused') { counts.P++; lists.P.push({...item, note: mainRecord.note}); }
-                    else if (status === 'absent') { counts.K++; lists.K.push({...item, note: mainRecord.note}); }
-                    else if (status === 'late') { counts.T++; lists.T.push({...item, note: mainRecord.note}); }
+                // --- GỘP DỮ LIỆU TIẾT LÈ ---
+                const aggregated: any = {
+                    missedPeriods: [] as number[],
+                    violationPeriods: [] as number[],
+                    status: '' as string,
+                    note: '',
+                    violationNote: '',
+                    rewardNote: '',
+                    violation: false,
+                    reward: false
+                };
+
+                records.forEach(r => {
+                    if (['excused', 'absent', 'late', 'absent_unknown', 'P', 'K', 'T', 'V'].includes(r.status)) {
+                        aggregated.status = r.status;
+                        aggregated.note = r.note || aggregated.note;
+                        if (r.period) aggregated.missedPeriods.push(r.period);
+                        else if (r.period === null) aggregated.missedPeriods = [1, 2, 3, 4, 5];
+                    }
+                    if (r.violation || r.status === 'violation' || r.status === 'VP') {
+                        aggregated.violation = true;
+                        aggregated.violationNote = r.violationNote || r.note || aggregated.violationNote;
+                        if (r.period) aggregated.violationPeriods.push(r.period);
+                        else if (r.period === null) aggregated.violationPeriods = [1, 2, 3, 4, 5];
+                    }
+                    if (r.reward || r.status === 'reward' || r.status === 'praise' || r.status === 'KH') {
+                        aggregated.reward = true;
+                        aggregated.rewardNote = r.rewardNote || r.note || aggregated.rewardNote;
+                    }
+                });
+
+                aggregated.missedPeriods = Array.from(new Set(aggregated.missedPeriods)).sort();
+                aggregated.violationPeriods = Array.from(new Set(aggregated.violationPeriods)).sort();
+
+                const getSuffix = (pArr: number[]) => (pArr.length > 0 && pArr.length < 5) ? ` (T${pArr.join(',')})` : "";
+
+                // 1. Chuyên cần chính
+                if (aggregated.status) {
+                    const status = aggregated.status;
+                    const suffix = getSuffix(aggregated.missedPeriods);
+                    const itemWithSuffix = { ...item, name: item.name + suffix, note: aggregated.note };
+                    if (status === 'excused' || status === 'P') { counts.P++; lists.P.push(itemWithSuffix); }
+                    else if (status === 'absent' || status === 'K') { counts.K++; lists.K.push(itemWithSuffix); }
+                    else if (status === 'late' || status === 'T') { counts.T++; lists.T.push(itemWithSuffix); }
                 }
 
-                const violationRec = records.find(r => r.violation || r.status === 'VP');
-                if (violationRec) { counts.VP++; lists.VP.push({...item, note: violationRec.violationNote || violationRec.note}); }
+                // 2. Vi phạm
+                if (aggregated.violation) { 
+                    counts.VP++; 
+                    const suffix = getSuffix(aggregated.violationPeriods);
+                    lists.VP.push({...item, name: item.name + suffix, note: aggregated.violationNote}); 
+                }
                 
-                const rewardRec = records.find(r => r.reward || r.status === 'KH');
-                if (rewardRec) { counts.KH++; lists.KH.push({...item, note: rewardRec.rewardNote || rewardRec.note}); }
+                // 3. Khen thưởng
+                if (aggregated.reward) { 
+                    counts.KH++; 
+                    lists.KH.push({...item, note: aggregated.rewardNote}); 
+                }
             });
 
             const sortFn = (a: any, b: any) => (parseInt(a.stt) || 0) - (parseInt(b.stt) || 0);

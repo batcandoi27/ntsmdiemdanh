@@ -1,0 +1,22 @@
+
+> app-diemdanh@02.2026 build
+> next build
+
+   ▲ Next.js 14.1.0
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+Failed to compile.
+
+./src/app/actions/admin-users.ts:28:23
+Type error: Cannot find name 'auth'.
+
+[0m [90m 26 |[39m             [90m// 2. Thực hiện xoá ở Firebase Auth[39m[0m
+[0m [90m 27 |[39m             [36mtry[39m {[0m
+[0m[31m[1m>[22m[39m[90m 28 |[39m                 [36mawait[39m auth[33m.[39mdeleteUser(targetUid)[33m;[39m[0m
+[0m [90m    |[39m                       [31m[1m^[22m[39m[0m
+[0m [90m 29 |[39m             } [36mcatch[39m (error[33m:[39m any) {[0m
+[0m [90m 30 |[39m                 [36mif[39m (error[33m.[39mcode [33m!==[39m [32m'auth/user-not-found'[39m) {[0m
+[0m [90m 31 |[39m                     console[33m.[39merror([32m'Lỗi khi xoá User Auth:'[39m[33m,[39m error)[33m;[39m[0m

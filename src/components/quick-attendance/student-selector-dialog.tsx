@@ -9,7 +9,7 @@ import { useAuth } from '@/context/auth-context';
 import { AttendanceStatus } from '@/types/models';
 
 import { SessionType } from '@/types/timetable';
-import { Search, Loader2, Save } from 'lucide-react';
+import { Search, Loader2, Save, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const triggerHapticFeedback = () => {
@@ -65,6 +65,7 @@ export function StudentSelectorDialog({
     // Map studentCode -> boolean for violation/praise
     const [localViolationMap, setLocalViolationMap] = useState<Record<string, boolean>>({});
     const [localRewardMap, setLocalRewardMap] = useState<Record<string, boolean>>({});
+    const [localRewardPeriodsMap, setLocalRewardPeriodsMap] = useState<Record<string, number[]>>({});
     
     // Map studentCode -> number[]: Tiết vắng/phép/trễ và Tiết vi phạm
     const [localMissedPeriodsMap, setLocalMissedPeriodsMap] = useState<Record<string, number[]>>({});
@@ -115,17 +116,21 @@ export function StudentSelectorDialog({
                     const rewardMap: Record<string, boolean> = {};
                     const missedPeriodsMap: Record<string, number[]> = {};
                     const violationPeriodsMap: Record<string, number[]> = {};
+                    const rewardPeriodsMap: Record<string, number[]> = {};
                     const noteMap: Record<string, string> = {};
                     const vNoteMap: Record<string, string> = {};
                     const rNoteMap: Record<string, string> = {};
 
                     data.forEach(s => {
-                        statusMap[s.student.code] = s.status;
+                        // Khởi tạo luôn rỗng cho tất cả học sinh để dễ track thay đổi
+                        statusMap[s.student.code] = s.status || '';
+                        violationMap[s.student.code] = !!s.violation;
+                        rewardMap[s.student.code] = !!s.reward;
+                        
                         if (s.note) noteMap[s.student.code] = s.note;
                         
                         // @ts-ignore
                         if (s.violation) {
-                            violationMap[s.student.code] = true;
                             // @ts-ignore
                             violationPeriodsMap[s.student.code] = s.violationPeriods || [1, 2, 3, 4, 5];
                         }
@@ -134,17 +139,19 @@ export function StudentSelectorDialog({
                         
                         // @ts-ignore
                         if (s.reward) {
-                            rewardMap[s.student.code] = true;
                             // @ts-ignore
                             rNoteMap[s.student.code] = s.rewardNote || '';
+                            // @ts-ignore
+                            rewardPeriodsMap[s.student.code] = s.rewardPeriods || [];
                         }
                         
                         // @ts-ignore
                         if (s.missedPeriods) {
+                            // @ts-ignore
                             missedPeriodsMap[s.student.code] = s.missedPeriods;
                         } else if (['P', 'K', 'T', 'V'].includes(s.status)) {
-                            // Fallback cho record cũ không có missedPeriods
-                            missedPeriodsMap[s.student.code] = [1, 2, 3, 4, 5];
+                            // Mặc định cho record cũ: Vắng cả buổi (rỗng = 5 tiết)
+                            missedPeriodsMap[s.student.code] = [];
                         }
                     });
                     setLocalStatusMap(statusMap);
@@ -155,6 +162,7 @@ export function StudentSelectorDialog({
                     setLocalNotesMap(noteMap);
                     setLocalViolationNotesMap(vNoteMap);
                     setLocalRewardNotesMap(rNoteMap);
+                    setLocalRewardPeriodsMap(rewardPeriodsMap);
                 })
                 .finally(() => setLoading(false));
         }
@@ -174,10 +182,13 @@ export function StudentSelectorDialog({
 
         if (targetStatus === 'KH') {
             // Toggle Khen thưởng độc lập
-            setLocalRewardMap(prev => ({
-                ...prev,
-                [studentCode]: !prev[studentCode]
-            }));
+            setLocalRewardMap(prev => {
+                const newVal = !prev[studentCode];
+                if (newVal && !localRewardPeriodsMap[studentCode]) {
+                    setLocalRewardPeriodsMap(p => ({ ...p, [studentCode]: [] }));
+                }
+                return { ...prev, [studentCode]: newVal };
+            });
             return;
         }
 
@@ -187,9 +198,9 @@ export function StudentSelectorDialog({
             const isTarget = currentStatus === targetStatus;
             const newStatus = isTarget ? '' as AttendanceStatus : targetStatus;
             
-            // Nếu là bật trạng thái mới, mặc định chọn cả 5 tiết
+            // Mặc định là vắng cả buổi (mảng rỗng)
             if (newStatus && !localMissedPeriodsMap[studentCode]) {
-                setLocalMissedPeriodsMap(p => ({ ...p, [studentCode]: [1, 2, 3, 4, 5] }));
+                setLocalMissedPeriodsMap(p => ({ ...p, [studentCode]: [] }));
             }
             
             return {
@@ -197,6 +208,18 @@ export function StudentSelectorDialog({
                 [studentCode]: newStatus
             };
         });
+    };
+
+    const handleClear = (studentCode: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        triggerHapticFeedback();
+        setLocalStatusMap(prev => ({ ...prev, [studentCode]: '' as AttendanceStatus }));
+        setLocalViolationMap(prev => ({ ...prev, [studentCode]: false }));
+        setLocalRewardMap(prev => ({ ...prev, [studentCode]: false }));
+        setLocalMissedPeriodsMap(p => ({ ...p, [studentCode]: [] }));
+        setLocalViolationPeriodsMap(p => ({ ...p, [studentCode]: [] }));
+        setLocalRewardPeriodsMap(p => ({ ...p, [studentCode]: [] }));
+        setLocalNotesMap(p => ({ ...p, [studentCode]: '' }));
     };
 
     const handleNoteChange = (studentCode: string, note: string) => {
@@ -208,12 +231,17 @@ export function StudentSelectorDialog({
     };
 
     const handleSave = () => {
+        console.group("🚀 [Quick Attendance] Đang lưu Điểm danh thủ công");
         startSaving(async () => {
             const marks: any[] = [];
+            // Thu thập TẤT CẢ các mã học sinh đã được thay đổi HOẶC có dữ liệu ban đầu
+            // Để gửi lên server. Server sẽ dùng danh sách này để DELETE toàn bộ, rồi INSERT nếu có.
             const allCodes = Array.from(new Set([
                 ...Object.keys(localStatusMap),
                 ...Object.keys(localViolationMap),
-                ...Object.keys(localRewardMap)
+                ...Object.keys(localRewardMap),
+                // Lấy thêm các học sinh có điểm danh ban đầu để đảm bảo nếu bị clear thì vẫn gửi lên
+                ...students.filter(s => s.status || s.violation || s.reward).map(s => s.student.code)
             ]));
 
             allCodes.forEach(code => {
@@ -221,25 +249,35 @@ export function StudentSelectorDialog({
                 const hasViolation = localViolationMap[code];
                 const hasReward = localRewardMap[code];
 
-                if (status || hasViolation || hasReward) {
-                    let v3Status: AttendanceStatusV3 = 'present';
-                    if (status === 'P') v3Status = 'excused';
-                    else if (status === 'K') v3Status = 'absent';
-                    else if (status === 'T') v3Status = 'late';
+                // Logic: Gửi record ngay cả khi là 'present' (status rỗng) để backend thực hiện DELETE
+                let v3Status: AttendanceStatusV3 = 'present';
+                if (status === 'P') v3Status = 'excused';
+                else if (status === 'K') v3Status = 'absent';
+                else if (status === 'T') v3Status = 'late';
+                else if (status === 'V') v3Status = 'absent';
 
-                    marks.push({
-                        studentId: code,
-                        studentName: students.find(s => s.student.code === code)?.student.fullName || code,
-                        status: v3Status,
-                        missedPeriods: status ? (localMissedPeriodsMap[code] || [1, 2, 3, 4, 5]) : undefined,
-                        note: localNotesMap[code] || '',
-                        violation: hasViolation || false,
-                        violationNote: localViolationNotesMap[code] || '',
-                        violationPeriods: hasViolation ? (localViolationPeriodsMap[code] || [1, 2, 3, 4, 5]) : undefined,
-                        reward: hasReward || false,
-                        rewardNote: localRewardNotesMap[code] || ''
-                    });
-                }
+                // Logic: Nếu không chọn tiết nào (rỗng) -> Mặc định vắng cả 5 tiết [1,2,3,4,5]
+                // Nếu status là '' (present) thì missedPeriods rỗng
+                const selectedMissed = localMissedPeriodsMap[code] || [];
+                const missedPeriods = (status && selectedMissed.length === 0) 
+                    ? [1, 2, 3, 4, 5] 
+                    : (status ? selectedMissed : []);
+
+                marks.push({
+                    studentId: code,
+                    studentName: students.find(s => s.student.code === code)?.student.fullName || code,
+                    status: v3Status,
+                    missedPeriods,
+                    // Hiệu chỉnh: Nếu học sinh chỉ Vi phạm (không Trễ/Vắng) thì note (cho Trễ) phải để trống
+                    note: v3Status !== 'present' ? (localNotesMap[code] || '') : '',
+                    violation: hasViolation || false,
+                    violationNote: localViolationNotesMap[code] || '',
+                    violationPeriods: hasViolation ? (localViolationPeriodsMap[code] || []) : undefined,
+                    reward: hasReward || false,
+                    rewardNote: localRewardNotesMap[code] || '',
+                    // @ts-ignore
+                    rewardPeriods: hasReward ? (localRewardPeriodsMap[code] || []) : undefined
+                });
             });
 
             if (!appUser) return;
@@ -247,6 +285,7 @@ export function StudentSelectorDialog({
             const allStudentIds = students.map(s => s.student.code);
 
             try {
+                console.log("-> 1. Danh sách học sinh cần cập nhật:", marks);
                 await batchMarkAttendance(appUser, {
                     classId,
                     session,
@@ -254,10 +293,14 @@ export function StudentSelectorDialog({
                     marks
                 }, allStudentIds, new Date(date));
 
+                console.log("-> 2. ✅ Lưu thành công!");
                 onSaved();
                 onOpenChange(false);
             } catch (error: any) {
+                console.error("-> ❌ Lỗi khi lưu:", error);
                 alert(error.message || 'Lỗi lưu điểm danh');
+            } finally {
+                console.groupEnd();
             }
         });
     };
@@ -339,28 +382,50 @@ export function StudentSelectorDialog({
                                                 />
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-2">
-                                                        <h4 className="font-bold text-gray-800 text-sm truncate">{item.student.fullName}</h4>
+                                                        <h4 className={cn(
+                                                            "font-bold text-sm truncate transition-colors",
+                                                            currentStatus === 'P' ? "text-yellow-600" :
+                                                            currentStatus === 'K' ? "text-red-600" :
+                                                            (currentStatus === 'T' || currentStatus === 'V') ? "text-blue-600" :
+                                                            hasViolation ? "text-purple-600" :
+                                                            hasReward ? "text-green-600" :
+                                                            "text-gray-800"
+                                                        )}>
+                                                            {item.student.fullName}
+                                                        </h4>
                                                         <span className="text-xs text-gray-400 font-mono shrink-0">{item.student.code}</span>
                                                     </div>
                                                 </div>
                                             </div>
 
                                             {/* Status Badge - Multi status support */}
-                                            <div className="flex gap-1">
-                                                {currentStatus && (
-                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 border border-blue-200`}>
-                                                        {currentStatus}
-                                                    </span>
-                                                )}
-                                                {hasViolation && (
-                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-600 border border-purple-200`}>
-                                                        VP
-                                                    </span>
-                                                )}
-                                                {hasReward && (
-                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-100 text-green-600 border border-green-200`}>
-                                                        KH
-                                                    </span>
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex gap-1">
+                                                    {currentStatus && (
+                                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 border border-blue-200`}>
+                                                            {currentStatus}
+                                                        </span>
+                                                    )}
+                                                    {hasViolation && (
+                                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-600 border border-purple-200`}>
+                                                            VP
+                                                        </span>
+                                                    )}
+                                                    {hasReward && (
+                                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-100 text-green-600 border border-green-200`}>
+                                                            KH
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                
+                                                {(currentStatus || hasViolation || hasReward) && (
+                                                    <button
+                                                        onClick={(e) => handleClear(item.student.code, e)}
+                                                        className="p-1 hover:bg-red-100 text-red-400 hover:text-red-600 rounded-full transition-colors"
+                                                        title="Xóa điểm danh"
+                                                    >
+                                                        <X size={14} />
+                                                    </button>
                                                 )}
                                             </div>
                                         </div>
@@ -369,8 +434,8 @@ export function StudentSelectorDialog({
                                         {isChecked && showNoteInput && (
                                             <div className="mt-3 pl-8 animate-in slide-in-from-top-1 space-y-3">
                                                 
-                                                {/* Bộ chọn tiết lẻ (Hiện cho P, K, T, VP) */}
-                                                {(['P', 'K', 'T', 'VP'].includes(targetStatus)) && (
+                                                {/* Bộ chọn tiết lẻ (Hiện cho P, K, T, VP, KH) */}
+                                                {(['P', 'K', 'T', 'VP', 'KH'].includes(targetStatus)) && (
                                                     <div className="space-y-1.5">
                                                         <div className="flex items-center gap-2">
                                                             <div className="text-[10px] text-gray-400 font-medium">
@@ -380,16 +445,18 @@ export function StudentSelectorDialog({
                                                         <div className="flex flex-wrap gap-1.5">
                                                             {[1, 2, 3, 4, 5].map(p => {
                                                                 const periods = targetStatus === 'VP' 
-                                                                    ? (localViolationPeriodsMap[item.student.code] || [1,2,3,4,5])
-                                                                    : (localMissedPeriodsMap[item.student.code] || [1,2,3,4,5]);
+                                                                    ? (localViolationPeriodsMap[item.student.code] || [])
+                                                                    : (targetStatus === 'KH' 
+                                                                        ? (localRewardPeriodsMap[item.student.code] || [])
+                                                                        : (localMissedPeriodsMap[item.student.code] || []));
                                                                 
                                                                 const isActive = periods.includes(p);
                                                                 
                                                                 const toggleP = (e: React.MouseEvent) => {
                                                                     e.stopPropagation();
-                                                                    const setFn = targetStatus === 'VP' ? setLocalViolationPeriodsMap : setLocalMissedPeriodsMap;
+                                                                    const setFn = targetStatus === 'VP' ? setLocalViolationPeriodsMap : (targetStatus === 'KH' ? setLocalRewardPeriodsMap : setLocalMissedPeriodsMap);
                                                                     setFn(prev => {
-                                                                        const current = prev[item.student.code] || [1,2,3,4,5];
+                                                                        const current = prev[item.student.code] || [];
                                                                         const next = current.includes(p) 
                                                                             ? current.filter(x => x !== p) 
                                                                             : [...current, p].sort();
@@ -402,11 +469,11 @@ export function StudentSelectorDialog({
                                                                         key={p}
                                                                         onClick={toggleP}
                                                                         className={`text-[10px] min-w-[32px] px-2 py-1 rounded border transition-colors ${isActive
-                                                                            ? (targetStatus === 'VP' ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-blue-100 text-blue-700 border-blue-200')
+                                                                            ? (targetStatus === 'VP' ? 'bg-purple-100 text-purple-700 border-purple-200' : (targetStatus === 'KH' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-blue-100 text-blue-700 border-blue-200'))
                                                                             : 'bg-white text-gray-400 border-gray-100 hover:bg-gray-50'
                                                                             } font-bold`}
                                                                     >
-                                                                        T{p}
+                                                                        Tiết {p}
                                                                     </button>
                                                                 );
                                                             })}
@@ -425,15 +492,22 @@ export function StudentSelectorDialog({
                                                                         key={suggestion}
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
-                                                                            const currentVal = targetStatus === 'VP' ? (localViolationNotesMap[item.student.code] || '') : (targetStatus === 'KH' ? (localRewardNotesMap[item.student.code] || '') : (localNotesMap[item.student.code] || ''));
-                                                                            const newVal = currentVal ? `${currentVal}, ${suggestion}` : suggestion;
+                                                                            const currentVal = (targetStatus === 'VP' ? localViolationNotesMap[item.student.code] : (targetStatus === 'KH' ? localRewardNotesMap[item.student.code] : localNotesMap[item.student.code])) || '';
                                                                             
-                                                                            if (targetStatus === 'KH') setLocalRewardNotesMap(p => ({ ...p, [item.student.code]: suggestion }));
-                                                                            else handleNoteChange(item.student.code, suggestion);
+                                                                            const parts = currentVal.split(', ').filter(Boolean);
+                                                                            let newVal = '';
+                                                                            if (parts.includes(suggestion)) {
+                                                                                newVal = parts.filter(p => p !== suggestion).join(', ');
+                                                                            } else {
+                                                                                newVal = currentVal ? `${currentVal}, ${suggestion}` : suggestion;
+                                                                            }
+                                                                            
+                                                                            if (targetStatus === 'KH') setLocalRewardNotesMap(p => ({ ...p, [item.student.code]: newVal }));
+                                                                            else handleNoteChange(item.student.code, newVal);
                                                                         }}
                                                                         className={cn(
                                                                             "text-[10px] px-2 py-1 rounded border transition-colors font-medium",
-                                                                            ((targetStatus === 'VP' ? localViolationNotesMap[item.student.code] : (targetStatus === 'KH' ? localRewardNotesMap[item.student.code] : localNotesMap[item.student.code])) === suggestion)
+                                                                            ((targetStatus === 'VP' ? localViolationNotesMap[item.student.code] : (targetStatus === 'KH' ? localRewardNotesMap[item.student.code] : localNotesMap[item.student.code])) || '').split(', ').includes(suggestion)
                                                                                 ? "bg-gray-800 border-gray-800 text-white font-bold"
                                                                                 : cn("bg-white", group.color)
                                                                         )}
@@ -445,17 +519,49 @@ export function StudentSelectorDialog({
                                                         </div>
                                                     ))}
                                                     
-                                                    <input
-                                                        type="text"
-                                                        placeholder={targetStatus === 'KH' ? "Nội dung khen thưởng..." : "Ghi chú thêm..."}
-                                                        value={targetStatus === 'VP' ? (localViolationNotesMap[item.student.code] || '') : (targetStatus === 'KH' ? (localRewardNotesMap[item.student.code] || '') : (localNotesMap[item.student.code] || ''))}
-                                                        onChange={(e) => {
-                                                            if (targetStatus === 'KH') setLocalRewardNotesMap(p => ({ ...p, [item.student.code]: e.target.value }));
-                                                            else handleNoteChange(item.student.code, e.target.value);
-                                                        }}
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        className="w-full text-xs p-2 border border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-400 outline-none"
-                                                    />
+                                                    <div className="space-y-2">
+                                                        {((targetStatus === 'P' || targetStatus === 'K' || targetStatus === 'T' || targetStatus === 'V') && (['P', 'K', 'T', 'V'].includes(currentStatus || ''))) && (
+                                                            <div className="space-y-1">
+                                                                <label className="text-[10px] font-bold text-sky-600 uppercase">Ghi chú Điểm danh (Trễ/Vắng/Phép):</label>
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Đi muộn, phép gia đình..."
+                                                                    value={localNotesMap[item.student.code] || ''}
+                                                                    onChange={(e) => setLocalNotesMap(prev => ({ ...prev, [item.student.code]: e.target.value }))}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    className="w-full px-3 py-2 text-sm border border-sky-200 rounded-lg focus:ring-2 focus:ring-sky-500 outline-none bg-sky-50/30 text-sky-700 font-medium placeholder:text-sky-300/40"
+                                                                />
+                                                            </div>
+                                                        )}
+
+                                                        {(targetStatus === 'VP' && hasViolation) && (
+                                                            <div className="space-y-1">
+                                                                <label className="text-[10px] font-bold text-purple-600 uppercase">Ghi chú Vi phạm:</label>
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Áo ngoài quần, không làm bài..."
+                                                                    value={localViolationNotesMap[item.student.code] || ''}
+                                                                    onChange={(e) => setLocalViolationNotesMap(prev => ({ ...prev, [item.student.code]: e.target.value }))}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    className="w-full px-3 py-2 text-sm border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none bg-purple-50/30 text-purple-700 font-medium placeholder:text-purple-300/40"
+                                                                />
+                                                            </div>
+                                                        )}
+
+                                                        {(targetStatus === 'KH' && hasReward) && (
+                                                            <div className="space-y-1">
+                                                                <label className="text-[10px] font-bold text-green-600 uppercase">Nội dung Khen thưởng:</label>
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Phát biểu tốt, giúp đỡ bạn..."
+                                                                    value={localRewardNotesMap[item.student.code] || ''}
+                                                                    onChange={(e) => setLocalRewardNotesMap(prev => ({ ...prev, [item.student.code]: e.target.value }))}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    className="w-full px-3 py-2 text-sm border border-green-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none bg-green-50/30 text-green-700 font-medium placeholder:text-green-300/40"
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         )}

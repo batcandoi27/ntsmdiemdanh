@@ -1,0 +1,1228 @@
+[
+  {
+    "date": "2026-02-23",
+    "session": "morning",
+    "classes": [
+      {
+        "className": "8A9",
+        "totalStudents": 39,
+        "absentCount": 3,
+        "students": [
+          { "name": "Hưng", "status": "excused", "note": "P" },
+          { "name": "My", "status": "excused", "note": "P" },
+          { "name": "Bảo", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A10",
+        "totalStudents": 38,
+        "absentCount": 11,
+        "students": [
+          { "name": "B. Vy", "status": "excused", "note": "P" },
+          { "name": "Jasmine", "status": "absent", "note": "" },
+          { "name": "Hùng", "status": "excused", "note": "P" },
+          { "name": "Dũng", "status": "absent", "note": "" },
+          { "name": "T. Phú", "status": "absent", "note": "" },
+          { "name": "H. Minh", "status": "absent", "note": "" },
+          { "name": "B. Tuyền", "status": "absent", "note": "" },
+          { "name": "Ý", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "8A12",
+        "totalStudents": 42,
+        "absentCount": 6,
+        "students": [
+          { "name": "Hân", "status": "excused", "note": "P" },
+          { "name": "Châu", "status": "excused", "note": "P" },
+          { "name": "Huy", "status": "excused", "note": "P" },
+          { "name": "Kim", "status": "excused", "note": "P" },
+          { "name": "Thư", "status": "absent", "note": "" },
+          { "name": "Vi", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A1",
+        "totalStudents": 40,
+        "absentCount": 2,
+        "students": [
+          { "name": "Quỳnh Anh", "status": "excused", "note": "P" },
+          { "name": "Lê Nhân", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A2",
+        "totalStudents": 41,
+        "absentCount": 1,
+        "students": [
+          { "name": "Ngọc Vy", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A3",
+        "totalStudents": 39,
+        "absentCount": 3,
+        "students": [
+          { "name": "Triệu Tân", "status": "excused", "note": "P" },
+          { "name": "Khánh Linh", "status": "excused", "note": "P" },
+          { "name": "Tú Hạnh", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A4",
+        "totalStudents": 40,
+        "absentCount": 5,
+        "students": [
+          { "name": "Quốc Minh", "status": "excused", "note": "P" },
+          { "name": "Phước Khang", "status": "excused", "note": "P" },
+          { "name": "Trọng Nhân", "status": "excused", "note": "P" },
+          { "name": "Gia Đạt", "status": "excused", "note": "P" },
+          { "name": "An Thy", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A5",
+        "totalStudents": 39,
+        "absentCount": 4,
+        "students": [
+          { "name": "Châu", "status": "excused", "note": "P" },
+          { "name": "Bảo Nghi", "status": "excused", "note": "P" },
+          { "name": "K. Nhi", "status": "absent", "note": "" },
+          { "name": "Ph. Thi", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A7",
+        "totalStudents": 38,
+        "absentCount": 1,
+        "students": [
+          { "name": "T. Bảo", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A8",
+        "totalStudents": 42,
+        "absentCount": 3,
+        "students": [
+          { "name": "H. Doanh", "status": "absent", "note": "" },
+          { "name": "B. Thy", "status": "excused", "note": "P" },
+          { "name": "K. Kỳ", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A9",
+        "totalStudents": 35,
+        "absentCount": 2,
+        "students": [
+          { "name": "Vĩ Hào", "status": "absent", "note": "" },
+          { "name": "H. Hà", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A10",
+        "totalStudents": 41,
+        "absentCount": 4,
+        "students": [
+          { "name": "Tú Hải", "status": "excused", "note": "P" },
+          { "name": "Lương", "status": "excused", "note": "P" },
+          { "name": "M. Đính", "status": "excused", "note": "P" },
+          { "name": "G. Huy", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A11",
+        "totalStudents": 40,
+        "absentCount": 3,
+        "students": [
+          { "name": "Minh Quân", "status": "absent", "note": "" },
+          { "name": "Minh Tuấn", "status": "absent", "note": "" },
+          { "name": "Quốc Qui", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A12",
+        "totalStudents": 43,
+        "absentCount": 7,
+        "students": [
+          { "name": "Phước", "status": "absent", "note": "" },
+          { "name": "Duyên", "status": "absent", "note": "" },
+          { "name": "Bảo", "status": "excused", "note": "P" },
+          { "name": "Sơn", "status": "excused", "note": "P" },
+          { "name": "Hân", "status": "absent", "note": "+" },
+          { "name": "Vi", "status": "excused", "note": "P" },
+          { "name": "Thiên Quân", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A13",
+        "totalStudents": 43,
+        "absentCount": 3,
+        "students": [
+          { "name": "Tường Vy", "status": "excused", "note": "P" },
+          { "name": "Minh Trung", "status": "excused", "note": "P" },
+          { "name": "Đức Thắng", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A14",
+        "totalStudents": 40,
+        "absentCount": 7,
+        "students": [
+          { "name": "Khoa", "status": "excused", "note": "P" },
+          { "name": "Nhiên", "status": "absent", "note": "" },
+          { "name": "Nguyên", "status": "excused", "note": "P" },
+          { "name": "Linh", "status": "excused", "note": "P" },
+          { "name": "Mẫn", "status": "excused", "note": "P" },
+          { "name": "Phát", "status": "excused", "note": "P" },
+          { "name": "Vân", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A1",
+        "totalStudents": 45,
+        "absentCount": 3,
+        "students": [
+          { "name": "Gia Hân", "status": "excused", "note": "P" },
+          { "name": "Gia Thành", "status": "excused", "note": "P" },
+          { "name": "Vạn Hưng", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A3",
+        "totalStudents": 45,
+        "absentCount": 6,
+        "students": [
+          { "name": "Thái Duy", "status": "excused", "note": "P" },
+          { "name": "Minh Hoà", "status": "excused", "note": "P" },
+          { "name": "Vĩ Long", "status": "excused", "note": "P" },
+          { "name": "Minh Tường", "status": "absent", "note": "" },
+          { "name": "Gia Linh", "status": "absent", "note": "" },
+          { "name": "Phương Linh", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A4",
+        "totalStudents": 44,
+        "absentCount": 7,
+        "students": [
+          { "name": "Cẩm Mỹ", "status": "excused", "note": "P" },
+          { "name": "Phương Quỳnh", "status": "excused", "note": "P" },
+          { "name": "Bảo Khôi", "status": "excused", "note": "P" },
+          { "name": "Tuấn Kiệt", "status": "excused", "note": "P" },
+          { "name": "Gia Tiến", "status": "excused", "note": "P" },
+          { "name": "Gia Long", "status": "excused", "note": "P" },
+          { "name": "Hoàng Quân", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A5",
+        "totalStudents": 44,
+        "absentCount": 2,
+        "students": [
+          { "name": "Vạn Phương", "status": "excused", "note": "P" },
+          { "name": "Thành Long", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A6",
+        "totalStudents": 42,
+        "absentCount": 1,
+        "students": [
+          { "name": "Đức Thắng", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A7",
+        "totalStudents": 43,
+        "absentCount": 2,
+        "students": [
+          { "name": "Khang", "status": "excused", "note": "P" },
+          { "name": "Vy", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A8",
+        "totalStudents": 39,
+        "absentCount": 3,
+        "students": [
+          { "name": "Bảo Nghi", "status": "absent", "note": "A" },
+          { "name": "Q. Hậu", "status": "absent", "note": "" },
+          { "name": "M. Nhân", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A9",
+        "totalStudents": 39,
+        "absentCount": 4,
+        "students": [
+          { "name": "Hào", "status": "excused", "note": "P" },
+          { "name": "Hưng", "status": "excused", "note": "P" },
+          { "name": "My", "status": "excused", "note": "P" },
+          { "name": "Thiên Bảo", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A10",
+        "totalStudents": 38,
+        "absentCount": 5,
+        "students": [
+          { "name": "Hưng", "status": "excused", "note": "P" },
+          { "name": "N. Thi", "status": "excused", "note": "P" },
+          { "name": "Khanh", "status": "excused", "note": "P" },
+          { "name": "U. My", "status": "absent", "note": "" },
+          { "name": "P. Vy", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A11",
+        "totalStudents": 40,
+        "absentCount": 5,
+        "students": [
+          { "name": "Ích Nhi", "status": "absent", "note": "" },
+          { "name": "H. Hải", "status": "excused", "note": "P" },
+          { "name": "T. Hiền", "status": "absent", "note": "" },
+          { "name": "H. Yến", "status": "absent", "note": "" },
+          { "name": "CT. Minh", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "8A12",
+        "totalStudents": 42,
+        "absentCount": 2,
+        "students": [
+          { "name": "Châu", "status": "absent", "note": "" },
+          { "name": "G. Hân", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A13",
+        "totalStudents": 41,
+        "absentCount": 4,
+        "students": [
+          { "name": "Ý", "status": "absent", "note": "" },
+          { "name": "G. Hân", "status": "absent", "note": "" },
+          { "name": "K. Ngọc", "status": "excused", "note": "P" },
+          { "name": "Nghi", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "8A14",
+        "totalStudents": 40,
+        "absentCount": 6,
+        "students": [
+          { "name": "T. Khang", "status": "absent", "note": "" },
+          { "name": "Nguyên", "status": "absent", "note": "" },
+          { "name": "Vương", "status": "absent", "note": "" },
+          { "name": "Y. Nhi", "status": "late", "note": "trễ" },
+          { "name": "A. Len", "status": "excused", "note": "P" },
+          { "name": "Ái Vy", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A15",
+        "totalStudents": 42,
+        "absentCount": 7,
+        "students": [
+          { "name": "Phát", "status": "excused", "note": "P" },
+          { "name": "Toàn", "status": "absent", "note": "" },
+          { "name": "N. Hân", "status": "excused", "note": "P" },
+          { "name": "Yến", "status": "excused", "note": "P" },
+          { "name": "G. Linh", "status": "excused", "note": "P" },
+          { "name": "Đức", "status": "absent", "note": "" },
+          { "name": "G. Bảo", "status": "absent", "note": "" }
+        ]
+      }
+    ]
+  },
+  {
+    "date": "2026-02-23",
+    "session": "afternoon",
+    "classes": [
+      {
+        "className": "9A1",
+        "totalStudents": 40,
+        "absentCount": 2,
+        "students": [
+          { "name": "Quỳnh Anh", "status": "excused", "note": "P" },
+          { "name": "Lê Nhân", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A2",
+        "totalStudents": 41,
+        "absentCount": 1,
+        "students": [
+          { "name": "Ngọc Vy", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A3",
+        "totalStudents": 39,
+        "absentCount": 3,
+        "students": [
+          { "name": "Triệu Tân", "status": "excused", "note": "P" },
+          { "name": "Khánh Linh", "status": "excused", "note": "P" },
+          { "name": "Tú Hạnh", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A4",
+        "totalStudents": 40,
+        "absentCount": 4,
+        "students": [
+          { "name": "Phước Khang", "status": "excused", "note": "P" },
+          { "name": "Trọng Nhân", "status": "excused", "note": "P" },
+          { "name": "Gia Đạt", "status": "excused", "note": "P" },
+          { "name": "An Thy", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A5",
+        "totalStudents": 39,
+        "absentCount": 4,
+        "students": [
+          { "name": "Châu", "status": "excused", "note": "P" },
+          { "name": "Bảo Nghi", "status": "excused", "note": "P" },
+          { "name": "K. Nhi", "status": "absent", "note": "" },
+          { "name": "Ph. Thi", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A7",
+        "totalStudents": 38,
+        "absentCount": 1,
+        "students": [
+          { "name": "T. Bảo", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A8",
+        "totalStudents": 42,
+        "absentCount": 3,
+        "students": [
+          { "name": "H. Doanh", "status": "absent", "note": "" },
+          { "name": "K. Kỳ", "status": "absent", "note": "" },
+          { "name": "B. Thy", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A9",
+        "totalStudents": 35,
+        "absentCount": 1,
+        "students": [
+          { "name": "Hào", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A14",
+        "totalStudents": 40,
+        "absentCount": 10,
+        "students": [
+          { "name": "Khoa", "status": "absent", "note": "" },
+          { "name": "Nhiên", "status": "absent", "note": "" },
+          { "name": "Nguyên", "status": "absent", "note": "" },
+          { "name": "Văn Cường", "status": "excused", "note": "P" },
+          { "name": "Uyên", "status": "absent", "note": "" },
+          { "name": "Phát", "status": "absent", "note": "" },
+          { "name": "Linh", "status": "excused", "note": "P" },
+          { "name": "Kiệt", "status": "absent", "note": "" },
+          { "name": "Mẫn", "status": "excused", "note": "P" }
+        ]
+      }
+    ]
+  },
+  {
+    "date": "2026-02-24",
+    "session": "morning",
+    "classes": [
+      {
+        "className": "8A9",
+        "totalStudents": 39,
+        "absentCount": 1,
+        "students": [
+          { "name": "Hưng", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A1",
+        "totalStudents": 40,
+        "absentCount": 1,
+        "students": [
+          { "name": "Lê Nhân", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A3",
+        "totalStudents": 39,
+        "absentCount": 1,
+        "students": [
+          { "name": "Triệu Tân", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A6",
+        "totalStudents": 38,
+        "absentCount": 1,
+        "students": [
+          { "name": "Thăng", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A7",
+        "totalStudents": 38,
+        "absentCount": 1,
+        "students": [
+          { "name": "T. Bảo", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A10",
+        "totalStudents": 41,
+        "absentCount": 2,
+        "students": [
+          { "name": "Nhật Quang", "status": "absent", "note": "" },
+          { "name": "Thuận Bảo", "status": "late", "note": "trễ" }
+        ]
+      },
+      {
+        "className": "9A11",
+        "totalStudents": 40,
+        "absentCount": 4,
+        "students": [
+          { "name": "Hoa", "status": "absent", "note": "" },
+          { "name": "Vân", "status": "absent", "note": "" },
+          { "name": "Quí", "status": "absent", "note": "" },
+          { "name": "Phát", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A12",
+        "totalStudents": 43,
+        "absentCount": 3,
+        "students": [
+          { "name": "Mỹ Duyên", "status": "absent", "note": "+" },
+          { "name": "Thành Phước", "status": "absent", "note": "" },
+          { "name": "Ngọc Phương", "status": "absent", "note": "+" }
+        ]
+      },
+      {
+        "className": "9A13",
+        "totalStudents": 43,
+        "absentCount": 2,
+        "students": [
+          { "name": "Đức Thắng", "status": "excused", "note": "P" },
+          { "name": "Tường Vy", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A14",
+        "totalStudents": 40,
+        "absentCount": 3,
+        "students": [
+          { "name": "Vân", "status": "absent", "note": "" },
+          { "name": "Phát", "status": "absent", "note": "" },
+          { "name": "Minh", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "8A1",
+        "totalStudents": 45,
+        "absentCount": 2,
+        "students": [
+          { "name": "Gia Thành", "status": "excused", "note": "P" },
+          { "name": "Vạn Hưng", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A3",
+        "totalStudents": 45,
+        "absentCount": 4,
+        "students": [
+          { "name": "Gia Linh", "status": "excused", "note": "P" },
+          { "name": "Minh Hoà", "status": "excused", "note": "P" },
+          { "name": "Trọng Trí", "status": "late", "note": "trễ" },
+          { "name": "Phương Linh", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A4",
+        "totalStudents": 44,
+        "absentCount": 3,
+        "students": [
+          { "name": "Gia Phát", "status": "excused", "note": "đau mắt" },
+          { "name": "Gia Tiến", "status": "excused", "note": "P" },
+          { "name": "Nhã Như", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A6",
+        "totalStudents": 42,
+        "absentCount": 1,
+        "students": [
+          { "name": "Đức Thắng", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A7",
+        "totalStudents": 43,
+        "absentCount": 2,
+        "students": [
+          { "name": "Khang", "status": "excused", "note": "P" },
+          { "name": "T. Vân", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A8",
+        "totalStudents": 39,
+        "absentCount": 2,
+        "students": [
+          { "name": "Q. Hậu", "status": "absent", "note": "" },
+          { "name": "B. Nghi", "status": "excused", "note": "B, P" }
+        ]
+      },
+      {
+        "className": "8A11",
+        "totalStudents": 40,
+        "absentCount": 1,
+        "students": [
+          { "name": "H. Yến", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "8A13",
+        "totalStudents": 41,
+        "absentCount": 1,
+        "students": [
+          { "name": "Y. Lâm", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A14",
+        "totalStudents": 40,
+        "absentCount": 4,
+        "students": [
+          { "name": "T. G. Hân", "status": "excused", "note": "P" },
+          { "name": "T. Khang", "status": "excused", "note": "P" },
+          { "name": "T. Nhi", "status": "late", "note": "trễ" },
+          { "name": "T. Nguyên", "status": "late", "note": "trễ" }
+        ]
+      },
+      {
+        "className": "8A15",
+        "totalStudents": 42,
+        "absentCount": 2,
+        "students": [
+          { "name": "Yến", "status": "absent", "note": "" },
+          { "name": "N. Hân", "status": "excused", "note": "P" }
+        ]
+      }
+    ]
+  },
+  {
+    "date": "2026-02-24",
+    "session": "afternoon",
+    "classes": [
+      {
+        "className": "9A1",
+        "totalStudents": 40,
+        "absentCount": 1,
+        "students": [
+          { "name": "Lê Nhân", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A3",
+        "totalStudents": 39,
+        "absentCount": 1,
+        "students": [
+          { "name": "Triệu Tân", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A7",
+        "totalStudents": 38,
+        "absentCount": 1,
+        "students": [
+          { "name": "T. Bảo", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A8",
+        "totalStudents": 42,
+        "absentCount": 1,
+        "students": [
+          { "name": "Q. May", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A12",
+        "totalStudents": 43,
+        "absentCount": 7,
+        "students": [
+          { "name": "Duyên", "status": "excused", "note": "P" },
+          { "name": "Bảo", "status": "excused", "note": "P" },
+          { "name": "Hoàng Kiệt", "status": "absent", "note": "+" },
+          { "name": "Mẫn", "status": "absent", "note": "+" },
+          { "name": "Long", "status": "absent", "note": "" },
+          { "name": "Trí", "status": "absent", "note": "+" },
+          { "name": "Hoàng Quân", "status": "excused", "note": "P" }
+        ]
+      }
+    ]
+  },
+  {
+    "date": "2026-02-25",
+    "session": "morning",
+    "classes": [
+      {
+        "className": "9A3",
+        "totalStudents": 39,
+        "absentCount": 1,
+        "students": [
+          { "name": "Triệu Tân", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A4",
+        "totalStudents": 40,
+        "absentCount": 1,
+        "students": [
+          { "name": "Lâm Tuấn Vĩ", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A10",
+        "totalStudents": 41,
+        "absentCount": 1,
+        "students": [
+          { "name": "Khánh Hân", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A11",
+        "totalStudents": 40,
+        "absentCount": 3,
+        "students": [
+          { "name": "Quân", "status": "absent", "note": "" },
+          { "name": "Phát", "status": "absent", "note": "" },
+          { "name": "Tuấn", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A12",
+        "totalStudents": 43,
+        "absentCount": 1,
+        "students": [
+          { "name": "Diệu Mẫn", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A13",
+        "totalStudents": 43,
+        "absentCount": 1,
+        "students": [
+          { "name": "Tường Vy", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A1",
+        "totalStudents": 45,
+        "absentCount": 1,
+        "students": [
+          { "name": "Vạn Hưng", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A3",
+        "totalStudents": 45,
+        "absentCount": 3,
+        "students": [
+          { "name": "Minh Hoà", "status": "excused", "note": "P" },
+          { "name": "Tú Lợi", "status": "excused", "note": "P" },
+          { "name": "Đăng Khánh", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A4",
+        "totalStudents": 44,
+        "absentCount": 3,
+        "students": [
+          { "name": "Nhã Như", "status": "excused", "note": "P" },
+          { "name": "Gia Phát", "status": "excused", "note": "P" },
+          { "name": "Gia Tiến", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A7",
+        "totalStudents": 43,
+        "absentCount": 2,
+        "students": [
+          { "name": "Khang", "status": "excused", "note": "P" },
+          { "name": "T. My", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A8",
+        "totalStudents": 39,
+        "absentCount": 3,
+        "students": [
+          { "name": "B. Yến", "status": "excused", "note": "P" },
+          { "name": "M. Thư", "status": "excused", "note": "P" },
+          { "name": "H. San", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A11",
+        "totalStudents": 40,
+        "absentCount": 1,
+        "students": [
+          { "name": "M. Hưng", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "8A13",
+        "totalStudents": 41,
+        "absentCount": 1,
+        "students": [
+          { "name": "Bi", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "8A14",
+        "totalStudents": 40,
+        "absentCount": 2,
+        "students": [
+          { "name": "H. Vương", "status": "absent", "note": "" },
+          { "name": "T. Nguyên", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A15",
+        "totalStudents": 42,
+        "absentCount": 1,
+        "students": [
+          { "name": "Yến", "status": "absent", "note": "quê" }
+        ]
+      }
+    ]
+  },
+  {
+    "date": "2026-02-25",
+    "session": "afternoon",
+    "classes": [
+      {
+        "className": "9A3",
+        "totalStudents": 39,
+        "absentCount": 1,
+        "students": [
+          { "name": "Triệu Tân", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A5",
+        "totalStudents": 39,
+        "absentCount": 2,
+        "students": [
+          { "name": "Thanh Thảo", "status": "excused", "note": "P" },
+          { "name": "Thanh Kim", "status": "absent", "note": "" }
+        ]
+      }
+    ]
+  },
+  {
+    "date": "2026-02-26",
+    "session": "morning",
+    "classes": [
+      {
+        "className": "8A9",
+        "totalStudents": 39,
+        "absentCount": 1,
+        "students": [
+          { "name": "Tuệ", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A11",
+        "totalStudents": 40,
+        "absentCount": 6,
+        "students": [
+          { "name": "L. Vy", "status": "absent", "note": "" },
+          { "name": "Q. Anh", "status": "absent", "note": "" },
+          { "name": "N. Vy", "status": "absent", "note": "" },
+          { "name": "M. Hưng", "status": "absent", "note": "" },
+          { "name": "D. Ân", "status": "absent", "note": "" },
+          { "name": "Hà G. Hân", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "8A14",
+        "totalStudents": 40,
+        "absentCount": 3,
+        "students": [
+          { "name": "T. Nhi", "status": "absent", "note": "" },
+          { "name": "T. Nguyên", "status": "excused", "note": "P" },
+          { "name": "H. Vương", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A2",
+        "totalStudents": 41,
+        "absentCount": 2,
+        "students": [
+          { "name": "Trân", "status": "absent", "note": "" },
+          { "name": "Giang", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A3",
+        "totalStudents": 39,
+        "absentCount": 1,
+        "students": [
+          { "name": "Triệu Tân", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A4",
+        "totalStudents": 40,
+        "absentCount": 2,
+        "students": [
+          { "name": "Quốc Minh", "status": "absent", "note": "" },
+          { "name": "Minh Thư", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A11",
+        "totalStudents": 40,
+        "absentCount": 2,
+        "students": [
+          { "name": "Thịnh", "status": "absent", "note": "" },
+          { "name": "Quân", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A12",
+        "totalStudents": 43,
+        "absentCount": 2,
+        "students": [
+          { "name": "Thúy Vy", "status": "absent", "note": "+" },
+          { "name": "Diệu Mẫn", "status": "absent", "note": "+" }
+        ]
+      },
+      {
+        "className": "9A14",
+        "totalStudents": 40,
+        "absentCount": 1,
+        "students": [
+          { "name": "Vân", "status": "excused", "note": "P" }
+        ]
+      }
+    ]
+  },
+  {
+    "date": "2026-02-26",
+    "session": "afternoon",
+    "classes": [
+      {
+        "className": "9A3",
+        "totalStudents": 39,
+        "absentCount": 2,
+        "students": [
+          { "name": "Tú Hạnh", "status": "absent", "note": "" },
+          { "name": "Triệu Tân", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A4",
+        "totalStudents": 40,
+        "absentCount": 1,
+        "students": [
+          { "name": "Quốc Minh", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A10",
+        "totalStudents": 41,
+        "absentCount": 2,
+        "students": [
+          { "name": "Ngọc Hân", "status": "absent", "note": "" },
+          { "name": "Ứng Xuân", "status": "absent", "note": "" }
+        ]
+      }
+    ]
+  },
+  {
+    "date": "2026-02-27",
+    "session": "morning",
+    "classes": [
+      {
+        "className": "8A13",
+        "totalStudents": 41,
+        "absentCount": 3,
+        "students": [
+          { "name": "Nghi", "status": "absent", "note": "" },
+          { "name": "Châu", "status": "absent", "note": "" },
+          { "name": "Ý", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "8A15",
+        "totalStudents": 42,
+        "absentCount": 4,
+        "students": [
+          { "name": "Long", "status": "absent", "note": "" },
+          { "name": "Hiếu", "status": "absent", "note": "" },
+          { "name": "Yến", "status": "absent", "note": "" },
+          { "name": "Thảo", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A1",
+        "totalStudents": 40,
+        "absentCount": 1,
+        "students": [
+          { "name": "Lê Nhân", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A3",
+        "totalStudents": 39,
+        "absentCount": 1,
+        "students": [
+          { "name": "Triệu Tân", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A4",
+        "totalStudents": 40,
+        "absentCount": 2,
+        "students": [
+          { "name": "Đông Nghi", "status": "absent", "note": "" },
+          { "name": "Quốc Minh", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A7",
+        "totalStudents": 38,
+        "absentCount": 1,
+        "students": [
+          { "name": "G. Bảo", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A8",
+        "totalStudents": 42,
+        "absentCount": 1,
+        "students": [
+          { "name": "K. Kỳ", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A10",
+        "totalStudents": 41,
+        "absentCount": 3,
+        "students": [
+          { "name": "P. Linh", "status": "absent", "note": "" },
+          { "name": "Bảo Ân", "status": "absent", "note": "" },
+          { "name": "Thuận Bảo", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A11",
+        "totalStudents": 40,
+        "absentCount": 4,
+        "students": [
+          { "name": "Vân", "status": "absent", "note": "" },
+          { "name": "Quân", "status": "late", "note": "trễ" },
+          { "name": "Phú", "status": "absent", "note": "" },
+          { "name": "Hoa", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A12",
+        "totalStudents": 43,
+        "absentCount": 1,
+        "students": [
+          { "name": "Tuấn Kiệt", "status": "absent", "note": "+" }
+        ]
+      },
+      {
+        "className": "9A13",
+        "totalStudents": 43,
+        "absentCount": 2,
+        "students": [
+          { "name": "Gia Linh", "status": "excused", "note": "P" },
+          { "name": "Đức Thắng", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "9A14",
+        "totalStudents": 40,
+        "absentCount": 1,
+        "students": [
+          { "name": "Minh", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "8A2",
+        "totalStudents": 45,
+        "absentCount": 1,
+        "students": [
+          { "name": "Lâm", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A3",
+        "totalStudents": 45,
+        "absentCount": 1,
+        "students": [
+          { "name": "Hải Long", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "8A4",
+        "totalStudents": 44,
+        "absentCount": 1,
+        "students": [
+          { "name": "Cẩm Mỹ", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A7",
+        "totalStudents": 43,
+        "absentCount": 3,
+        "students": [
+          { "name": "Đại", "status": "excused", "note": "P" },
+          { "name": "T. My", "status": "excused", "note": "P" },
+          { "name": "Q. Trân", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A8",
+        "totalStudents": 39,
+        "absentCount": 3,
+        "students": [
+          { "name": "M. Thư", "status": "absent", "note": "" },
+          { "name": "B. Nghi", "status": "excused", "note": "B" },
+          { "name": "Q. Hậu", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "8A9",
+        "totalStudents": 39,
+        "absentCount": 1,
+        "students": [
+          { "name": "Tuệ", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A11",
+        "totalStudents": 40,
+        "absentCount": 1,
+        "students": [
+          { "name": "N. Vy", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A12",
+        "totalStudents": 42,
+        "absentCount": 2,
+        "students": [
+          { "name": "Dương", "status": "absent", "note": "" },
+          { "name": "M. Thư", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "8A13",
+        "totalStudents": 41,
+        "absentCount": 1,
+        "students": [
+          { "name": "Ý", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "8A14",
+        "totalStudents": 40,
+        "absentCount": 2,
+        "students": [
+          { "name": "T. Nhi", "status": "absent", "note": "" },
+          { "name": "T. Nguyên", "status": "excused", "note": "P" }
+        ]
+      },
+      {
+        "className": "8A15",
+        "totalStudents": 42,
+        "absentCount": 3,
+        "students": [
+          { "name": "Yến", "status": "absent", "note": "" },
+          { "name": "Hiếu", "status": "absent", "note": "" },
+          { "name": "Thảo", "status": "absent", "note": "" }
+        ]
+      }
+    ]
+  },
+  {
+    "date": "2026-02-27",
+    "session": "afternoon",
+    "classes": [
+      {
+        "className": "9A1",
+        "totalStudents": 40,
+        "absentCount": 1,
+        "students": [
+          { "name": "Lê Nhân", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A3",
+        "totalStudents": 39,
+        "absentCount": 1,
+        "students": [
+          { "name": "Triệu Tân", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A5",
+        "totalStudents": 39,
+        "absentCount": 1,
+        "students": [
+          { "name": "Thanh Tâm", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A7",
+        "totalStudents": 38,
+        "absentCount": 1,
+        "students": [
+          { "name": "G. Bảo", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A8",
+        "totalStudents": 42,
+        "absentCount": 1,
+        "students": [
+          { "name": "K. Kỳ", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A11",
+        "totalStudents": 40,
+        "absentCount": 3,
+        "students": [
+          { "name": "Vân", "status": "absent", "note": "" },
+          { "name": "Quân", "status": "absent", "note": "" },
+          { "name": "Phú", "status": "absent", "note": "" }
+        ]
+      },
+      {
+        "className": "9A13",
+        "totalStudents": 43,
+        "absentCount": 2,
+        "students": [
+          { "name": "Gia Linh", "status": "excused", "note": "P" },
+          { "name": "Đức Thắng", "status": "excused", "note": "P" }
+        ]
+      }
+    ]
+  }
+]

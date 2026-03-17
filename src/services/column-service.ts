@@ -10,10 +10,13 @@ import {
 } from 'firebase/firestore';
 import { SCHOOL_ID, DEFAULT_YEAR as CURRENT_YEAR } from '@/config/constants';
 
+const isSupabase = process.env.NEXT_PUBLIC_USE_SUPABASE === 'true';
+
 /**
  * Get all columns for a class
  */
 export async function getColumns(classId: string, userId?: string): Promise<Column[]> {
+    if (isSupabase) return []; // TODO: Implement custom columns in Supabase
     const colRef = collection(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'columns');
     const q = query(colRef, where('classId', '==', classId));
     const snap = await getDocs(q);
@@ -43,6 +46,7 @@ export async function getColumnsByFrequency(classId: string, frequency: ColumnFr
  * Get a single column by ID
  */
 export async function getColumn(columnId: string): Promise<Column | null> {
+    if (isSupabase) return null;
     const docRef = doc(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'columns', columnId);
     const snap = await getDoc(docRef);
     return snap.exists() ? (snap.data() as Column) : null;
@@ -52,6 +56,10 @@ export async function getColumn(columnId: string): Promise<Column | null> {
  * Create a new column
  */
 export async function createColumn(column: Omit<Column, 'createdAt' | 'updatedAt'>): Promise<Column> {
+    if (isSupabase) {
+        console.warn("createColumn is not implemented for Supabase yet");
+        return { ...column, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as Column;
+    }
     // Validate frequency is provided
     if (!column.frequency) {
         throw new Error('Column frequency is required');

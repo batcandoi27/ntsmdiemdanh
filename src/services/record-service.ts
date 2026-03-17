@@ -11,6 +11,8 @@ import {
 } from 'firebase/firestore';
 import { SCHOOL_ID, DEFAULT_YEAR as CURRENT_YEAR } from '@/config/constants';
 
+const isSupabase = process.env.NEXT_PUBLIC_USE_SUPABASE === 'true';
+
 /**
  * Get the Firestore path for column data
  */
@@ -26,6 +28,10 @@ function getColumnDataPath(columnId: string) {
  * Save a daily record
  */
 export async function saveDailyRecord(record: Omit<DailyRecord, 'id' | 'updatedAt'>): Promise<DailyRecord> {
+    if (isSupabase) {
+        console.warn("saveDailyRecord is not implemented for Supabase yet");
+        return { ...record, id: 'tmp', updatedAt: new Date().toISOString() } as DailyRecord;
+    }
     const column = await getColumn(record.columnId);
     if (!column || column.frequency !== 'daily') {
         throw new Error('Invalid column for daily record');
@@ -48,6 +54,7 @@ export async function saveDailyRecord(record: Omit<DailyRecord, 'id' | 'updatedA
  * Get daily records for a column on a specific date
  */
 export async function getDailyRecords(columnId: string, date: string): Promise<DailyRecord[]> {
+    if (isSupabase) return [];
     const colRef = collection(db, getColumnDataPath(columnId));
     const q = query(colRef, where('date', '==', date));
     const snap = await getDocs(q);
@@ -198,6 +205,7 @@ export async function checkOneTimeComplete(columnId: string, totalStudents: numb
  * Delete a record
  */
 export async function deleteRecord(columnId: string, recordId: string): Promise<void> {
+    if (isSupabase) return;
     const docRef = doc(db, getColumnDataPath(columnId), recordId);
     await deleteDoc(docRef);
 }

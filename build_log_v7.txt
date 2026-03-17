@@ -1,0 +1,22 @@
+
+> app-diemdanh@02.2026 build
+> next build
+
+   ▲ Next.js 14.1.0
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+Failed to compile.
+
+./src/app/actions/report.ts:210:42
+Type error: Type '"K"' is not assignable to type 'AttendanceStatusV3'.
+
+[0m [90m 208 |[39m[0m
+[0m [90m 209 |[39m                 [90m// Map status sang mã ngắn để tính toán logic bên dưới[39m[0m
+[0m[31m[1m>[22m[39m[90m 210 |[39m                 [36mif[39m (status [33m===[39m [32m'absent'[39m) status [33m=[39m [32m'K'[39m[33m;[39m[0m
+[0m [90m     |[39m                                          [31m[1m^[22m[39m[0m
+[0m [90m 211 |[39m                 [36mif[39m (status [33m===[39m [32m'excused'[39m) status [33m=[39m [32m'P'[39m[33m;[39m[0m
+[0m [90m 212 |[39m                 [36mif[39m (status [33m===[39m [32m'late'[39m) {[0m
+[0m [90m 213 |[39m                     [36mconst[39m periods [33m=[39m normRecord[33m.[39mmissedPeriods [33m||[39m [][33m;[39m[0m

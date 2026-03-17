@@ -1,0 +1,22 @@
+
+> app-diemdanh@02.2026 build
+> next build
+
+   ▲ Next.js 14.1.0
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+Failed to compile.
+
+./src/app/actions/quick-attendance.ts:143:101
+Type error: This comparison appears to be unintentional because the types 'AttendanceStatusV3' and '"violation"' have no overlap.
+
+[0m [90m 141 |[39m                 }[0m
+[0m [90m 142 |[39m[0m
+[0m[31m[1m>[22m[39m[90m 143 |[39m                 [36mconst[39m violationRec [33m=[39m records[33m.[39mfind(r [33m=>[39m r[33m.[39mviolation [33m||[39m (r[33m.[39mstatus [36mas[39m any) [33m===[39m [32m'VP'[39m [33m||[39m r[33m.[39mstatus [33m===[39m [32m'violation'[39m)[33m;[39m[0m
+[0m [90m     |[39m                                                                                                     [31m[1m^[22m[39m[0m
+[0m [90m 144 |[39m                 [36mif[39m (violationRec) {[0m
+[0m [90m 145 |[39m                     counts[33m.[39m[33mVP[39m[33m++[39m[33m;[39m[0m
+[0m [90m 146 |[39m                     lists[33m.[39m[33mVP[39m[33m.[39mpush({ [33m...[39mitem[33m,[39m note[33m:[39m violationRec[33m.[39mviolationNote [33m||[39m violationRec[33m.[39mnote [33m||[39m [32m''[39m })[33m;[39m[0m

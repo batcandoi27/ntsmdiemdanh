@@ -35,8 +35,8 @@ export interface AppUser {
     studentCode?: string;           // Ban Cán Sự dùng mã HS (VD: hs8a13_01)
     displayName: string;            // 'Cô Lan', 'Nguyễn Văn A (LT 8A13)'
     role: UserRole;
-    assignedClassIds: string[];     // Lớp được phân công (CN + BM)
-    homeroomClassId?: string;       // Lớp chủ nhiệm (chỉ GVCN)
+    assignedClassIds: string[];     // [Legacy] Nên dùng bảng teacher_classes trên Supabase
+    homeroomClassId?: string;       // [Legacy] Nên dùng bảng teacher_classes trên Supabase
     assignedGrade?: string;         // Supervisor: 'grade_8' | 'all'
     permissions: UserPermissions;
     editWindowMinutes: number;      // class_monitor: 30, teacher: 1440, admin: -1
@@ -194,8 +194,10 @@ export interface Class {
     maleCount?: number;
     classType?: string; // BT, TCH...
     actualStudentCount?: number;    // [v3] Sĩ số thực tế = active + temp_leave
-    manualStudentCount?: number;    // [v3] Sĩ số tự nhập (nếu cấu hình là 'manual')
+    manualStudentCount?: number;    // [v3] Sĩ số tự nhập (legacy)
+    adjustmentCount?: number;       // [v3] Biến động (+/-)
     sessions?: ('morning' | 'afternoon')[]; // [v3] ['morning'] hoặc ['morning','afternoon']
+    academicYear?: string;          // [v3] Tên năm học (VD: 2024-2025)
     isPersonal?: boolean; // Đánh dấu lớp do người dùng tự tạo
     ownerId?: string;     // ID người dùng tạo lớp cá nhân
 }

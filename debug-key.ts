@@ -1,0 +1,39 @@
+
+import { createPrivateKey } from 'crypto';
+
+const privateKey = `-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDSugXQtaSNpBAP
+mCxgfgDi+Tc6XnKJkf5FbkZtVXAziI2PBhLVv3SQdFWpDxzuyLhx0RoaHvXrpKK/
+fP+jUgHqzgscVX4JwxtCT0QdD/K2U0uUdOjqaPbImiIP77KTnhUFypG0GtZG37AD
+aNTl5NJROuKCQwpwgI2LUGcD8XJZ76DkXFo9Kcbnz97XNEgu26sFKllyFTc0iob5
+ldTcmNXryWRPbDq4sHFl2Bn47RdNztDanZ0xYiL7a7jMmAuFKSjgpXcyMJkIfPBz
+DEFCdRwRkULFWp5kEHX0RSXueWUVLzdEtMVSFb+lnTeQgsnY1CmH1btw2EcKgK4P
+A79oA+VtAgMBAAECggEAGKNvcqEKWxVHsMsWGozLsGjQhZ6YExsNeTNqQKEGEWsc
+l2XFEKuQsXh+Bi+iLmPW960p5CFNQlQUQ1drfGkQ7adRspURu4p4cXRbKRq9l4Z9
+sR9KQb4sEfW+Qya/i8r795q2a9yHbpn7i9Usr1nlzWGZLP8xr/MX7vtjpW5hnxTT
+F6b4XdPtGSC5qrSKspbKjWsOgOzyb5fqdeNH6K0CfD4rBydfhNHzbVtxssvD3WiS
+qwtdd4w6kudWZdE+yEQQzq1o9Zgc7eMoi1vAn4wAkgUH6/vgNlzNMxrLFCc4T9ia
+oPKyeLm0VAnrhLFQ8Up779Rw1bpgqxv4jMvhNjIc8QKBgQD5sIys2a3k58UMVSio
+AZX46NntYqyRxnr+KawzvAuxRX/DulCNSvSEdsJ/TEhCiDEGoWT4sysP0yn7MJ2X
+bBal5QDnsN/sS4/we35/M06ibxP0TGTaUNCw45erBplTP8rjE/P00KPiXMKCRUIYA
+qkxNSfeVL7OaPm4UIsvPxFsGRwKBgQDYDWOcTRzQrnbLiJB03RYJ/ahyEwkHi2G9
+iabL5Eu8D4aLbIlY1M5+FadMPrPXzmvxCPSmWw6aBh20cGF3TJrT9pRnItgNPqNJ
+KM+BzeUAp56ts2iLHVO0ZSvnJUbHDmMH/Q9XDHcxWi9P1aF1ZQdDMmg3dyh4aDnb
+VWtc7YmsqwKBgBGwe1bnmRVFgkVMZzP34MsgnAfgXL97I02MYEHOCboGZXXVZk2M
+SOR1kXP5UIk+ItMIbiHcd6mIWUoNeKy4oKYiIj1H36Va+RiddynF1VgLza4jtCUt
+yRBC4a3Ufd+5n3N9ROcEHBCCBm4lGUlEx2EWY27zUTMVRzEwAeZ3T8eTAoGBAJij
+VPWPMUVpjLodAFnf/HsQf1oggqeW3HXI81NnNe5mVZrZEmv05PIFIE3omqxjxLTk
+q9t/x2Af5AqfvuxG7bfEpHH9FwC8eSXttDSznw+IXL3BW6G1FXcEZzEFj+yACI0T
+RywrvWXbnkNb3ZcPykK6MRDGmYv/rqh7v79GfpbDAoGAH4z5qhxWXOg89NE5t8wu
+O5vLM5Zm1H0w/Kojt/cNTzyzP2jz3h0f0kICkX+0lTd8ZZTLWAEnh1jG+UK9LkAe
+a8Ir7GVFhU9LLCHUCwLb7n83VKUT9TaAtLQ6AUA40ZjympTqBkXXLAH6ttmzmZYj
+RFZrEllZgjrflSGVGKhTQFs=
+-----END PRIVATE KEY-----`;
+
+console.log('Validating Private Key content...');
+try {
+    const key = createPrivateKey(privateKey);
+    console.log('✅ Success! Node crypto can parse this key.');
+} catch (err) {
+    console.error('❌ Failed to parse key:', err.message);
+}

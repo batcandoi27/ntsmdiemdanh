@@ -10,6 +10,8 @@ import {
     collection, query, where, orderBy, addDoc,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+
+const isSupabase = process.env.NEXT_PUBLIC_USE_SUPABASE === 'true';
 import {
     Timetable, TimetableConflict, TimetableFlatRow, TimetableImportResult,
     DayOfWeek, SessionType, PeriodSlot, DAY_ORDER,
@@ -30,6 +32,7 @@ export async function saveTimetable(
     timetable: Omit<Timetable, 'id' | 'createdBy' | 'createdByName' | 'updatedAt' | 'isActive'>,
     year?: string
 ): Promise<string> {
+    if (isSupabase) return 'tmp-id'; // TODO: Implement in Supabase
     checkClassAccess(user, timetable.classId);
     const path = getYearPath(year);
 
@@ -46,11 +49,13 @@ export async function saveTimetable(
 }
 
 export async function getTimetable(id: string, year?: string): Promise<Timetable | null> {
+    if (isSupabase) return null;
     const snap = await getDoc(doc(db, `${getYearPath(year)}/timetables`, id));
     return snap.exists() ? { ...snap.data(), id: snap.id } as Timetable : null;
 }
 
 export async function getTimetableForClass(classId: string, date?: string, year?: string): Promise<Timetable | null> {
+    if (isSupabase) return null;
     const path = getYearPath(year);
     const q = query(
         collection(db, `${path}/timetables`),

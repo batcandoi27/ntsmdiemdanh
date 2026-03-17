@@ -10,6 +10,9 @@ import { FeatureFlagsProvider } from '@/context/feature-flags-context';
 import { BottomNav } from '@/components/layout/bottom-nav';
 import { Analytics } from "@vercel/analytics/next"
 
+import { LoadingProvider } from '@/context/loading-context';
+import { LoadingOverlay } from '@/components/ui/loading-overlay';
+
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
@@ -25,20 +28,23 @@ export default function RootLayout({
   return (
     <html lang="vi" suppressHydrationWarning>
       <body className={inter.className} suppressHydrationWarning>
-        <AuthProvider>
-          <FeatureFlagsProvider>
-            <ViewModeProvider>
-              <div className="flex flex-col min-h-screen pb-20 md:pb-0">
-                <SiteHeader />
-                <ViewContainer>
-                  {children}
-                </ViewContainer>
-                <SiteFooter />
-                <BottomNav />
-              </div>
-            </ViewModeProvider>
-          </FeatureFlagsProvider>
-        </AuthProvider>
+        <LoadingProvider>
+          <AuthProvider>
+            <FeatureFlagsProvider>
+              <ViewModeProvider>
+                <div className="flex flex-col min-h-screen pb-20 md:pb-0">
+                  <SiteHeader />
+                  <ViewContainer>
+                    {children}
+                  </ViewContainer>
+                  <SiteFooter />
+                  <BottomNav />
+                </div>
+              </ViewModeProvider>
+            </FeatureFlagsProvider>
+          </AuthProvider>
+          <LoadingOverlay />
+        </LoadingProvider>
         <Analytics />
       </body>
     </html>

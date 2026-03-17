@@ -7,6 +7,9 @@ import { AppUser, Student } from '@/types/models';
 import { getEffectiveStatus } from '@/services/student-status-service';
 import { db } from '@/services/db';
 import { DEFAULT_YEAR } from '@/config/constants';
+import { supabaseAdmin } from '@/lib/supabase-admin';
+
+const isSupabase = process.env.NEXT_PUBLIC_USE_SUPABASE === 'true';
 
 export interface ImportAttendanceRecord {
     date: string;
@@ -17,6 +20,7 @@ export interface ImportAttendanceRecord {
         studentName: string;
         status: AttendanceStatusV3;
         note: string;
+        missedPeriods?: number[];
     }[];
 }
 
@@ -63,51 +67,115 @@ export async function processImportedAttendance(records: ImportAttendanceRecord[
         let totalDeleted = 0;
 
         for (const record of records) {
-            // Get all students for the class using adminDb (Bypassing rules)
-            const studentsSnap = await adminDb.collection(`schools/default/years/${DEFAULT_YEAR}/classes/${record.classId}/students`).get();
-            const classStudents = studentsSnap.docs.map(d => d.data() as Student);
-            const activeStudents = classStudents.filter(s => getEffectiveStatus(s) !== 'dropped_out' && getEffectiveStatus(s) !== 'suspended');
-            const allStudentIds = activeStudents.map(s => s.code);
+            let allStudentIds: string[] = [];
+            
+            if (isSupabase) {
+                // Supabase flow
+                const classStudents = await db.getStudentsByClass(record.classId);
+                const activeStudents = classStudents.filter(s => getEffectiveStatus(s) !== 'dropped_out' && getEffectiveStatus(s) !== 'suspended');
+                allStudentIds = activeStudents.map(s => s.code);
+            } else {
+                // Firebase flow
+                const studentsSnap = await adminDb.collection(`schools/default/years/${DEFAULT_YEAR}/classes/${record.classId}/students`).get();
+                const classStudents = studentsSnap.docs.map(d => d.data() as Student);
+                const activeStudents = classStudents.filter(s => getEffectiveStatus(s) !== 'dropped_out' && getEffectiveStatus(s) !== 'suspended');
+                allStudentIds = activeStudents.map(s => s.code);
+            }
 
             const attendanceDateKey = formatDateKey(parseVietnameseDate(record.date));
             const path = getAttendancePath(DEFAULT_YEAR, attendanceDateKey);
-            const batch = adminDb.batch();
+            
+            if (isSupabase) {
+                // Supabase Logic: Fetch necessary IDs first
+                const { data: students } = await supabaseAdmin.from('student_classes').select('student_id, students(student_code)').eq('class_id', record.classId);
+                const codeToIdMap = new Map<string, string>();
+                students?.forEach((s: any) => { if (s.students?.student_code) codeToIdMap.set(s.students.student_code, s.student_id); });
 
-            const markedIds = new Set(record.studentsToUpdate.map(m => m.studentId));
+                const { data: typeData } = await supabaseAdmin.from('attendance_types').select('id').limit(1).single();
+                const { data: statuses } = await supabaseAdmin.from('attendance_statuses').select('id, code');
+                const statusCodeToIdMap = new Map<string, string>();
+                statuses?.forEach(s => statusCodeToIdMap.set(s.code, s.id));
 
-            // 1. Write exception records
-            for (const mark of record.studentsToUpdate) {
-                const recordId = buildRecordId(record.classId, record.session, null, mark.studentId);
-                const recordData: AttendanceRecordV3 = {
-                    id: recordId,
-                    classId: record.classId,
-                    studentId: mark.studentId,
-                    studentName: mark.studentName,
-                    session: record.session,
-                    period: null,
-                    status: mark.status,
-                    note: mark.note || '',
-                    markedBy: mockAdminUser.uid,
-                    markedByName: mockAdminUser.displayName,
-                    markedByRole: mockAdminUser.role,
-                    timestamp: new Date().toISOString(),
-                };
-                const docRef = adminDb.collection(path).doc(recordId);
-                batch.set(docRef, recordData);
-                totalWritten++;
-            }
+                const markedIds = new Set(record.studentsToUpdate.map(m => m.studentId));
 
-            // 2. Delete old records for students now marked as present
-            for (const studentId of allStudentIds) {
-                if (!markedIds.has(studentId)) {
-                    const recordId = buildRecordId(record.classId, record.session, null, studentId);
-                    const docRef = adminDb.collection(path).doc(recordId);
-                    batch.delete(docRef);
-                    totalDeleted++;
+                // Clear old records for this session/day
+                await supabaseAdmin.from('attendance').delete().eq('class_id', record.classId).eq('date', attendanceDateKey).eq('session', record.session);
+
+                const inserts = record.studentsToUpdate.flatMap(mark => {
+                    const sId = codeToIdMap.get(mark.studentId);
+                    
+                    // Nếu không có missedPeriods, mặc định là null (cả buổi)
+                    const periods = (mark.missedPeriods && mark.missedPeriods.length > 0) 
+                        ? mark.missedPeriods 
+                        : [null];
+
+                    return periods.map(p => {
+                        let statusCode = mark.status as string;
+                        if (statusCode === 'absent' || statusCode === 'K') statusCode = 'K';
+                        else if (statusCode === 'excused' || statusCode === 'P') statusCode = 'P';
+                        else if (statusCode === 'late' || statusCode === 'T') statusCode = 'T';
+                        
+                        const stId = statusCodeToIdMap.get(statusCode);
+                        if (sId && stId) {
+                            return {
+                                student_id: sId,
+                                class_id: record.classId,
+                                type_id: typeData?.id,
+                                status_id: stId,
+                                date: attendanceDateKey,
+                                session: record.session,
+                                period: p,
+                                note: mark.note || '',
+                                marked_by: mockAdminUser.uid
+                            };
+                        }
+                        return null;
+                    });
+                }).filter(i => i !== null);
+                
+                console.log(`[processImportedAttendance] Lớp ${record.classId}: Chuẩn bị lưu ${inserts.length} dòng dữ liệu tiết lẻ.`, inserts);
+
+                if (inserts.length > 0) {
+                    const { error } = await supabaseAdmin.from('attendance').insert(inserts);
+                    if (error) throw error;
+                    totalWritten += inserts.length;
                 }
-            }
+            } else {
+                // Legacy Firebase Logic
+                const batch = adminDb.batch();
+                const markedIds = new Set(record.studentsToUpdate.map(m => m.studentId));
 
-            await batch.commit();
+                for (const mark of record.studentsToUpdate) {
+                    const recordId = buildRecordId(record.classId, record.session, null, mark.studentId);
+                    const recordData: AttendanceRecordV3 = {
+                        id: recordId,
+                        classId: record.classId,
+                        studentId: mark.studentId,
+                        studentName: mark.studentName,
+                        session: record.session,
+                        period: null,
+                        status: mark.status,
+                        note: mark.note || '',
+                        markedBy: mockAdminUser.uid,
+                        markedByName: mockAdminUser.displayName,
+                        markedByRole: mockAdminUser.role,
+                        timestamp: new Date().toISOString(),
+                    };
+                    const docRef = adminDb.collection(path).doc(recordId);
+                    batch.set(docRef, recordData);
+                    totalWritten++;
+                }
+
+                for (const studentId of allStudentIds) {
+                    if (!markedIds.has(studentId)) {
+                        const recordId = buildRecordId(record.classId, record.session, null, studentId);
+                        const docRef = adminDb.collection(path).doc(recordId);
+                        batch.delete(docRef);
+                        totalDeleted++;
+                    }
+                }
+                await batch.commit();
+            }
         }
 
         return {
