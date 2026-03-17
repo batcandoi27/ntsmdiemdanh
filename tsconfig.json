@@ -37,6 +37,11 @@
   "exclude": [
     "node_modules",
     "mobile",
-    "scripts"
+    "docs",
+    "supabase",
+    "scripts",
+    "xxxxUsersBCDgeminiantigravityskillsawesome-skills-temp",
+    "test-*.ts",
+    "verify-import.js"
   ]
 }
