@@ -2,6 +2,5 @@ docs/
 supabase/
 xxxxUsersBCDgeminiantigravityskillsawesome-skills-temp/
 *.sql
-*.js
 test-*.ts
 verify-import.js
