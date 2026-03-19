@@ -41,6 +41,7 @@ export interface AttendanceRecordV3 {
 
     // Khen thưởng (Reward/Praise) - lưu ở mức buổi
     reward?: boolean;
+    rewardPeriods?: number[];       // [1,2] -> Các tiết được khen thưởng
     rewardNote?: string;
     rewardType?: string;            // Loai khen thuong: good_deed, helpful...
 

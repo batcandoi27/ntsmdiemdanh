@@ -63,6 +63,151 @@ export interface AbsenceDetail {
     notes?: string;
 }
 
+// --- Production Utils ---
+const statusOrder = ['K', 'P', 'VP', 'T', 'KH'];
+
+function resolveDailyStatus(rawItems: any[]) {
+    if (!rawItems || rawItems.length === 0) return { labels: [], notes: '', stats: {} };
+
+    const board: Record<string, Record<number, any>> = { 'S': {}, 'C': {} };
+    rawItems.forEach(item => {
+        const sessions = item.session === 'both' ? ['S', 'C'] : [item.session];
+        sessions.forEach(sess => {
+            const periods = item.periods || [1, 2, 3, 4, 5];
+            periods.forEach((p: number) => {
+                const current = board[sess][p];
+                const newPriority = statusOrder.indexOf(item.base);
+                if (newPriority === -1) return;
+                if (!current || newPriority < statusOrder.indexOf(current.base)) {
+                    board[sess][p] = item;
+                }
+            });
+        });
+    });
+
+    const groupByType: Record<string, Record<string, { sessions: Set<string>, periodsBySession: Record<string, Set<number>> }>> = {};
+    
+    ['S', 'C'].forEach(sess => {
+        for (let p = 1; p <= 5; p++) {
+            const item = board[sess][p];
+            if (item) {
+                const type = item.base;
+                const note = item.note || ''; // Key is the note text
+                if (!groupByType[type]) groupByType[type] = {};
+                if (!groupByType[type][note]) {
+                    groupByType[type][note] = { sessions: new Set(), periodsBySession: { 'S': new Set(), 'C': new Set() } };
+                }
+                groupByType[type][note].sessions.add(sess);
+                groupByType[type][note].periodsBySession[sess].add(p);
+            }
+        }
+    });
+
+    const labels: string[] = [];
+    const stats: Record<string, number> = {};
+
+    statusOrder.forEach(type => {
+        const noteGroups = groupByType[type];
+        if (!noteGroups) return;
+
+        stats[type] = 1;
+        
+        // If there's only one group and it has NO note, use the old simple formatting
+        const notes = Object.keys(noteGroups);
+        if (notes.length === 1 && !notes[0]) {
+            const info = noteGroups[notes[0]];
+            let label = type;
+            const hasS = info.periodsBySession['S'].size > 0;
+            const hasC = info.periodsBySession['C'].size > 0;
+            const fullS = info.periodsBySession['S'].size === 5;
+            const fullC = info.periodsBySession['C'].size === 5;
+
+            if (fullS && fullC) {
+                label += '(SC)';
+            } else {
+                let sessionPart = '';
+                if (hasS) {
+                    sessionPart += 's';
+                    if (!fullS) {
+                        const pList = Array.from(info.periodsBySession['S']).sort();
+                        if (pList.length > 1 && pList[pList.length - 1] - pList[0] === pList.length - 1) {
+                            sessionPart += `${pList[0]}-${pList[pList.length - 1]}`;
+                        } else {
+                            sessionPart += pList.join('');
+                        }
+                    }
+                }
+                if (hasC) {
+                    sessionPart += 'c';
+                    if (!fullC) {
+                        const pList = Array.from(info.periodsBySession['C']).sort();
+                        if (pList.length > 1 && pList[pList.length - 1] - pList[0] === pList.length - 1) {
+                            sessionPart += `${pList[0]}-${pList[pList.length - 1]}`;
+                        } else {
+                            sessionPart += pList.join('');
+                        }
+                    }
+                }
+                label += `(${sessionPart})`;
+            }
+            labels.push(label);
+            return;
+        }
+
+        // Complex formatting: Group by notes
+        // Example: VP(s1,2 [Lỗi A]; c3 [Lỗi B])
+        const segmentStrings: string[] = [];
+        Object.entries(noteGroups).forEach(([note, info]) => {
+            const hasS = info.periodsBySession['S'].size > 0;
+            const hasC = info.periodsBySession['C'].size > 0;
+            const fullS = info.periodsBySession['S'].size === 5;
+            const fullC = info.periodsBySession['C'].size === 5;
+
+            let periodPart = '';
+            if (fullS && fullC) {
+                periodPart = 'SC';
+            } else {
+                if (hasS) {
+                    periodPart += 's';
+                    if (!fullS) {
+                        const pList = Array.from(info.periodsBySession['S']).sort();
+                        if (pList.length > 1 && pList[pList.length - 1] - pList[0] === pList.length - 1) {
+                            periodPart += `${pList[0]}-${pList[pList.length - 1]}`;
+                        } else {
+                            periodPart += pList.join('');
+                        }
+                    }
+                }
+                if (hasC) {
+                    periodPart += 'c';
+                    if (!fullC) {
+                        const pList = Array.from(info.periodsBySession['C']).sort();
+                        if (pList.length > 1 && pList[pList.length - 1] - pList[0] === pList.length - 1) {
+                            periodPart += `${pList[0]}-${pList[pList.length - 1]}`;
+                        } else {
+                            periodPart += pList.join('');
+                        }
+                    }
+                }
+            }
+            
+            if (note) {
+                segmentStrings.push(`${periodPart} [${note}]`);
+            } else {
+                segmentStrings.push(periodPart);
+            }
+        });
+
+        labels.push(`${type}(${segmentStrings.join('; ')})`);
+    });
+
+    return {
+        labels,
+        notes: Array.from(new Set(rawItems.map(i => i.note).filter(Boolean))).join('; '),
+        stats
+    };
+}
+
 export interface ReportResult {
     totalP: number;
     totalK: number;
@@ -139,8 +284,8 @@ export async function getReports(criteria: ReportCriteria, userRole: string = 't
     const absences: AbsenceDetail[] = [];
     let totalP = 0, totalK = 0, totalV = 0, totalT = 0, totalVP = 0, totalKH = 0;
 
-    // Map: classId -> studentCode -> date -> combined status info
-    const mergedMap: Record<string, Record<string, Record<string, { status: string, notes: string, id: string }>>> = {};
+    // Map: classId -> studentCode -> date -> { items: [] }
+    const mergedMap: Record<string, Record<string, Record<string, { items: any[] }>>> = {};
 
     const recordsByClass: Record<string, any[]> = {};
     records.forEach(r => {
@@ -163,100 +308,78 @@ export async function getReports(criteria: ReportCriteria, userRole: string = 't
             if (s.id) studentInfoMap.set(s.id, info);
         });
 
+        // Phase 1: Group all raw status items by class -> student -> date
         if (!mergedMap[classId]) mergedMap[classId] = {};
 
         classRecords.forEach((record: any) => {
-            // Processing both V1 and V3 formats
+            const dateKey = record.date || (record.timestamp ? record.timestamp.split('T')[0] : '');
+            
             if (record.absences) {
                 // V1
                 Object.entries(record.absences).forEach(([code, status]) => {
                     if (status && status !== 'C' && status !== '') {
-                        const dateKey = record.date;
                         if (!mergedMap[classId][code]) mergedMap[classId][code] = {};
-                        if (!mergedMap[classId][code][dateKey]) {
-                            mergedMap[classId][code][dateKey] = { status: status as string, notes: record.notes?.[code] || '', id: `${dateKey}_${code}` };
-                        } else {
-                            const cur = mergedMap[classId][code][dateKey];
-                            if (!cur.status.split(', ').includes(status as string)) {
-                                cur.status += `, ${status}`;
-                                if (record.notes?.[code]) cur.notes = cur.notes ? `${cur.notes}; ${record.notes[code]}` : record.notes[code];
-                            }
-                        }
+                        if (!mergedMap[classId][code][dateKey]) mergedMap[classId][code][dateKey] = { items: [] };
+                        
+                        mergedMap[classId][code][dateKey].items.push({
+                            base: (status as string).trim().toUpperCase(),
+                            session: 'both',
+                            periods: [1, 2, 3, 4, 5],
+                            note: record.notes?.[code] || ''
+                        });
                     }
                 });
             } else if (record.studentId && record.status) {
                 // V3
                 const normRecord = normalizeAttendanceRecord(record);
                 const code = normRecord.studentId;
+                if (!mergedMap[classId][code]) mergedMap[classId][code] = {};
+                if (!mergedMap[classId][code][dateKey]) mergedMap[classId][code][dateKey] = { items: [] };
+
                 let s = normRecord.status as any;
                 if (s === 'absent') s = 'K';
                 else if (s === 'excused') s = 'P';
                 else if (s === 'late') s = 'T';
 
-                const statusesToAdd: string[] = [];
+                const session = normRecord.session === 'morning' ? 'S' : 'C';
+                const periods = normRecord.missedPeriods && normRecord.missedPeriods.length > 0 
+                    ? normRecord.missedPeriods 
+                    : [1, 2, 3, 4, 5];
 
                 if (s !== 'present' && s !== 'C' && s && s !== 'violation' && s !== 'reward') {
-                    let label = s;
-                    if (s === 'T') {
-                        if (normRecord.missedPeriods?.length > 0) {
-                            label = `T (Vắng T${normRecord.missedPeriods.join(', T')})`;
-                        } else if (normRecord.note && normRecord.note.trim()) {
-                            label = `T (${normRecord.note.trim()})`;
-                        } else {
-                            label = `T (Trễ 10p)`;
-                        }
-                    }
-                    statusesToAdd.push(label);
+                    mergedMap[classId][code][dateKey].items.push({
+                        base: s,
+                        session,
+                        periods,
+                        note: normRecord.note || ''
+                    });
                 }
 
                 if (normRecord.violation) {
-                    const vpNote = normRecord.violationNote ? `VP (${normRecord.violationNote})` : 'VP';
-                    if (!statusesToAdd.some(st => st.startsWith('VP'))) {
-                        statusesToAdd.push(vpNote);
-                    }
+                    mergedMap[classId][code][dateKey].items.push({
+                        base: 'VP',
+                        session,
+                        periods: normRecord.violationPeriods || periods,
+                        note: normRecord.violationNote || normRecord.note || ''
+                    });
                 }
                 if (normRecord.reward) {
-                    const khNote = normRecord.rewardNote ? `KH (${normRecord.rewardNote})` : 'KH';
-                    if (!statusesToAdd.some(st => st.startsWith('KH'))) {
-                        statusesToAdd.push(khNote);
-                    }
+                    mergedMap[classId][code][dateKey].items.push({
+                        base: 'KH',
+                        session,
+                        periods: normRecord.rewardPeriods || periods,
+                        note: normRecord.rewardNote || normRecord.note || ''
+                    });
                 }
-
-                const dateKey = record.date || (record.timestamp ? record.timestamp.split('T')[0] : '');
-                
-                // Tách biệt theo Status để mỗi loại giữ ghi chú riêng
-                statusesToAdd.forEach(sLabel => {
-                    const baseStatus = sLabel.split(' ')[0]; // P, K, T, VP, KH
-                    if (!mergedMap[classId][code]) mergedMap[classId][code] = {};
-                    
-                    // Logic gộp: P và K (Nghỉ) nên gộp chung theo ngày để frontend tính SC (nghỉ sáng + chiều)
-                    // T, VP, KH có thể tách biệt hoặc gộp tùy ý. Ở đây tớ gộp hết theo ngày để backend dọn dẹp data luôn.
-                    const finalKey = dateKey; 
-
-                    if (!mergedMap[classId][code][finalKey]) {
-                        mergedMap[classId][code][finalKey] = {
-                            status: sLabel,
-                            notes: normRecord.note || '',
-                            id: `${record.id}_${baseStatus}` || `${finalKey}_${code}`
-                        };
-                    } else {
-                        const cur = mergedMap[classId][code][finalKey];
-                        // Nếu status mới chưa có trong danh sách thì mới thêm vào
-                        if (!cur.status.split(', ').includes(sLabel)) {
-                            cur.status += `, ${sLabel}`;
-                        }
-                        if (normRecord.note && !cur.notes.includes(normRecord.note)) {
-                            cur.notes = cur.notes ? `${cur.notes}; ${normRecord.note}` : normRecord.note;
-                        }
-                    }
-                });
             }
         });
     }
 
-    // After processing ALL classes and ALL records, convert mergedMap back to absences array and update totals
-    for (const [classId, studentsInClass] of Object.entries(mergedMap)) {
-        // We need students names for each class processed
+    // Phase 2: Process each student/day to apply priority and generate Ps13c2 labels
+    for (const [classId, studentDates] of Object.entries(mergedMap)) {
+        const classObj = classes.find(c => c.id === classId);
+        const className = classObj?.name || classId;
+        
         let students = await db.getStudentsByClass(classId);
         const studentInfoMap = new Map();
         students.forEach((s, index) => {
@@ -265,44 +388,43 @@ export async function getReports(criteria: ReportCriteria, userRole: string = 't
             if (s.id) studentInfoMap.set(s.id, info);
         });
 
-        for (const [code, dates] of Object.entries(studentsInClass)) {
+        for (const [code, dates] of Object.entries(studentDates)) {
             const info = studentInfoMap.get(code) || { name: code, stt: 0 };
-            for (const [date, val] of Object.entries(dates)) {
+            
+            for (const [date, data] of Object.entries(dates)) {
+                const rawItems = data.items;
+                if (!rawItems || rawItems.length === 0) continue;
+
+                const resolved = resolveDailyStatus(rawItems);
+                
+                // Update overall stats
+                Object.keys(resolved.stats).forEach(type => {
+                    if (type === 'P') totalP++;
+                    else if (type === 'K') totalK++;
+                    else if (type === 'T') totalT++;
+                    else if (type === 'VP') totalVP++;
+                    else if (type === 'KH') totalKH++;
+                });
+
                 absences.push({
-                    id: val.id,
-                    date: date,
-                    classId: classId,
-                    className: classMap.get(classId) || classId,
+                    id: `${date}_${code}`,
+                    date,
+                    classId,
+                    className,
                     studentCode: code,
                     studentName: info.name,
                     stt: info.stt,
-                    status: val.status as AttendanceStatus,
-                    notes: val.notes
+                    status: resolved.labels.join(' | ') as any,
+                    notes: resolved.notes
                 });
-
-                // Update Totals (Approximate weights as 1 per student/day/type)
-                if (val.status.includes('P')) totalP++;
-                if (val.status.includes('K')) totalK++;
-                if (val.status.includes('V')) totalV++;
-                if (val.status.includes('T')) totalT++;
-                if (val.status.includes('VP')) totalVP++;
-                if (val.status.includes('KH')) totalKH++;
             }
         }
     }
 
-    // Sort by Date DESC
-    // The instruction implies sorting by STT, but the original code sorts by date.
-    // Assuming the instruction wants to change the sorting for getReports as well.
-    // The provided snippet was malformed, so I'm interpreting it as:
-    // 1. Keep the `absences` array name.
-    // 2. Sort by `stt` then by `date` (to maintain some order).
-    // 3. The `results` variable in the snippet was likely a placeholder for `absences`.
+    // Sort: STT asc, then Date desc
     absences.sort((a, b) => {
-        if (a.stt !== b.stt) {
-            return a.stt - b.stt;
-        }
-        return new Date(b.date).getTime() - new Date(a.date).getTime(); // Secondary sort by date DESC
+        if (a.stt !== b.stt) return a.stt - b.stt;
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
     });
 
     console.log(`[getReports] Processed ${absences.length} merged records. Totals: P=${totalP}, K=${totalK}, T=${totalT}, VP=${totalVP}, KH=${totalKH}`);
@@ -310,7 +432,7 @@ export async function getReports(criteria: ReportCriteria, userRole: string = 't
 
     return {
         totalP, totalK, totalV, totalT, totalVP, totalKH,
-        absences: absences,
+        absences,
         classSizes
     };
 }
@@ -365,88 +487,72 @@ export async function getExcelExportData(
     });
 
     for (const cls of targetClasses) {
-        // Fetch all students in this class
         let students = await db.getStudentsByClass(cls.id);
         students = filterActiveStudentsForReport(students, startDate);
         console.log(`[Excel] Class ${cls.name}: Students count: ${students.length}`);
 
         const classRecords = recordsByClass[cls.id] || [];
+        const studentRawMap: Record<string, Record<string, any[]>> = {};
 
+        // Phase 1: Collect raw records for this class
+        classRecords.forEach((r: any) => {
+            const dateStr = r.date || (r.timestamp ? r.timestamp.split('T')[0] : '');
+            if (!dateStr) return;
+
+            const processRecord = (code: string, rawItem: any) => {
+                if (!studentRawMap[code]) studentRawMap[code] = {};
+                if (!studentRawMap[code][dateStr]) studentRawMap[code][dateStr] = [];
+                studentRawMap[code][dateStr].push(rawItem);
+            };
+
+            if (r.absences) {
+                Object.entries(r.absences).forEach(([code, status]) => {
+                    const st = (status as string).trim().toUpperCase();
+                    if (st && st !== 'C' && st !== 'PRESENT') {
+                        processRecord(code, { base: st, session: 'both', periods: [1,2,3,4,5], note: r.notes?.[code] || '' });
+                    }
+                });
+            } else if (r.studentId && r.status) {
+                const normRecord = normalizeAttendanceRecord(r);
+                const code = normRecord.studentId;
+                const session = normRecord.session === 'morning' ? 'S' : 'C';
+                const periods = normRecord.missedPeriods && normRecord.missedPeriods.length > 0 ? normRecord.missedPeriods : [1,2,3,4,5];
+                
+                let s = normRecord.status as any;
+                if (s === 'absent') s = 'K';
+                else if (s === 'excused') s = 'P';
+                else if (s === 'late') s = 'T';
+
+                if (s !== 'present' && s !== 'C' && s && s !== 'violation' && s !== 'reward' && s !== 'VP' && s !== 'KH') {
+                    processRecord(code, { base: s, session, periods, note: normRecord.note || '' });
+                }
+                if (normRecord.violation) {
+                    processRecord(code, { base: 'VP', session, periods: normRecord.violationPeriods || periods, note: normRecord.violationNote || normRecord.note || '' });
+                }
+                if (normRecord.reward) {
+                    processRecord(code, { base: 'KH', session, periods: normRecord.rewardPeriods || periods, note: normRecord.rewardNote || normRecord.note || '' });
+                }
+            }
+        });
+
+        // Phase 2: Resolve and Map
         const mappedStudents: { code: string; name: string; absences: Record<string, string> }[] = [];
 
         students.forEach((student) => {
             const absences: Record<string, string> = {};
-            let hasAbsence = false;
+            let hasPrimaryAbsence = false; // Only P or K count for "isCompact" filter
+            const rawByDate = studentRawMap[student.code] || studentRawMap[student.id] || {};
 
-            // V3 data: record is 1 exception
-            classRecords.filter(r => {
-                // Chỉ lấy bản ghi thuộc về học sinh này
-                // TH1: V3 format (studentId khớp)
-                // TH2: V1 format (absences chứa student code)
-                return r.studentId === student.code || (r.absences && r.absences[student.code]);
-            }).forEach(r => {
-                let statusCode = '';
-                let dateStr = '';
-
-                if (r.studentId && r.status) {
-                    // It's V3 format - Chuẩn hoá dữ liệu trước khi tính toán
-                    const normRecord = normalizeAttendanceRecord(r);
-                    statusCode = normRecord.status;
-
-                    if (statusCode === 'absent') statusCode = 'K';
-                    if (statusCode === 'excused') statusCode = 'P';
-                    
-                    if (statusCode === 'K' || statusCode === 'P' || statusCode === 'late' || (statusCode === 'T' && !statusCode.includes('('))) {
-                        if (statusCode === 'late') statusCode = 'T';
-                        const periods = normRecord.missedPeriods || [];
-                        if (periods.length > 0 && periods.length < 5) {
-                            statusCode = `${statusCode} (T${periods.join(', T')})`;
-                        } else if (statusCode === 'T' && periods.length === 0 && (normRecord.note || normRecord.violationNote)) {
-                            statusCode = `T (${normRecord.note || normRecord.violationNote})`;
-                        }
-                    }
-
-                    // Xử lý Violation tập trung
-                    if (normRecord.violation) {
-                        const vPeriods = normRecord.violationPeriods || [];
-                        const note = normRecord.violationNote || normRecord.note || '';
-                        const pTag = (vPeriods.length > 0 && vPeriods.length < 5) ? ` [T${vPeriods.join(', T')}]` : '';
-                        const vpLabel = note ? `VP (${note}${pTag})` : `VP${pTag}`;
-                        
-                        if (statusCode === 'present' || !statusCode) {
-                            statusCode = vpLabel;
-                        } else if (!statusCode.includes('VP')) {
-                            statusCode = `${statusCode}, ${vpLabel}`;
-                        }
-                    }
-
-                    // Xử lý Reward/KH tập trung
-                    if (normRecord.reward) {
-                        const khLabel = normRecord.rewardNote || normRecord.note ? `KH (${normRecord.rewardNote || normRecord.note})` : 'KH';
-                        if (statusCode === 'present' || !statusCode) {
-                            statusCode = khLabel;
-                        } else if (!statusCode.includes('KH')) {
-                            statusCode = `${statusCode}, KH`;
-                        }
-                    }
-
-                    dateStr = normRecord.date || (normRecord.timestamp ? normRecord.timestamp.split('T')[0] : '');
-                    
-                    if (dateStr && statusCode && statusCode !== 'present') {
-                        absences[dateStr] = statusCode;
-                        
-                        // Hiệu chỉnh: Chỉ đánh dấu hasAbsence nếu có P hoặc K
-                        const baseCodes = statusCode.split(', ').map(s => s.split(' ')[0]);
-                        if (baseCodes.includes('P') || baseCodes.includes('K')) {
-                            hasAbsence = true;
-                        }
-                    }
+            Object.keys(rawByDate).forEach(dateKey => {
+                const resolved = resolveDailyStatus(rawByDate[dateKey]);
+                absences[dateKey] = resolved.labels.join(' | ');
+                
+                if (resolved.stats['P'] || resolved.stats['K']) {
+                    hasPrimaryAbsence = true;
                 }
-
             });
 
-            // Filter compact logic
-            if (!isCompact || (isCompact && hasAbsence)) {
+            if (!isCompact || (isCompact && hasPrimaryAbsence)) {
                 mappedStudents.push({
                     code: student.code,
                     name: student.fullName,
@@ -454,16 +560,14 @@ export async function getExcelExportData(
                 });
             }
         });
-        console.log(`[Excel] Class ${cls.name}: Mapped students: ${mappedStudents.length}`);
 
-        // Only add class sheet if there are students to display
         if (mappedStudents.length > 0) {
             result.push({
                 className: cls.name,
                 year: exportYear,
                 month: exportMonth,
-                startDate: startDate, // Thêm ngày bắt đầu để helper tính toán cột
-                endDate: endDate,     // Thêm ngày kết thúc
+                startDate: startDate,
+                endDate: endDate,
                 totalStudents: getClassSize(cls, appSettings),
                 students: mappedStudents.sort((a, b) => a.name.localeCompare(b.name))
             });
@@ -497,69 +601,62 @@ export async function getMonthlyReportData(classId: string, month: number, year:
 
     // 4. Map to Export Format
     // Format: date "YYYY-MM-DD" -> status
+    // Phase 1: Collect raw records
+    const studentRawMap: Record<string, Record<string, any[]>> = {};
+    records.forEach((r: any) => {
+        const dateStr = r.date || (r.timestamp ? r.timestamp.split('T')[0] : '');
+        if (!dateStr) return;
+
+        const processRecord = (code: string, rawItem: any) => {
+            if (!studentRawMap[code]) studentRawMap[code] = {};
+            if (!studentRawMap[code][dateStr]) studentRawMap[code][dateStr] = [];
+            studentRawMap[code][dateStr].push(rawItem);
+        };
+
+        if (r.absences) {
+            // V1
+            Object.entries(r.absences).forEach(([code, status]) => {
+                const st = (status as string).trim().toUpperCase();
+                if (st && st !== 'C' && st !== 'PRESENT') {
+                    processRecord(code, { base: st, session: 'both', periods: [1,2,3,4,5], note: r.notes?.[code] || '' });
+                }
+            });
+        } else if (r.studentId && r.status) {
+            // V3
+            const normRecord = normalizeAttendanceRecord(r);
+            const code = normRecord.studentId;
+            const session = normRecord.session === 'morning' ? 'S' : 'C';
+            const periods = normRecord.missedPeriods && normRecord.missedPeriods.length > 0 ? normRecord.missedPeriods : [1,2,3,4,5];
+            
+            let s = normRecord.status as any;
+            if (s === 'absent') s = 'K';
+            else if (s === 'excused') s = 'P';
+            else if (s === 'late') s = 'T';
+
+            if (s !== 'present' && s !== 'C' && s && s !== 'violation' && s !== 'reward' && s !== 'VP' && s !== 'KH') {
+                processRecord(code, { base: s, session, periods, note: normRecord.note || '' });
+            }
+            if (normRecord.violation) {
+                processRecord(code, { base: 'VP', session, periods: normRecord.violationPeriods || periods, note: normRecord.violationNote || normRecord.note || '' });
+            }
+            if (normRecord.reward) {
+                processRecord(code, { base: 'KH', session, periods: normRecord.rewardPeriods || periods, note: normRecord.rewardNote || normRecord.note || '' });
+            }
+        }
+    });
+
+    // Phase 2: Resolve and Map students
     const studentData = students.map((s, idx) => {
         const absences: Record<string, string> = {};
-        records.forEach((r: any) => {
-            // V1 logic
-            if (r.absences && r.absences[s.code]) {
-                const baseStatus = r.absences[s.code];
-                const noteV1 = r.notes ? r.notes[s.code] : undefined;
-                const status = noteV1 ? `${baseStatus} (${noteV1})` : baseStatus;
-                
-                if (baseStatus && baseStatus !== 'C' && baseStatus !== '') {
-                    absences[r.date] = status;
-                }
-            }
-            // V3 logic
-            else if (r.studentId === s.code && r.status) {
-                let status = r.status;
-                // Hỗ trợ cả Firebase English VÀ Supabase short codes
-                if (status === 'absent') status = 'K';
-                if (status === 'excused') status = 'P';
-                if (status === 'late' || (status === 'T' && !status.includes('('))) {
-                    const periods = r.missedPeriods || [];
-                    if (periods.length > 0) {
-                        status = `T (Vắng T${periods.join(', T')})`;
-                    } else if (r.note && r.note.trim()) {
-                        status = `T (${r.note.trim()})`;
-                    } else {
-                        status = `T (Trễ 10p)`; // Mặc định nếu không có dữ liệu chi tiết
-                    }
-                }
-                if (status === 'violation' || status === 'reward' || (status === 'VP' && !status.includes('('))) {
-                    const note = r.violationNote || r.note || '';
-                    status = note ? `VP (${note})` : 'VP';
-                }
-                if (status === 'praise' || status === 'KH' || status === 'reward') status = 'KH';
-                const dateKey = r.date || (r.timestamp ? r.timestamp.split('T')[0] : '');
-                if (dateKey) {
-                    const existing = absences[dateKey];
-                    if (existing) {
-                        const parts = existing.split(',').map(p => p.trim());
-                        if (!parts.includes(status)) {
-                            absences[dateKey] = `${existing}, ${status}`;
-                        }
-                    } else {
-                        absences[dateKey] = status;
-                    }
-
-                    // Bổ sung Violation/Praise từ V3 fields mới
-                    if (r.violation) {
-                        const current = absences[dateKey];
-                        const vpLabel = r.violationNote ? `VP (${r.violationNote})` : 'VP';
-                        if (!current.includes('VP')) {
-                            absences[dateKey] = current ? `${current}, ${vpLabel}` : vpLabel;
-                        }
-                    }
-                    if ((r as any).praise) {
-                        const current = absences[dateKey];
-                        if (!current.includes('KH')) absences[dateKey] = `${current}, KH`;
-                    }
-                }
-            }
+        const rawByDate = studentRawMap[s.id] || {};
+        
+        Object.keys(rawByDate).forEach(dateKey => {
+            const resolved = resolveDailyStatus(rawByDate[dateKey]);
+            absences[dateKey] = resolved.labels.join(' | ');
         });
+
         return {
-            stt: idx + 1, // Export STT as well if needed
+            stt: idx + 1,
             code: s.code,
             name: s.fullName,
             absences
@@ -622,63 +719,67 @@ export async function getAdvancedReportData(
 
         // 4. Get Data
         const data: Record<string, { stats: Record<string, number>; custom: Record<string, string> }> = {};
-
-        // Initialize Data
         students.forEach(s => {
             data[s.id] = { stats: {}, custom: {} };
         });
 
-        // 4a. Get Basic Stats (P, K, T...)
-        // We reuse getReportData from DB service which returns raw records
         const attendanceRecords = await db.getReportData(startDate, endDate, [cls.id]);
+        const studentRawMap: Record<string, Record<string, any[]>> = {};
 
-        attendanceRecords.forEach((record: any) => {
-            // V1 logic
-            if (record.absences) {
-                Object.entries(record.absences).forEach(([studentCode, status]) => {
-                    const student = students.find(s => s.code === studentCode);
-                    if (student && status && status !== 'C' && (status as string) !== '') {
-                        if (!data[student.id].stats[status as string]) data[student.id].stats[status as string] = 0;
-                        data[student.id].stats[status as string]++;
+        attendanceRecords.forEach((r: any) => {
+            const dateStr = r.date || (r.timestamp ? r.timestamp.split('T')[0] : '');
+            if (!dateStr) return;
+            
+            const processRecord = (code: string, rawItem: any) => {
+                if (!studentRawMap[code]) studentRawMap[code] = {};
+                if (!studentRawMap[code][dateStr]) studentRawMap[code][dateStr] = [];
+                studentRawMap[code][dateStr].push(rawItem);
+            };
+
+            if (r.absences) {
+                Object.entries(r.absences).forEach(([code, status]) => {
+                    const st = (status as string).trim().toUpperCase();
+                    if (st && st !== 'C' && st !== 'PRESENT') {
+                        processRecord(code, { base: st, session: 'both', periods: [1,2,3,4,5], note: r.notes?.[code] || '' });
                     }
                 });
-            }
-            // V3 logic
-            else if (record.studentId && record.status) {
-                const normRecord = normalizeAttendanceRecord(record);
-                const studentCode = normRecord.studentId;
-                let status: any = normRecord.status;
+            } else if (r.studentId && r.status) {
+                const normRecord = normalizeAttendanceRecord(r);
+                const code = normRecord.studentId;
+                const session = normRecord.session === 'morning' ? 'S' : 'C';
+                const periods = normRecord.missedPeriods && normRecord.missedPeriods.length > 0 ? normRecord.missedPeriods : [1,2,3,4,5];
+                
+                let s = normRecord.status as any;
+                if (s === 'absent') s = 'K';
+                else if (s === 'excused') s = 'P';
+                else if (s === 'late') s = 'T';
 
-                // Map status sang mã ngắn
-                if (status === 'absent') status = 'K';
-                else if (status === 'excused') status = 'P';
-                else if (status === 'late') status = 'T';
-
-                const weight = normRecord.missedPeriods ? normRecord.missedPeriods.length : 1;
-                const vpWeight = normRecord.violationPeriods ? normRecord.violationPeriods.length : (normRecord.violation ? 5 : 0);
-
-                const student = students.find(s => s.code === studentCode);
-                if (student) {
-                    if (status && status !== 'present') {
-                        // Tránh đếm trùng VP/KH nếu gán trực tiếp qua status
-                        if (status !== 'violation' && status !== 'reward' && status !== 'VP' && status !== 'KH') {
-                            if (!data[student.id].stats[status]) data[student.id].stats[status] = 0;
-                            data[student.id].stats[status] += weight;
-                        }
-                    }
-                    // Đếm Violation
-                    if (normRecord.violation) {
-                        if (!data[student.id].stats['VP']) data[student.id].stats['VP'] = 0;
-                        data[student.id].stats['VP'] += vpWeight || 1;
-                    }
-                    // Đếm Praise/Reward
-                    if (normRecord.reward) {
-                        if (!data[student.id].stats['KH']) data[student.id].stats['KH'] = 0;
-                        data[student.id].stats['KH']++;
-                    }
+                if (s !== 'present' && s !== 'C' && s && s !== 'violation' && s !== 'reward' && s !== 'VP' && s !== 'KH') {
+                    processRecord(code, { base: s, session, periods, note: normRecord.note || '' });
+                }
+                if (normRecord.violation) {
+                    processRecord(code, { base: 'VP', session, periods: normRecord.violationPeriods || periods, note: normRecord.violationNote || normRecord.note || '' });
+                }
+                if (normRecord.reward) {
+                    processRecord(code, { base: 'KH', session, periods: normRecord.rewardPeriods || periods, note: normRecord.rewardNote || normRecord.note || '' });
                 }
             }
+        });
 
+        // 4.1 Process raw records with resolveDailyStatus
+        students.forEach(s => {
+            const rawByDate = studentRawMap[s.id] || {};
+            const stats: Record<string, number> = { 'P': 0, 'K': 0, 'T': 0, 'VP': 0, 'KH': 0 };
+            
+            Object.keys(rawByDate).forEach(dateKey => {
+                const resolved = resolveDailyStatus(rawByDate[dateKey]);
+                // Increment stats based on resolved types
+                Object.keys(resolved.stats).forEach(type => {
+                    stats[type] = (stats[type] || 0) + 1;
+                });
+            });
+            
+            data[s.id].stats = stats;
         });
 
         // 4b. Get Custom Records

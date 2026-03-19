@@ -9,6 +9,22 @@ import { Student } from "@/types/models";
 import { useAuth } from "@/context/auth-context";
 import { ReportMessageModal } from "./report-message-modal";
 
+const getGradeColor = (className: string) => {
+    if (className.startsWith('6')) return "bg-emerald-100 text-emerald-800 border-emerald-200";
+    if (className.startsWith('7')) return "bg-blue-100 text-blue-800 border-blue-200";
+    if (className.startsWith('8')) return "bg-orange-100 text-orange-800 border-orange-200";
+    if (className.startsWith('9')) return "bg-rose-100 text-rose-800 border-rose-200";
+    return "bg-gray-100 text-gray-800 border-gray-200";
+};
+
+const getGradeBarColor = (className: string) => {
+    if (className.startsWith('6')) return "bg-emerald-500";
+    if (className.startsWith('7')) return "bg-blue-500";
+    if (className.startsWith('8')) return "bg-orange-500";
+    if (className.startsWith('9')) return "bg-rose-500";
+    return "bg-gray-500";
+};
+
 interface ReportsListViewProps {
     data: AbsenceDetail[];
     classSizes?: Record<string, number>;
@@ -78,8 +94,8 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
     const groups: Record<string, AbsenceDetail[]> = {};
 
     data.forEach(item => {
-        const statuses = item.status.split(', ');
-        if (!statuses.some(st => visibleColumns.includes(st.split(' ')[0]))) return; // Filter
+        const statuses = item.status.split('; ');
+        if (!statuses.some(st => visibleColumns.includes(st.split('(')[0].trim()))) return; // Filter
         const key = groupBy === 'DATE' ? item.date : item.className;
         if (!groups[key]) groups[key] = [];
         groups[key].push(item);
@@ -90,22 +106,6 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
         if (groupBy === 'DATE') return new Date(b).getTime() - new Date(a).getTime();
         return a.localeCompare(b, undefined, { numeric: true });
     });
-
-    const getGradeColor = (className: string) => {
-        if (className.startsWith('6')) return "bg-emerald-100 text-emerald-800 border-emerald-200";
-        if (className.startsWith('7')) return "bg-blue-100 text-blue-800 border-blue-200";
-        if (className.startsWith('8')) return "bg-orange-100 text-orange-800 border-orange-200";
-        if (className.startsWith('9')) return "bg-rose-100 text-rose-800 border-rose-200";
-        return "bg-gray-100 text-gray-800 border-gray-200";
-    };
-
-    const getGradeBarColor = (className: string) => {
-        if (className.startsWith('6')) return "bg-emerald-500";
-        if (className.startsWith('7')) return "bg-blue-500";
-        if (className.startsWith('8')) return "bg-orange-500";
-        if (className.startsWith('9')) return "bg-rose-500";
-        return "bg-gray-500";
-    };
 
     return (
         <div className="space-y-6">
@@ -152,7 +152,7 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                         
                                         // Hiệu chỉnh logic: Chỉ đếm Vắng (P hoặc K)
                                         const vCount = items.filter(item => {
-                                            const statuses = item.status.split(', ').map(s => s.split(' ')[0]);
+                                            const statuses = item.status.split('; ').map(s => s.split('(')[0].trim());
                                             return statuses.includes('P') || statuses.includes('K');
                                         }).length;
 
@@ -219,7 +219,7 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                             };
                                         } else {
                                             consolidatedMap[studentKey].count++;
-                                            consolidatedMap[studentKey].status += `, ${item.status}`;
+                                            consolidatedMap[studentKey].status += `; ${item.status}`;
                                             if (item.notes && !consolidatedMap[studentKey].notes?.includes(item.notes)) {
                                                 consolidatedMap[studentKey].notes = consolidatedMap[studentKey].notes 
                                                     ? `${consolidatedMap[studentKey].notes}; ${item.notes}` 
@@ -234,30 +234,36 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                     const consolidatedStudents = Object.entries(consolidatedMap)
                                         .map(([code, info]) => {
                                             // Split by comma or space to handle various status strings
-                                            const rawStatuses = info.status.split(/[,]+/).map(s => s.trim()).filter(Boolean);
+                                            const rawStatuses = info.status.split('; ').map(s => s.trim()).filter(Boolean);
                                             
                                             let pCount = 0;
                                             let kCount = 0;
                                             const displayStatuses = new Set<string>();
 
+                                            const seenBases = new Set<string>();
                                             rawStatuses.forEach(st => {
-                                                const base = st.split(' ')[0].toUpperCase();
-                                                if (base.startsWith('P')) pCount++;
-                                                else if (base.startsWith('K')) kCount++;
+                                                const base = st.split('(')[0].trim().toUpperCase();
+                                                if (!seenBases.has(base)) {
+                                                    if (base.startsWith('P')) pCount++;
+                                                    else if (base.startsWith('K')) kCount++;
+                                                    seenBases.add(base);
+                                                }
                                                 displayStatuses.add(st);
                                             });
                                             
-                                            const isSC = (pCount + kCount) >= 2;
+                                            const hasMorning = rawStatuses.some(st => (st.toUpperCase().startsWith('P') || st.toUpperCase().startsWith('K')) && st.includes('(S)'));
+                                            const hasAfternoon = rawStatuses.some(st => (st.toUpperCase().startsWith('P') || st.toUpperCase().startsWith('K')) && st.includes('(C)'));
+                                            const isSC = (hasMorning && hasAfternoon) || (pCount + kCount >= 2);
 
                                             const filteredStatuses = Array.from(displayStatuses).filter(st => {
-                                                const baseCode = st.split(' ')[0];
+                                                const baseCode = st.split('(')[0].trim();
                                                 return visibleColumns.includes(baseCode);
                                             });
 
                                             return {
                                                 code,
                                                 ...info,
-                                                status: filteredStatuses.join(', '),
+                                                status: filteredStatuses.join('; '),
                                                 isSC: isSC // Explicitly pass isSC
                                             };
                                         })
@@ -284,7 +290,7 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                                                 
                                                                 // Chỉ đếm học sinh có P hoặc K
                                                                 const v = consolidatedStudents.filter(s => {
-                                                                    const statuses = s.status.split(', ').map(st => st.split(' ')[0]);
+                                                                    const statuses = s.status.split(', ').map(st => st.split('(')[0].trim());
                                                                     return statuses.includes('P') || statuses.includes('K');
                                                                 }).length;
 
@@ -307,9 +313,9 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                                                     const classId = subGroupItems[0]?.classId;
                                                                     const ss = classId ? classSizes[classId] : 0;
                                                                     
-                                                                    // Chỉ đếm học sinh có P hoặc K
-                                                                    const v = consolidatedStudents.filter(s => {
-                                                                        const statuses = s.status.split(', ').map(st => st.split(' ')[0]);
+                                                                    // Chỉ đếm học sinh có P hoặc K (Ngoại lệ)
+                                                                    const v = subGroupItems.filter(item => {
+                                                                        const statuses = item.status.split('; ').map(st => st.split('(')[0].trim());
                                                                         return statuses.includes('P') || statuses.includes('K');
                                                                     }).length;
 
@@ -333,10 +339,9 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                                 )}
                                             </div>
 
-                                            {/* Right Column: List of Students */}
                                             <div className="col-span-12 md:col-span-10 flex flex-wrap gap-2">
                                                 {consolidatedStudents.map(student => {
-                                                    const statuses = student.status.split(', ');
+                                                    const statuses = student.status.split('; ').filter(Boolean);
                                                     return (
                                                         <div
                                                             key={student.id}
@@ -360,9 +365,9 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                                                 "font-medium truncate max-w-[150px]",
                                                                 statuses[0]?.startsWith('P') ? "text-yellow-600" :
                                                                 statuses[0]?.startsWith('K') ? "text-red-600" :
-                                                                statuses[0]?.startsWith('T') ? "text-blue-600" :
                                                                 statuses[0]?.startsWith('VP') ? "text-purple-600" :
-                                                                statuses[0]?.startsWith('KH') ? "text-pink-600" :
+                                                                statuses[0]?.startsWith('T') ? "text-blue-600" :
+                                                                statuses[0]?.startsWith('KH') ? "text-orange-600" :
                                                                 "text-slate-700"
                                                             )}>
                                                                 {student.name}
@@ -397,14 +402,48 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                 );
             })}
 
-            {/* Chú thích phía dưới cùng */}
-            <div className="mt-4 p-3 bg-blue-50/50 border border-blue-100 rounded-lg flex items-center gap-3 text-xs text-blue-800">
-                <div className="bg-blue-100 p-1 rounded-full text-blue-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
+            {/* Bảng Chú thích Ký hiệu & Màu sắc */}
+            <div className="mt-8 p-4 bg-white border border-gray-100 rounded-xl shadow-sm space-y-4">
+                <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 pb-3 border-b border-gray-50">
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
+                        <span className="text-[11px] font-bold text-yellow-700 uppercase tracking-tight">Phép (P)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                        <span className="text-[11px] font-bold text-red-700 uppercase tracking-tight">Không (K)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                        <span className="text-[11px] font-bold text-blue-700 uppercase tracking-tight">Trễ (T)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                        <span className="text-[11px] font-bold text-purple-700 uppercase tracking-tight">Vi Phạm (VP)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                        <span className="text-[11px] font-bold text-orange-700 uppercase tracking-tight">Khen (KH)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-red-600 font-extrabold text-[11px] tracking-tighter">(SC)</span>
+                        <span className="text-[11px] font-bold text-gray-600 uppercase tracking-tight">Vắng cả ngày</span>
+                    </div>
                 </div>
-                <p>
-                    <span className="font-bold">Ghi chú:</span> Ký hiệu <span className="text-red-600 font-bold">(SC)</span> hiển thị cho các học sinh vắng cả <span className="font-bold">Sáng</span> và <span className="font-bold">Chiều</span> trong cùng một ngày.
-                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px]">
+                    <div className="flex flex-wrap items-center gap-3 justify-center md:justify-start">
+                        <span className="font-black text-gray-400 uppercase tracking-widest text-[10px]">Ký hiệu buổi:</span>
+                        <span className="text-gray-600"><b>s</b>: Sáng</span>
+                        <span className="text-gray-600"><b>c</b>: Chiều</span>
+                        <span className="text-gray-600"><b>1, 2, 3...</b>: Số tiết vắng</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 justify-center md:justify-end border-t md:border-t-0 pt-2 md:pt-0">
+                        <span className="font-black text-gray-400 uppercase tracking-widest text-[10px]">Ví dụ:</span>
+                        <span className="bg-yellow-50 text-yellow-700 px-1.5 py-0.5 rounded border border-yellow-100 font-bold">Ps: Phép sáng</span>
+                        <span className="bg-red-50 text-red-700 px-1.5 py-0.5 rounded border border-red-100 font-bold">Ks1: Không phép sáng tiết 1</span>
+                    </div>
+                </div>
             </div>
 
             {/* Custom Popover Editor */}
@@ -602,9 +641,9 @@ function AddAttendanceModal({ className, defaultDate, onClose, onRefresh }: { cl
 }
 
 function CompactStatusBadge({ status }: { status: string }) {
-    const baseCode = status.split(' ')[0];
-    const hasDetail = status.includes('(');
-    const detail = hasDetail ? status.substring(status.indexOf('(') + 1, status.lastIndexOf(')')) : '';
+    const baseCode = status.split('(')[0].trim();
+    const hasDetail = status.includes('[');
+    const detail = hasDetail ? status.substring(status.indexOf('[') + 1, status.lastIndexOf(']')) : '';
 
     const map = {
         'P': { text: 'P', color: 'text-yellow-600', size: 'text-[15px] font-black' },
@@ -612,13 +651,22 @@ function CompactStatusBadge({ status }: { status: string }) {
         'V': { text: 'V', color: 'text-gray-600', size: 'text-xs font-bold' },
         'T': { text: 'T', color: 'text-blue-600', size: 'text-[15px] font-black' },
         'VP': { text: 'VP', color: 'text-purple-600', size: 'text-[15px] font-black' },
-        'KH': { text: 'KH', color: 'text-pink-600', size: 'text-[15px] font-black' },
+        'KH': { text: 'KH', color: 'text-orange-600', size: 'text-[15px] font-black' },
+        'ND': { text: 'ND', color: 'text-gray-400', size: 'text-[15px] font-black' }
     };
-    const style = map[baseCode as keyof typeof map] || { text: baseCode, color: 'text-gray-600', size: 'text-xs' };
+    const style = map[baseCode as keyof typeof map] || { text: baseCode, color: 'text-gray-600', size: 'text-xs font-bold' };
+
+    // Parse session indicator: (s), (c), (sc), (s12), etc.
+    const sessionMatch = status.match(/\(([^)]+)\)/);
+    const sessionTag = sessionMatch ? sessionMatch[1] : '';
+    const isSC = sessionTag.toLowerCase() === 'sc';
 
     return (
-        <span className={cn("uppercase group/badge relative inline-flex items-center justify-center", style.color, style.size)}>
+        <span className={cn("uppercase group/badge relative inline-flex items-center justify-center leading-none", style.color, style.size)}>
             {style.text}
+            {sessionTag && !isSC && (
+                <span className="text-[9px] font-bold lowercase mt-1.5 ml-0.5 opacity-80">{sessionTag}</span>
+            )}
             {hasDetail && (
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/badge:block z-[9999] pointer-events-none">
                     <div className="bg-gray-900 text-white text-[11px] px-3 py-1.5 rounded-lg shadow-2xl w-max min-w-[80px] text-center border border-gray-700 font-bold animate-in fade-in slide-in-from-bottom-1 duration-200">
@@ -632,17 +680,17 @@ function CompactStatusBadge({ status }: { status: string }) {
 }
 
 function StatusBadge({ status }: { status: string }) {
-    const baseCode = status.split(' ')[0];
-    const hasNote = status.includes('(');
-    const note = hasNote ? status.substring(status.indexOf('(') + 1, status.lastIndexOf(')')) : '';
+    const baseCode = status.split('(')[0].trim();
+    const hasNote = status.includes('[');
+    const note = hasNote ? status.substring(status.indexOf('[') + 1, status.lastIndexOf(']')) : '';
 
     const map = {
-        'P': { text: 'Phép (P)', bg: 'bg-yellow-100', color: 'text-yellow-700', border: 'border-yellow-200' },
-        'K': { text: 'Không (K)', bg: 'bg-red-100', color: 'text-red-700', border: 'border-red-200' },
-        'V': { text: 'Vắng (V)', bg: 'bg-gray-100', color: 'text-gray-700', border: 'border-gray-200' },
-        'T': { text: 'Trễ (T)', bg: 'bg-blue-100', color: 'text-blue-700', border: 'border-blue-200' },
-        'VP': { text: 'Vi Phạm (VP)', bg: 'bg-purple-100', color: 'text-purple-700', border: 'border-purple-200' },
-        'KH': { text: 'Khen thưởng (KH)', bg: 'bg-pink-100', color: 'text-pink-700', border: 'border-pink-200' },
+        'P': { text: 'Phép (P)', bg: 'bg-yellow-50', color: 'text-yellow-600', border: 'border-yellow-200' },
+        'K': { text: 'Không (K)', bg: 'bg-red-50', color: 'text-red-600', border: 'border-red-200' },
+        'V': { text: 'Vắng (V)', bg: 'bg-gray-50', color: 'text-gray-600', border: 'border-gray-200' },
+        'T': { text: 'Trễ (T)', bg: 'bg-blue-50', color: 'text-blue-600', border: 'border-blue-200' },
+        'VP': { text: 'Vi Phạm (VP)', bg: 'bg-purple-50', color: 'text-purple-600', border: 'border-purple-200' },
+        'KH': { text: 'Khen thưởng (KH)', bg: 'bg-orange-50', color: 'text-orange-600', border: 'border-orange-200' },
     };
     const style = map[baseCode as keyof typeof map] || { text: baseCode, bg: 'bg-gray-100', color: 'text-gray-600', border: 'border-gray-200' };
 

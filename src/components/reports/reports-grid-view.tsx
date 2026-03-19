@@ -9,6 +9,22 @@ import { Class, Student } from "@/types/models";
 import { AttendanceSheet } from "@/components/attendance-sheet";
 import { useAuth } from "@/context/auth-context";
 
+const getGradeColor = (className: string) => {
+    if (className.startsWith('6')) return "bg-emerald-100 border-emerald-200 text-emerald-900";
+    if (className.startsWith('7')) return "bg-blue-100 border-blue-200 text-blue-900";
+    if (className.startsWith('8')) return "bg-orange-100 border-orange-200 text-orange-900";
+    if (className.startsWith('9')) return "bg-rose-100 border-rose-200 text-rose-900";
+    return "bg-gray-100 border-gray-200 text-gray-900";
+};
+
+const getGradeBarColor = (className: string) => {
+    if (className.startsWith('6')) return "bg-emerald-600";
+    if (className.startsWith('7')) return "bg-blue-600";
+    if (className.startsWith('8')) return "bg-orange-600";
+    if (className.startsWith('9')) return "bg-rose-600";
+    return "bg-gray-600";
+};
+
 interface ReportsGridViewProps {
     dateRange: { start: string, end: string };
     selectedClasses: string[]; // IDs
@@ -35,10 +51,10 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
         // ...
         absences.forEach(record => {
             const status = record.status;
-            const statuses = status.split(', ');
+            const statuses = status.split(' | ');
             
             // Filter by visible columns using base code - check if ANY of the statuses are visible
-            if (!statuses.some(st => visibleColumns.includes(st.split(' ')[0]))) return;
+            if (!statuses.some(st => visibleColumns.includes(st.split('(')[0].trim()))) return;
 
             const clsId = record.classId;
             // Filter by selectedClasses if set
@@ -63,7 +79,7 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
             if (!groups[clsId].students[record.studentCode].absences[record.date]) {
                 groups[clsId].students[record.studentCode].absences[record.date] = status;
             } else {
-                groups[clsId].students[record.studentCode].absences[record.date] += `, ${status}`;
+                groups[clsId].students[record.studentCode].absences[record.date] += ` | ${status}`;
             }
         });
 
@@ -90,21 +106,7 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
         );
     }
 
-    const getGradeColor = (className: string) => {
-        if (className.startsWith('6')) return "bg-emerald-100 border-emerald-200 text-emerald-900";
-        if (className.startsWith('7')) return "bg-blue-100 border-blue-200 text-blue-900";
-        if (className.startsWith('8')) return "bg-orange-100 border-orange-200 text-orange-900";
-        if (className.startsWith('9')) return "bg-rose-100 border-rose-200 text-rose-900";
-        return "bg-gray-100 border-gray-200 text-gray-900";
-    };
 
-    const getGradeBarColor = (className: string) => {
-        if (className.startsWith('6')) return "bg-emerald-600";
-        if (className.startsWith('7')) return "bg-blue-600";
-        if (className.startsWith('8')) return "bg-orange-600";
-        if (className.startsWith('9')) return "bg-rose-600";
-        return "bg-gray-600";
-    };
 
     const getDayName = (date: Date) => {
         const day = date.getDay(); // 0 = Sun, 1 = Mon...
@@ -228,27 +230,36 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                                                         const allStatusValues = Object.values(student.absences || {});
                                                         const firstStatus = allStatusValues.find(s => s) as string;
                                                         if (!firstStatus) return "text-black";
-                                                        const base = firstStatus.split(', ')[0].split(' ')[0];
+                                                        const base = firstStatus.split(' | ')[0].split('(')[0].trim().toUpperCase();
                                                         return base === 'P' ? "text-yellow-600" :
                                                                base === 'K' ? "text-red-600" :
-                                                               base === 'T' ? "text-blue-600" :
                                                                base === 'VP' ? "text-purple-600" :
-                                                               base === 'KH' ? "text-pink-600" : "text-black";
+                                                               base === 'T' ? "text-blue-600" :
+                                                               base === 'KH' ? "text-orange-600" : "text-black";
                                                     })()
                                                 )}>
                                                     <span className="truncate">{student.name}</span>
                                                     {(() => {
-                                                        // Tính SC: Tổng P + K trên tất cả các ngày đang hiển thị
-                                                        let pkCount = 0;
+                                                        // Tính SC: Nghỉ cả sáng và chiều TRONG CÙNG 1 NGÀY
+                                                        let hasFullDayAbsence = false;
                                                         dates.forEach(d => {
                                                             const ds = format(d, 'yyyy-MM-dd');
                                                             const st = student.absences[ds];
                                                             if (st) {
-                                                                const parts = st.split(/[,]+/).map(p => p.trim().split(' ')[0].toUpperCase()).filter(Boolean);
-                                                                pkCount += parts.filter(p => p.startsWith('P') || p.startsWith('K')).length;
+                                                                const parts = st.split(' | ').map(p => p.trim().toUpperCase()).filter(Boolean);
+                                                                // TH1: Có cả (S) và (C) trong cùng ngày
+                                                                const morningAbs = parts.some(p => (p.startsWith('P') || p.startsWith('K')) && p.includes('(S)'));
+                                                                const afternoonAbs = parts.some(p => (p.startsWith('P') || p.startsWith('K')) && p.includes('(C)'));
+                                                                if (morningAbs && afternoonAbs) hasFullDayAbsence = true;
+                                                                
+                                                                // TH2: Fallback cho dữ liệu cũ V1 (không có (S)/(C)) hoặc nếu có 2 bản ghi P, K
+                                                                if (!hasFullDayAbsence) {
+                                                                    const pkParts = parts.filter(p => p.startsWith('P') || p.startsWith('K'));
+                                                                    if (pkParts.length >= 2) hasFullDayAbsence = true;
+                                                                }
                                                             }
                                                         });
-                                                        return pkCount >= 2 ? (
+                                                        return hasFullDayAbsence ? (
                                                             <span className="text-red-600 font-black text-[10px] leading-none tracking-tighter shrink-0 border border-red-200 bg-red-50 px-0.5 rounded" title="Nghỉ cả sáng và chiều">(SC)</span>
                                                         ) : null;
                                                     })()}
@@ -264,7 +275,7 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                                                     const colClass = isSat ? "bg-orange-50" : isSun ? "bg-red-50" : "bg-white";
 
                                                     const status = student.absences[dateStr];
-                                                    const statuses = status ? status.split(/[,]+/).map(s => s.trim()).filter(Boolean) : [];
+                                                    const statuses = status ? status.split(' | ').map(s => s.trim()).filter(Boolean) : [];
                                                     
                                                     statuses.forEach(st => {
                                                         const base = st.split(' ')[0].toUpperCase();
@@ -316,7 +327,7 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                                             students.forEach(s => {
                                                 const status = s.absences[dateStr];
                                                 if (status) {
-                                                    const bases = status.split(', ').map(st => st.split(' ')[0]);
+                                                    const bases = status.split(' | ').map(st => st.split('(')[0].trim());
                                                     if (bases.includes('P') || bases.includes('K')) {
                                                         count++;
                                                     }
@@ -330,27 +341,27 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                                         })}
                                         {visibleColumns.includes('P') && (
                                             <td className="p-1 border border-gray-500 text-center text-base bg-yellow-300">
-                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(', ').filter(x => x.split(' ')[0] === 'P').length : 0), 0), 0) || ''}
+                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(' | ').filter(x => x.split('(')[0].trim() === 'P').length : 0), 0), 0) || ''}
                                             </td>
                                         )}
                                         {visibleColumns.includes('K') && (
                                             <td className="p-1 border border-gray-500 text-center text-base bg-red-300 text-white">
-                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(', ').filter(x => x.split(' ')[0] === 'K').length : 0), 0), 0) || ''}
+                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(' | ').filter(x => x.split('(')[0].trim() === 'K').length : 0), 0), 0) || ''}
                                             </td>
                                         )}
                                         {visibleColumns.includes('T') && (
                                             <td className="p-1 border border-gray-500 text-center text-base bg-blue-300">
-                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(', ').filter(x => x.split(' ')[0] === 'T').length : 0), 0), 0) || ''}
+                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(' | ').filter(x => x.split('(')[0].trim() === 'T').length : 0), 0), 0) || ''}
                                             </td>
                                         )}
                                         {visibleColumns.includes('VP') && (
                                             <td className="p-1 border border-gray-500 text-center text-base bg-purple-300 text-white">
-                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(', ').filter(x => x.split(' ')[0] === 'VP').length : 0), 0), 0) || ''}
+                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(' | ').filter(x => x.split('(')[0].trim() === 'VP').length : 0), 0), 0) || ''}
                                             </td>
                                         )}
                                         {visibleColumns.includes('KH') && (
                                             <td className="p-1 border border-gray-500 text-center text-base bg-pink-300">
-                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(', ').filter(x => x.split(' ')[0] === 'KH').length : 0), 0), 0) || ''}
+                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(' | ').filter(x => x.split('(')[0].trim() === 'KH').length : 0), 0), 0) || ''}
                                             </td>
                                         )}
                                     </tr>
@@ -388,8 +399,8 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                                             st === 'P' ? "bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border-yellow-200" :
                                                 st === 'K' ? "bg-red-50 text-red-700 hover:bg-red-100 border-red-200" :
                                                     st === 'T' ? "bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200" :
-                                                        st === 'VP' ? "bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200" :
-                                                            "bg-orange-50 text-orange-700 hover:bg-orange-100 border-orange-200"
+                                                        st === 'VP' ? "bg-orange-50 text-orange-700 hover:bg-orange-100 border-orange-200" :
+                                                            "bg-pink-50 text-pink-700 hover:bg-pink-100 border-pink-200"
                                         )}
                                     >
                                         <span>{label}</span>
@@ -579,34 +590,39 @@ function AddAttendanceModal({ classId, className, onClose, onRefresh }: { classI
 function GridCell({ status, visibleColumns }: { status: string, visibleColumns: string[] }) {
     const allStatuses = (status || '').split(', ').filter(Boolean);
     const displayStatuses = allStatuses.filter(st => {
-        const baseCode = st.split(' ')[0];
+        const baseCode = st.split('(')[0].trim();
         return visibleColumns.includes(baseCode);
     });
 
     if (displayStatuses.length === 0) return null;
 
     const map = {
-        'P': "bg-yellow-400 text-black border border-yellow-600",
-        'K': "bg-red-500 text-white border border-red-700",
-        'T': "bg-blue-400 text-white border border-blue-600",
-        'VP': "bg-purple-400 text-white border border-purple-600",
-        'KH': "bg-pink-500 text-white border border-pink-700",
+        'P': "bg-yellow-50 text-yellow-600 border border-yellow-200",
+        'K': "bg-red-50 text-red-600 border border-red-200",
+        'T': "bg-blue-50 text-blue-600 border border-blue-200",
+        'VP': "bg-purple-50 text-purple-600 border border-purple-200",
+        'KH': "bg-orange-50 text-orange-600 border border-orange-200",
     };
 
     return (
         <div className="flex flex-wrap gap-0.5 justify-center">
             {displayStatuses.map((st, i) => {
-                const baseCode = st.split(' ')[0];
-                const hasNote = st.includes('(');
-                const note = hasNote ? st.substring(st.indexOf('(') + 1, st.lastIndexOf(')')) : '';
+                const baseCode = st.split('(')[0].trim();
+                const hasNote = st.includes('[');
+                const note = hasNote ? st.substring(st.indexOf('[') + 1, st.lastIndexOf(']')) : '';
                 const style = map[baseCode as keyof typeof map] || "bg-gray-400 text-white border-gray-600";
+                
+                const sessionMatch = st.match(/\(([^)]+)\)/);
+                const sessionTag = sessionMatch ? sessionMatch[1] : '';
+                const isSC = sessionTag.toLowerCase() === 'sc';
 
                 return (
                     <div 
                         key={i}
-                        className={cn("w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-black shadow-sm group relative cursor-help", style)}
+                        className={cn("w-6 h-6 rounded-md flex flex-col items-center justify-center text-[10px] font-black shadow-sm group relative cursor-help leading-none", style)}
                     >
-                        {baseCode}
+                        <span>{baseCode}</span>
+                        {sessionTag && !isSC && <span className="text-[7px] font-bold lowercase opacity-80 mt-[-1px]">{sessionTag}</span>}
                         {hasNote && (
                             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover:block z-[9999] pointer-events-none">
                                 {/* Arrow (mũi tên chỉ xuống) */}
@@ -621,6 +637,50 @@ function GridCell({ status, visibleColumns }: { status: string, visibleColumns: 
                     </div>
                 );
             })}
+
+            {/* Bảng Chú thích Ký hiệu & Màu sắc */}
+            <div className="mt-8 p-4 bg-white border border-gray-100 rounded-xl shadow-sm space-y-4">
+                <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 pb-3 border-b border-gray-50">
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
+                        <span className="text-[11px] font-bold text-yellow-700 uppercase tracking-tight">Phép (P)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                        <span className="text-[11px] font-bold text-red-700 uppercase tracking-tight">Không (K)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                        <span className="text-[11px] font-bold text-blue-700 uppercase tracking-tight">Trễ (T)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                        <span className="text-[11px] font-bold text-purple-700 uppercase tracking-tight">Vi Phạm (VP)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                        <span className="text-[11px] font-bold text-orange-700 uppercase tracking-tight">Khen (KH)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-red-600 font-extrabold text-[11px] tracking-tighter">(SC)</span>
+                        <span className="text-[11px] font-bold text-gray-600 uppercase tracking-tight">Vắng cả ngày</span>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px]">
+                    <div className="flex flex-wrap items-center gap-3 justify-center md:justify-start">
+                        <span className="font-black text-gray-400 uppercase tracking-widest text-[10px]">Ký hiệu tiết:</span>
+                        <span className="text-gray-600"><b>s</b>: Sáng</span>
+                        <span className="text-gray-600"><b>c</b>: Chiều</span>
+                        <span className="text-gray-600"><b>1, 2, 3...</b>: Số tiết vắng</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 justify-center md:justify-end border-t md:border-t-0 pt-2 md:pt-0">
+                        <span className="font-black text-gray-400 uppercase tracking-widest text-[10px]">Ví dụ:</span>
+                        <span className="bg-yellow-50 text-yellow-700 px-1.5 py-0.5 rounded border border-yellow-100 font-bold">Ps: Phép sáng</span>
+                        <span className="bg-red-50 text-red-700 px-1.5 py-0.5 rounded border border-red-100 font-bold">Ks1: Không phép sáng tiết 1</span>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

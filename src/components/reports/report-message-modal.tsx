@@ -57,12 +57,13 @@ export function ReportMessageModal({
     absences.forEach(record => {
       const dateStr = record.date;
       const status = record.status || '';
-      const statuses = status.split(', ');
+      const statuses = status.split(' | ').filter(Boolean);
       
       statuses.forEach(statusStr => {
         if (!statusStr) return;
-        const parts = statusStr.split(' ');
-        const code = parts[0];
+        
+        // Trích xuất mã gốc (P, K, T, VP, KH) từ chuỗi P(S), K(C)...
+        const code = statusStr.split('(')[0].trim().toUpperCase();
         const note = statusStr.includes('(') ? statusStr.substring(statusStr.indexOf('(') + 1, statusStr.lastIndexOf(')')) : '';
         const entry = note ? `${record.studentName} (${note})` : record.studentName;
 
@@ -310,7 +311,7 @@ export function ReportMessageModal({
                     <div className="space-y-4">
                       {[
                         { id: 'K', label: 'NGHỈ KHÔNG PHÉP (K)', color: 'red', data: lists.K },
-                        { id: 'P', label: 'NGHỈ CÓ PHÉP (P)', color: 'amber', data: lists.P },
+                        { id: 'P', label: 'NGHỈ CÓ PHÉP (P)', color: 'yellow', data: lists.P },
                         { id: 'T', label: 'ĐI TRỄ (T)', color: 'blue', data: lists.T },
                         { id: 'VP', label: 'VI PHẠM NỀN NẾP (VP)', color: 'purple', data: lists.VP },
                         { id: 'KH', label: 'KHEN THƯỞNG (KH)', color: 'orange', data: lists.KH }

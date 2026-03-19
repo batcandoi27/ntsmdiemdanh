@@ -49,7 +49,10 @@ export interface StudentAttendanceDetail {
     violationPeriods?: number[];
     reward?: boolean;
     rewardNote?: string;
+    rewardNotes?: Record<number, string>;
     missedPeriods?: number[];
+    statusNotes?: Record<number, string>;
+    violationNotes?: Record<number, string>;
 }
 
 export interface DailyAttendanceData {
@@ -249,7 +252,11 @@ export async function getClassAttendanceDetails(classId: string, dateStr: string
                 recordMap.set(sid, { 
                     ...r, 
                     missedPeriods: r.period ? [r.period] : (r.period === null ? [1,2,3,4,5] : []),
-                    violationPeriods: r.violation ? (r.period ? [r.period] : [1,2,3,4,5]) : []
+                    violationPeriods: r.violation ? (r.period ? [r.period] : [1,2,3,4,5]) : [],
+                    rewardPeriods: r.reward ? (r.period ? [r.period] : [1,2,3,4,5]) : [],
+                    statusNotes: r.status && r.status !== 'present' ? { [r.period || 0]: r.note || '' } : {},
+                    violationNotes: r.violation ? { [r.period || 0]: r.violationNote || r.note || '' } : {},
+                    rewardNotes: r.reward ? { [r.period || 0]: r.rewardNote || r.note || '' } : {}
                 });
             } else {
                 const existing = recordMap.get(sid);
@@ -257,6 +264,7 @@ export async function getClassAttendanceDetails(classId: string, dateStr: string
                 if (r.violation) {
                     existing.violation = true;
                     existing.violationNote = r.violationNote || r.note || existing.violationNote;
+                    existing.violationNotes = { ...existing.violationNotes, [r.period || 0]: r.violationNote || r.note || '' };
                     if (r.period) existing.violationPeriods = Array.from(new Set([...(existing.violationPeriods || []), r.period])).sort();
                     else if (r.period === null) existing.violationPeriods = [1,2,3,4,5];
                 }
@@ -264,11 +272,15 @@ export async function getClassAttendanceDetails(classId: string, dateStr: string
                 if (r.reward) {
                     existing.reward = true;
                     existing.rewardNote = r.rewardNote || r.note || existing.rewardNote;
+                    existing.rewardNotes = { ...existing.rewardNotes, [r.period || 0]: r.rewardNote || r.note || '' };
+                    if (r.period) existing.rewardPeriods = Array.from(new Set([...(existing.rewardPeriods || []), r.period])).sort();
+                    else if (r.period === null) existing.rewardPeriods = [1,2,3,4,5];
                 }
                 // Gộp Chuyên cần & Tiết lẻ
                 if (['absent', 'late', 'excused'].includes(r.status)) {
                     existing.status = r.status;
                     if (!existing.note) existing.note = r.note;
+                    existing.statusNotes = { ...existing.statusNotes, [r.period || 0]: r.note || '' };
                     if (r.period) existing.missedPeriods = Array.from(new Set([...(existing.missedPeriods || []), r.period])).sort();
                     else if (r.period === null) existing.missedPeriods = [1,2,3,4,5];
                 }
@@ -298,7 +310,10 @@ export async function getClassAttendanceDetails(classId: string, dateStr: string
                     violationPeriods: record.violationPeriods,
                     reward: record.reward,
                     rewardNote: record.rewardNote,
-                    missedPeriods: record.missedPeriods // Thêm field này để Dialog hiện lại đúng các tiết đã tích
+                    rewardNotes: record.rewardNotes,
+                    missedPeriods: record.missedPeriods,
+                    statusNotes: record.statusNotes,
+                    violationNotes: record.violationNotes
                 };
             }
 

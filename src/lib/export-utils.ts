@@ -69,11 +69,12 @@ const setHeaderStyle = (cell: ExcelJS.Cell, bgColor: string = 'E0E0E0') => {
 
 // Màu cho từng loại trạng thái (ARGB)
 const STATUS_COLORS: Record<string, string> = {
-    P: 'FFF59E0B', // Yellow
-    K: 'FFEF4444', // Red
+    P: 'FFEAB308', // Yellow (Vàng) - yellow-500
+    K: 'FFEF4444', // Red (Đỏ) - red-500
     V: 'FF9CA3AF', // Gray
-    T: 'FF3B82F6', // Blue
-    VP: 'FF8B5CF6' // Purple
+    T: 'FF3B82F6', // Blue (Xanh) - blue-500
+    VP: 'FFA855F7', // Purple (Tím) - purple-500
+    KH: 'FFF97316'  // Orange (Cam) - orange-500
 };
 
 const STATUS_TEXT_COLORS: Record<string, string> = {
@@ -198,7 +199,7 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
                 cellDay.font = { ...cellDay.font, color: { argb: 'FFDD6B20' } };
             }
 
-            sheet.getColumn(colIdx).width = 4; // Narrow for days
+            sheet.getColumn(colIdx).width = 7.5; // Wider for detailed notation e.g., Ps13c2
             colIdx++;
         });
 
@@ -225,8 +226,8 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
         const studentsToDisplay = classData.students.filter(s => {
             // Kiểm tra xem có bất kỳ lỗi nào NẰM TRONG visibleColumns không
             return Object.values(s.absences).some(raw => {
-                const parts = raw.split(',').map(p => p.trim());
-                return parts.some(p => visibleColumns.includes(p));
+                const parts = raw.split(';').map(p => p.trim());
+                return parts.some(p => visibleColumns.includes(p.split('(')[0].trim()));
             });
         });
 
@@ -279,17 +280,17 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
                 
                 // Hỗ trợ hiển thị đa trạng thái (ví dụ: "T, VP")
                 // Lọc theo visibleColumns: Chỉ hiện những gì người dùng muốn xem
-                const statuses = rawStatus.split(',')
+                const statuses = rawStatus.split(';')
                     .map(st => st.trim())
                     .filter(Boolean)
                     .filter(st => {
-                        const baseCode = st.split(' ')[0]; // Trích xuất P/K/T/VP/KH
+                        const baseCode = st.split('(')[0].trim(); // Trích xuất P/K/T/VP/KH
                         return visibleColumns.includes(baseCode);
                     });
                     
                 // Tách mã gốc để hiển thị trong ô, chi tiết đưa vào Comment
                 // Tách mã gốc để hiển thị trong ô, chi tiết đưa vào Comment
-                const displayStatus = statuses.map(st => st.split(' ')[0]).join(', ');
+                const displayStatus = statuses.map(st => st.split('(')[0].trim()).join('; ');
                 const fullDetails = statuses.join('\n');
                 
                 const cell = row.getCell(dayColIdx);
@@ -309,9 +310,9 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
                                 font: { size: 8.5, name: 'Times New Roman' } 
                             }
                         ],
-                        // Kích thước chuẩn để không bị cắt nội dung dài
-                        width: 420,
-                        height: 160,
+                        // Kích thước chuẩn để không bị cắt nội dung dài (Đã tăng gấp đôi)
+                        width: 1200,
+                        height: 600,
                         margins: { inset: [0.4, 0.3, 0.4, 0.3], insetmode: 'custom' }
                     } as any;
                 }
@@ -355,9 +356,9 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
                 if (h.id === 'P') val = countP;
                 else if (h.id === 'K') val = countK;
                 else if (h.id === 'V') val = countV;
-                else if (h.id === 'T') val = Object.values(s.absences).filter(v => (v === 'T' || v.startsWith('T ')) && visibleColumns.includes('T')).length;
-                else if (h.id === 'VP') val = Object.values(s.absences).filter(v => v.split(',').map(x => x.trim()).includes('VP') && visibleColumns.includes('VP')).length;
-                else if (h.id === 'KH') val = Object.values(s.absences).filter(v => v.split(',').map(x => x.trim()).includes('KH') && visibleColumns.includes('KH')).length;
+                else if (h.id === 'T') val = Object.values(s.absences).filter(v => v.split(';').some(x => x.trim().split('(')[0].trim() === 'T')).length;
+                else if (h.id === 'VP') val = Object.values(s.absences).filter(v => v.split(';').some(x => x.trim().split('(')[0].trim() === 'VP')).length;
+                else if (h.id === 'KH') val = Object.values(s.absences).filter(v => v.split(';').some(x => x.trim().split('(')[0].trim() === 'KH')).length;
                 
                 row.getCell(dayColIdx).value = val > 0 ? val : '';
                 rowTotal += val;
@@ -396,8 +397,8 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
             let dayTotal = 0;
             studentsToDisplay.forEach(s => {
                 const raw = s.absences[dateStr] || '';
-                const parts = raw.split(',').map(p => p.trim());
-                const activeOnThisDay = parts.some(p => visibleColumns.includes(p));
+                const parts = raw.split(';').map(p => p.trim());
+                const activeOnThisDay = parts.some(p => visibleColumns.includes(p.split('(')[0].trim()));
                 if (activeOnThisDay) {
                     dayTotal++;
                 }
@@ -415,12 +416,12 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
         activeSummaryHeaders.forEach(h => {
             let hSum = 0;
             classData.students.forEach(s => {
-                if (h.id === 'P') hSum += Object.values(s.absences).filter(v => v === 'P').length;
-                else if (h.id === 'K') hSum += Object.values(s.absences).filter(v => v === 'K').length;
-                else if (h.id === 'V') hSum += Object.values(s.absences).filter(v => v === 'V').length;
-                else if (h.id === 'T') hSum += Object.values(s.absences).filter(v => v === 'T' || v.startsWith('T ')).length;
-                else if (h.id === 'VP') hSum += Object.values(s.absences).filter(v => v === 'VP').length;
-                else if (h.id === 'KH') hSum += Object.values(s.absences).filter(v => v === 'KH').length;
+                if (h.id === 'P') hSum += Object.values(s.absences).filter(v => v.split(';').some(x => x.trim().startsWith('P('))).length;
+                else if (h.id === 'K') hSum += Object.values(s.absences).filter(v => v.split(';').some(x => x.trim().startsWith('K('))).length;
+                else if (h.id === 'V') hSum += Object.values(s.absences).filter(v => v.split(';').some(x => x.trim().startsWith('V('))).length;
+                else if (h.id === 'T') hSum += Object.values(s.absences).filter(v => v.split(';').some(x => x.trim().startsWith('T('))).length;
+                else if (h.id === 'VP') hSum += Object.values(s.absences).filter(v => v.split(';').some(x => x.trim().startsWith('VP'))).length;
+                else if (h.id === 'KH') hSum += Object.values(s.absences).filter(v => v.split(';').some(x => x.trim().startsWith('KH'))).length;
             });
             
             const cell = summaryRow.getCell(colIdx);
@@ -643,12 +644,12 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
 
         // Summary Columns (P, K, T, VP, KH) - Lọc theo visibleColumns
         const allSummaryHeadersConfig = [
-            { id: 'P', label: 'P', color: 'F59E0B' },
+            { id: 'P', label: 'P', color: 'EAB308' },
             { id: 'K', label: 'K', color: 'EF4444' },
             { id: 'V', label: 'V', color: '9CA3AF' },
             { id: 'T', label: 'T', color: '3B82F6' },
-            { id: 'VP', label: 'VP', color: '8B5CF6' },
-            { id: 'KH', label: 'KH', color: '10B981' }
+            { id: 'VP', label: 'VP', color: 'A855F7' },
+            { id: 'KH', label: 'KH', color: 'F97316' }
         ];
         const activeSummaryHeaders = allSummaryHeadersConfig.filter(h => visibleColumns.includes(h.id));
 
@@ -700,11 +701,11 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
 
         // Summary Columns (P, K, T, VP, KH) - Lọc theo visibleColumns
         const allSumConfig = [
-            { id: 'P', label: 'P', color: 'FEF08A' },
-            { id: 'K', label: 'K', color: 'FECACA' },
-            { id: 'T', label: 'T', color: 'BFDBFE' },
-            { id: 'VP', label: 'VP', color: 'E9D5FF' },
-            { id: 'KH', label: 'KH', color: 'FBCFE8' }
+            { id: 'P', label: 'P', color: 'FEF08A' }, // Yellow-100
+            { id: 'K', label: 'K', color: 'FECACA' }, // Red-100
+            { id: 'T', label: 'T', color: 'DBEAFE' }, // Blue-100
+            { id: 'VP', label: 'VP', color: 'F3E8FF' }, // Purple-100
+            { id: 'KH', label: 'KH', color: 'FFEDD5' }  // Orange-100
         ];
         const activeSumConfigs = allSumConfig.filter(h => visibleColumns.includes(h.id));
 
@@ -713,10 +714,10 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
                .forEach((classData) => {
             // LỌC HỌC SINH cho báo cáo Khối: Chỉ giữ em có lỗi thuộc visibleColumns
             const studentsToDisplay = classData.students.filter(s => {
-                return Object.values(s.absences).some(raw => {
-                    const parts = raw.split(',').map(p => p.trim());
-                    return parts.some(p => {
-                        const baseCode = p.split(' ')[0]; // Lấy "T" từ "T (Vắng T1)"
+                return Object.values(s.absences).some((raw: any) => {
+                    const parts = (raw || '').split(';').map((p: string) => p.trim());
+                    return parts.some((p: string) => {
+                        const baseCode = p.split('(')[0].trim(); // Lấy "T" từ "T(S)"
                         return visibleColumns.includes(baseCode);
                     });
                 });
@@ -836,20 +837,16 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
                         if (rawStatus) {
                             console.log(`[Raw-Data-Check] Student: ${s.name}, Date: ${dateStr}, Raw: ${rawStatus}`);
                         }
-                        const statuses = rawStatus.split(',')
+                        const statuses = rawStatus.split(';')
                             .map(st => st.trim())
                             .filter(Boolean)
                             .filter(st => {
-                                const match = st.match(/^([A-Z]+)/);
-                                const baseCode = match ? match[1] : st.split(' ')[0];
+                                const baseCode = st.split('(')[0].trim();
                                 return visibleColumns.includes(baseCode);
                             });
                         
                         // Tách mã gốc để hiển thị, chi tiết đưa vào Comment
-                        const displayStatus = statuses.map(st => {
-                             const m = st.match(/^([A-Z]+)/);
-                             return m ? m[1] : st.split(' ')[0];
-                        }).join(', ');
+                        const displayStatus = statuses.map(st => st.split('(')[0].trim()).join('; ');
                         const fullDetails = statuses.join('\n');
                         
                         const cell = row.getCell(cIdx);
@@ -857,10 +854,12 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
 
                         // DEBUG LOG: Hiển thị trong Console F12 để kiểm tra trích xuất
                         // Kiểm tra cả dấu ngoặc đơn ()
-                        if (fullDetails.includes('(')) {
-                            cell.note = {
-                                texts: [{ text: fullDetails }],
-                                margins: { inset: [0.5, 0.5, 0.5, 0.5], insetmode: 'custom' }
+                        if (fullDetails.trim().includes('(')) {
+                            (cell as any).note = {
+                                texts: [{ text: fullDetails, font: { size: 9, name: 'Times New Roman' } }],
+                                width: 1000,
+                                height: 500,
+                                margins: { inset: [0.4, 0.4, 0.4, 0.4], insetmode: 'custom' }
                             };
                         }
                         cell.border = BORDER_STYLE;
@@ -876,7 +875,7 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
                         // Lấy màu trạng thái đầu tiên được hiển thị
                         const firstActive = statuses[0];
                         if (firstActive) {
-                            const baseCode = firstActive.split(' ')[0];
+                            const baseCode = firstActive.split('(')[0].trim().toUpperCase();
                             if (STATUS_COLORS[baseCode]) {
                                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STATUS_COLORS[baseCode] } };
                                 cell.font = { ...cell.font, color: { argb: 'FFFFFFFF' } };

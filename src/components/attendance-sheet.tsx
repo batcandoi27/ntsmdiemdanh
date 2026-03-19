@@ -62,6 +62,8 @@ interface SwipeableStudentRowProps {
     customColumns: Column[];
     customRecords: Record<string, Record<string, boolean>>;
     latePeriods?: number[];
+    isSelected?: boolean;
+    onToggleSelect?: () => void;
     handleStatusChange: (code: string, st: AttendanceStatus) => void;
     handleCustomChange: (code: string, colId: string, checked: boolean) => void;
     handlePeriodToggle: (code: string, periodNumber: number) => void;
@@ -71,6 +73,7 @@ interface SwipeableStudentRowProps {
 
 function SwipeableStudentRow({
     hs, status, violationNote, isLeave, settings, customColumns, customRecords, latePeriods,
+    isSelected, onToggleSelect,
     handleStatusChange, handleCustomChange, handlePeriodToggle, onOpenViolation, onOpenNote
 }: SwipeableStudentRowProps) {
     const [swipeOffset, setSwipeOffset] = useState(0);
@@ -129,19 +132,32 @@ function SwipeableStudentRow({
                     </div>
                 )}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-                    <div className="min-w-[180px]">
-                        <div className="font-bold text-gray-800">{hs.fullName}</div>
-                        <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[10px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">#{hs.order}</span>
-                            {status === '' || status === 'C' ? (
-                                <span className="text-[10px] font-bold text-green-600 flex items-center gap-1"><CheckCircle size={10} /> Có mặt</span>
-                            ) : status === 'VP' ? (
-                                <span className="text-[10px] font-bold text-purple-600 flex items-center gap-1"><Ban size={10} /> {violationNote || 'Vi phạm'}</span>
-                            ) : (
-                                <span className="text-[10px] font-bold text-gray-500">
-                                    {status === 'P' ? 'Có phép' : status === 'K' ? 'Không phép' : status === 'V' ? 'Vắng?' : 'Đi trễ'}
-                                </span>
+                    <div className="flex items-center gap-3 min-w-[180px]">
+                        {/* Bulk Select Checkbox */}
+                        <div 
+                            onClick={(e) => { e.stopPropagation(); onToggleSelect?.(); }}
+                            className={cn(
+                                "w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all cursor-pointer",
+                                isSelected ? "bg-blue-600 border-blue-600 shadow-sm" : "bg-white border-gray-200"
                             )}
+                        >
+                            {isSelected && <CheckCircle size={14} className="text-white" />}
+                        </div>
+                        
+                        <div>
+                            <div className="font-bold text-gray-800">{hs.fullName}</div>
+                            <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">#{hs.order}</span>
+                                {status === '' || status === 'C' ? (
+                                    <span className="text-[10px] font-bold text-green-600 flex items-center gap-1"><CheckCircle size={10} /> Có mặt</span>
+                                ) : status === 'VP' ? (
+                                    <span className="text-[10px] font-bold text-purple-600 flex items-center gap-1"><Ban size={10} /> {violationNote || 'Vi phạm'}</span>
+                                ) : (
+                                    <span className="text-[10px] font-bold text-gray-500">
+                                        {status === 'P' ? 'Có phép' : status === 'K' ? 'Không phép' : status === 'V' ? 'Vắng?' : 'Đi trễ'}
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     </div>
 
@@ -230,8 +246,9 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
 
     // State for Attendance
     const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
-    const [notes, setNotes] = useState<Record<string, string>>({});
+    const [notes, setNotes] = useState<Record<string, Record<number, string>>>({}); // studentCode -> period -> note (period 0 for all)
     const [latePeriods, setLatePeriods] = useState<Record<string, number[]>>({});
+    const [selectedHs, setSelectedHs] = useState<Set<string>>(new Set());
 
     // Custom Columns
     const [customColumns, setCustomColumns] = useState<Column[]>([]);
@@ -297,7 +314,7 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                 const allRecords = await getClassAttendance(classId, date, session);
                 const records = allRecords.filter(r => r.period === period);
                 const attMap: Record<string, AttendanceStatus> = {};
-                const noteMap: Record<string, string> = {};
+                const noteMap: Record<string, Record<number, string>> = {};
                 const lateMap: Record<string, number[]> = {};
 
                 records.forEach(r => {
@@ -306,7 +323,6 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                     else if (r.status === 'absent') uiStatus = 'K';
                     else if (r.status === 'late') uiStatus = 'T';
                     
-                    // Ưu tiên hiển thị status chính, nhưng nếu có VP/KH thì UI cũ vẫn cần map
                     if (uiStatus) {
                         attMap[r.studentId] = uiStatus as AttendanceStatus;
                     } else if (r.violation) {
@@ -316,8 +332,12 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                     }
 
                     if (attMap[r.studentId]) {
-                        if (r.note) noteMap[r.studentId] = r.note;
-                        if (r.violation && r.violationNote) noteMap[r.studentId] = r.violationNote;
+                        if (!noteMap[r.studentId]) noteMap[r.studentId] = {};
+                        const pKey = r.period === null ? 0 : r.period;
+                        
+                        if (r.note) noteMap[r.studentId][pKey] = r.note;
+                        if (r.violation && r.violationNote) noteMap[r.studentId][pKey] = r.violationNote;
+                        
                         if (attMap[r.studentId] === 'T' && r.missedPeriods) {
                             lateMap[r.studentId] = r.missedPeriods;
                         }
@@ -344,12 +364,21 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
         if (!code) return;
 
         setNotes(prev => {
+            const studentNotes = { ...(prev[code] || {}) };
+            const selected = latePeriods[code] || [0];
+            
             if (!noteInput.trim()) {
-                const newNotes = { ...prev };
-                delete newNotes[code];
-                return newNotes;
+                selected.forEach(p => delete studentNotes[p]);
+            } else {
+                selected.forEach(p => studentNotes[p] = noteInput.trim());
             }
-            return { ...prev, [code]: noteInput.trim() };
+
+            if (Object.keys(studentNotes).length === 0) {
+                const newState = { ...prev };
+                delete newState[code];
+                return newState;
+            }
+            return { ...prev, [code]: studentNotes };
         });
         setNoteModal({ isOpen: false, studentCode: null });
     };
@@ -358,41 +387,97 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
         triggerHapticFeedback();
 
         if (status === 'VP') {
-            setViolationInput(notes[studentCode] || '');
+            const studentNotes = notes[studentCode] || {};
+            const selected = latePeriods[studentCode] || [0];
+            const existingNote = selected.map(p => studentNotes[p]).find(n => !!n) || '';
+            setViolationInput(existingNote);
             setViolationModal({ isOpen: true, studentCode });
         } else {
-            // Khi thay đổi trạng thái cả buổi -> Xóa sạch các tiết lẻ đã chọn trước đó
-            setLatePeriods(prev => {
-                const newState = { ...prev };
-                delete newState[studentCode];
-                return newState;
-            });
-
+            const newAtt = attendance[studentCode] === status ? '' : status;
+            
             setAttendance(prev => ({
                 ...prev,
-                [studentCode]: prev[studentCode] === status ? '' : status
+                [studentCode]: newAtt
             }));
+
+            if (!newAtt || newAtt !== 'T') {
+                setLatePeriods(prev => {
+                    const newState = { ...prev };
+                    delete newState[studentCode];
+                    return newState;
+                });
+            }
             
-            if (attendance[studentCode] === 'VP') {
-                const newNotes = { ...notes };
-                delete newNotes[studentCode];
-                setNotes(newNotes);
+            if (attendance[studentCode] === 'VP' || !newAtt) {
+                setNotes(prev => {
+                    const newState = { ...prev };
+                    delete newState[studentCode];
+                    return newState;
+                });
             }
         }
     };
 
+    const handleBulkStatusChange = (status: AttendanceStatus) => {
+        triggerHapticFeedback();
+        if (selectedHs.size === 0) return;
+
+        if (status === 'VP') {
+            setViolationInput("");
+            setViolationModal({ isOpen: true, studentCode: "BULK_SELECTION" });
+            return;
+        }
+
+        const hsArray = Array.from(selectedHs);
+        const newAttendance = { ...attendance };
+        const newLatePeriods = { ...latePeriods };
+        const newNotes = { ...notes };
+
+        hsArray.forEach(code => {
+            newAttendance[code] = status;
+            // Clear specific periods if changing to a session-wide status (P, K)
+            if (status === 'P' || status === 'K') {
+                delete newLatePeriods[code];
+            }
+            // If clearing, delete notes
+            if (!status) delete newNotes[code];
+        });
+
+        setAttendance(newAttendance);
+        setLatePeriods(newLatePeriods);
+        setNotes(newNotes);
+        setSelectedHs(new Set());
+        setMsg({ type: 'success', text: `Đã áp dụng ${status} cho ${hsArray.length} học sinh.` });
+        setTimeout(() => setMsg(null), 2000);
+    };
+
     const confirmViolation = () => {
         if (violationModal.studentCode) {
-            setAttendance(prev => ({
-                ...prev,
-                [violationModal.studentCode!]: 'VP'
-            }));
-            if (violationInput.trim()) {
-                setNotes(prev => ({
-                    ...prev,
-                    [violationModal.studentCode!]: violationInput.trim()
-                }));
-            }
+            const code = violationModal.studentCode;
+            const codesToApply = code === "BULK_SELECTION" ? Array.from(selectedHs) : [code];
+
+            setAttendance(prev => {
+                const next = { ...prev };
+                codesToApply.forEach(c => next[c] = 'VP');
+                return next;
+            });
+
+            setNotes(prev => {
+                const next = { ...prev };
+                codesToApply.forEach(c => {
+                    const studentNotes = { ...(next[c] || {}) };
+                    const selected = latePeriods[c] || [0];
+                    if (violationInput.trim()) {
+                        selected.forEach(p => studentNotes[p] = violationInput.trim());
+                    } else {
+                        selected.forEach(p => delete studentNotes[p]);
+                    }
+                    next[c] = studentNotes;
+                });
+                return next;
+            });
+            
+            if (code === "BULK_SELECTION") setSelectedHs(new Set());
         }
         setViolationModal({ isOpen: false, studentCode: null });
     };
@@ -460,16 +545,47 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                     }
 
                     if (v3Status !== '' || violation || reward) {
-                        marks.push({
-                            studentId: code,
-                            studentName: students.find(s => s.code === code)?.fullName || code,
-                            status: v3Status as AttendanceStatusV3,
-                            note: notes[code] || '',
-                            missedPeriods: (v3Status === 'late' || v3Status === 'excused' || v3Status === 'absent') ? latePeriods[code] : undefined,
-                            violation,
-                            violationNote: violation ? (notes[code] || '') : undefined,
-                            reward,
-                            rewardNote: reward ? (notes[code] || '') : undefined
+                        const studentNotes = notes[code] || {};
+                        const selectedPeriods = latePeriods[code] || [];
+                        
+                        // Group periods by their note to send minimal marks objects
+                        const periodsByNote: Record<string, number[]> = {};
+                        
+                        // 1. Periods with specific notes
+                        Object.entries(studentNotes).forEach(([p, n]) => {
+                            const pNum = Number(p);
+                            if (pNum === 0 || selectedPeriods.includes(pNum)) {
+                                if (!periodsByNote[n]) periodsByNote[n] = [];
+                                if (pNum > 0) periodsByNote[n].push(pNum);
+                            }
+                        });
+
+                        // 2. Selected periods with NO note
+                        const noteLessPeriods = selectedPeriods.filter(p => !studentNotes[p]);
+                        if (noteLessPeriods.length > 0) {
+                            if (!periodsByNote[""]) periodsByNote[""] = [];
+                            periodsByNote[""].push(...noteLessPeriods);
+                        }
+
+                        // 3. Fallback: If nothing in periodsByNote but status is active (all session)
+                        if (Object.keys(periodsByNote).length === 0) {
+                            const mainNote = studentNotes[0] || "";
+                            periodsByNote[mainNote] = []; // Empty array means all/period null
+                        }
+
+                        // Create mark for each note group
+                        Object.entries(periodsByNote).forEach(([noteText, pList]) => {
+                            marks.push({
+                                studentId: code,
+                                studentName: students.find(s => s.code === code)?.fullName || code,
+                                status: v3Status as AttendanceStatusV3,
+                                note: noteText,
+                                missedPeriods: pList.length > 0 ? pList : undefined,
+                                violation,
+                                violationNote: violation ? noteText : undefined,
+                                reward,
+                                rewardNote: reward ? noteText : undefined
+                            });
                         });
                     }
                 });
@@ -607,14 +723,28 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
 
             {/* Student List */}
             <div className="p-4 space-y-3 max-h-[600px] overflow-y-auto">
-                <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-2 text-center text-xs text-indigo-700 mb-2 font-medium flex items-center justify-center gap-2">
-                    <CheckCircle size={14} />
-                    Mặc định: <span className="font-bold">CÓ MẶT (C)</span>
+                <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-2 text-center text-xs text-indigo-700 mb-2 font-medium flex items-center justify-between px-3">
+                    <div className="flex items-center gap-2">
+                        <CheckCircle size={14} />
+                        Mặc định: <span className="font-bold">CÓ MẶT (C)</span>
+                    </div>
+                    <button 
+                        onClick={() => {
+                            if (selectedHs.size === students.length) setSelectedHs(new Set());
+                            else setSelectedHs(new Set(students.map(s => s.code)));
+                        }}
+                        className="text-[10px] bg-white px-2 py-1 rounded border border-indigo-200 hover:bg-indigo-100 transition-colors uppercase font-bold"
+                    >
+                        {selectedHs.size === students.length ? "Bỏ chọn tất cả" : "Chọn tất cả HS"}
+                    </button>
                 </div>
 
                 {students.map((hs) => {
                     const status = attendance[hs.code] || '';
-                    const violationNote = notes[hs.code];
+                    const studentNotes = notes[hs.code] || {};
+                    // Display note for currently selected periods, or first available
+                    const selected = latePeriods[hs.code] || [0];
+                    const violationNote = selected.map(p => studentNotes[p]).find(n => !!n) || Object.values(studentNotes)[0];
                     const isLeave = getEffectiveStatus(hs) === 'temporary_leave';
 
                     return (
@@ -628,15 +758,32 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                             customColumns={customColumns}
                             customRecords={customRecords}
                             latePeriods={latePeriods[hs.code]}
+                            isSelected={selectedHs.has(hs.code)}
+                            onToggleSelect={() => {
+                                triggerHapticFeedback();
+                                setSelectedHs(prev => {
+                                    const next = new Set(prev);
+                                    if (next.has(hs.code)) next.delete(hs.code);
+                                    else next.add(hs.code);
+                                    return next;
+                                });
+                            }}
                             handleStatusChange={handleStatusChange}
                             handleCustomChange={handleCustomChange}
                             handlePeriodToggle={handlePeriodToggle}
                             onOpenViolation={() => {
-                                setViolationInput(notes[hs.code] || '');
+                                setViolationInput(""); // Clear or fetch based on selection
+                                const currentNotes = notes[hs.code] || {};
+                                const selected = latePeriods[hs.code] || [0];
+                                const existing = selected.map(p => currentNotes[p]).find(n => !!n) || "";
+                                setViolationInput(existing);
                                 setViolationModal({ isOpen: true, studentCode: hs.code });
                             }}
                             onOpenNote={() => {
-                                setNoteInput(notes[hs.code] || '');
+                                const currentNotes = notes[hs.code] || {};
+                                const selected = latePeriods[hs.code] || [0];
+                                const existing = selected.map(p => currentNotes[p]).find(n => !!n) || "";
+                                setNoteInput(existing);
                                 setNoteModal({ isOpen: true, studentCode: hs.code });
                             }}
                         />
@@ -644,17 +791,38 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                 })}
             </div>
 
+            {/* Floating Bulk Action Bar */}
+            {selectedHs.size > 0 && (
+                <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 animate-in fade-in zoom-in slide-in-from-bottom-10 duration-300">
+                    <div className="bg-white/90 backdrop-blur-md border border-blue-200 shadow-2xl rounded-2xl p-2 flex items-center gap-2 ring-4 ring-blue-500/10">
+                        <div className="px-3 border-r border-gray-100 mr-1 flex flex-col items-center">
+                            <span className="text-[10px] font-bold text-blue-600 uppercase">Đã chọn</span>
+                            <span className="text-sm font-black text-gray-800 leading-none">{selectedHs.size} HS</span>
+                        </div>
+                        <div className="flex gap-1.5">
+                            <button onClick={() => handleBulkStatusChange('P')} className="w-10 h-10 bg-yellow-500 text-white rounded-xl shadow-lg shadow-yellow-500/30 flex items-center justify-center font-bold text-xs active:scale-90 transition-transform">P</button>
+                            <button onClick={() => handleBulkStatusChange('K')} className="w-10 h-10 bg-red-500 text-white rounded-xl shadow-lg shadow-red-500/30 flex items-center justify-center font-bold text-xs active:scale-90 transition-transform">K</button>
+                            <button onClick={() => handleBulkStatusChange('T')} className="w-10 h-10 bg-blue-500 text-white rounded-xl shadow-lg shadow-blue-500/30 flex items-center justify-center font-bold text-xs active:scale-90 transition-transform">T</button>
+                            <button onClick={() => handleBulkStatusChange('VP')} className="w-10 h-10 bg-purple-500 text-white rounded-xl shadow-lg shadow-purple-500/30 flex items-center justify-center font-bold text-xs active:scale-90 transition-transform">VP</button>
+                            <button onClick={() => setSelectedHs(new Set())} className="w-10 h-10 bg-gray-100 text-gray-500 rounded-xl flex items-center justify-center font-bold text-xs active:scale-90 transition-transform ml-1">
+                                <X size={20} />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Footer Stats & Save */}
             <div className="bg-gray-50 border-t border-gray-200 p-4">
                 <div className="flex flex-wrap justify-center gap-4 text-xs font-bold text-gray-500 mb-4 uppercase">
                     <div className="flex flex-col items-center"><span className="text-xl text-green-600 leading-none">{countPresent}</span>Hiện diện</div>
                     <div className="w-px bg-gray-300 h-8"></div>
-                    <div className="flex flex-col items-center"><span className="text-xl text-yellow-500 leading-none">{stats.P}</span>Phép</div>
-                    <div className="flex flex-col items-center"><span className="text-xl text-red-500 leading-none">{stats.K}</span>Không</div>
+                    <div className="flex flex-col items-center"><span className="text-xl text-yellow-600 leading-none">{stats.P}</span>Phép</div>
+                    <div className="flex flex-col items-center"><span className="text-xl text-red-600 leading-none">{stats.K}</span>Không</div>
                     <div className="flex flex-col items-center"><span className="text-xl text-gray-400 leading-none">{stats.V}</span>Vắng?</div>
                     <div className="w-px bg-gray-300 h-8"></div>
-                    <div className="flex flex-col items-center"><span className="text-xl text-blue-500 leading-none">{stats.T}</span>Trễ</div>
-                    <div className="flex flex-col items-center"><span className="text-xl text-purple-500 leading-none">{stats.VP}</span>Vi phạm</div>
+                    <div className="flex flex-col items-center"><span className="text-xl text-blue-600 leading-none">{stats.T}</span>Trễ</div>
+                    <div className="flex flex-col items-center"><span className="text-xl text-purple-600 leading-none">{stats.VP}</span>Vi phạm</div>
                 </div>
 
                 <button
