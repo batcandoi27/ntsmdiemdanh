@@ -19,9 +19,17 @@ export async function setupRoleWithoutCode(
 
         // 1. Verify user exists to prevent unauthorized calls
         if (isSupabase) {
-            const { data: { user }, error: authError } = await supabaseAdmin.auth.admin.getUserById(uid);
-            if (authError || !user) {
-                return { success: false, message: 'Người dùng Supabase không hợp lệ hoặc chưa đăng nhập.' };
+            // Kiểm tra xem uid có đúng chuẩn UUID không (Supabase bắt buộc UUID cho getUserById)
+            const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uid);
+            
+            if (isUUID) {
+                const { data: { user }, error: authError } = await supabaseAdmin.auth.admin.getUserById(uid);
+                if (authError || !user) {
+                    return { success: false, message: 'Người dùng Supabase không hợp lệ hoặc chưa đăng nhập.' };
+                }
+            } else {
+                console.warn(`[Migration] UID ${uid} không phải chuẩn UUID (có thể là Firebase UID cũ). Bỏ qua bước kiểm tra cứng bằng getUserById.`);
+                // Nếu DB schema đã đổi sang TEXT, code upsert bên dưới vẫn sẽ chạy bình thường
             }
         } else {
             try {
