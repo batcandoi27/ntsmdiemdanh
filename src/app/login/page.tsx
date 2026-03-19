@@ -168,7 +168,8 @@ export default function LoginPage() {
             return;
         }
 
-        const userEmail = firebaseUser.email || `${firebaseUser.uid}@no-email.local`;
+        const actualUid = firebaseUser.uid || (firebaseUser as any).id;
+        const userEmail = firebaseUser.email || `${actualUid}@no-email.local`;
         const userDisplayName = firebaseUser.displayName || (firebaseUser.email ? firebaseUser.email.split('@')[0] : 'Người dùng');
 
         // Validate chọn lớp cho GV
@@ -205,7 +206,7 @@ export default function LoginPage() {
             ]));
 
             const res = await setupRoleWithoutCode(
-                firebaseUser.uid,
+                actualUid,
                 userEmail,
                 userDisplayName,
                 requestedRole as any,

@@ -5,6 +5,8 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { revalidatePath } from 'next/cache';
 
+import { UserRole, AppUser, DEFAULT_PERMISSIONS, DEFAULT_EDIT_WINDOW } from '@/types/models';
+
 /**
  * Xoá tài khoản người dùng cả ở DB và Auth
  * CHỈ dành cho Admin
@@ -49,5 +51,80 @@ export async function deleteUserAccount(targetUid: string) {
     } catch (error: any) {
         console.error('Lỗi trong deleteUserAccount:', error);
         return { success: false, message: 'Đã xảy ra lỗi máy chủ khi xoá tài khoản: ' + error.message };
+    }
+}
+
+export async function adminCreateUser(input: any) {
+    try {
+        let uid = '';
+        const email = input.email || (input.studentCode ? `${input.studentCode.toLowerCase()}@thcstbc.com` : '');
+        if (!email) return { success: false, message: 'Thiếu email hoặc mã học sinh' };
+
+        if (isSupabase) {
+            // 1. Tạo auth user
+            const { data, error } = await supabaseAdmin.auth.admin.createUser({
+                email,
+                password: input.password,
+                email_confirm: true,
+            });
+            if (error) return { success: false, message: 'Lỗi Supabase Auth: ' + error.message };
+            uid = data.user.id;
+
+            // 2. Tạo profile
+            const { error: dbError } = await supabaseAdmin.from('profiles').insert({
+                id: uid,
+                email,
+                full_name: input.displayName,
+                role: input.role,
+                student_code: input.studentCode || null,
+                is_active: true
+            });
+            if (dbError) return { success: false, message: 'Lỗi tạo profile Supabase: ' + dbError.message };
+
+            // 3. Gán lớp
+            if (input.assignedClassIds && input.assignedClassIds.length > 0) {
+                const assignments = input.assignedClassIds.map((cid: string) => ({
+                    teacher_id: uid,
+                    class_id: cid,
+                    is_homeroom: false
+                }));
+                await supabaseAdmin.from('teacher_classes').insert(assignments);
+            }
+        } else {
+            // Tạo bằng Firebase Admin
+            try {
+                const userRecord = await adminAuth.createUser({
+                    email,
+                    password: input.password,
+                    displayName: input.displayName,
+                });
+                uid = userRecord.uid;
+            } catch (err: any) {
+                return { success: false, message: 'Lỗi Firebase Auth: ' + err.message };
+            }
+
+            const appUser: AppUser = {
+                uid,
+                displayName: input.displayName,
+                role: input.role,
+                assignedClassIds: input.assignedClassIds || [],
+                permissions: { ...DEFAULT_PERMISSIONS[input.role as UserRole] },
+                editWindowMinutes: DEFAULT_EDIT_WINDOW[input.role as UserRole],
+                isActive: true,
+                createdBy: input.createdBy,
+                createdAt: new Date().toISOString(),
+                email: input.email,
+                studentCode: input.studentCode,
+                assignedGrade: input.assignedGrade
+            };
+
+            await adminDb.doc(`schools/default/users/${uid}`).set(appUser);
+        }
+
+        revalidatePath('/settings');
+        return { success: true, uid };
+    } catch (e: any) {
+        console.error('Error adminCreateUser:', e);
+        return { success: false, message: 'Lỗi máy chủ: ' + e.message };
     }
 }

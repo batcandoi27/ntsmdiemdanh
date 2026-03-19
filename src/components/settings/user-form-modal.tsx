@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { AppUser, UserRole, ROLE_DISPLAY, Class } from '@/types/models';
-import { createUser, updateUser } from '@/services/user-service';
+import { updateUser } from '@/services/user-service';
+import { adminCreateUser } from '@/app/actions/admin-users';
 import { useAuth } from '@/context/auth-context';
 import { X, Save, AlertCircle } from 'lucide-react';
 
@@ -59,13 +60,12 @@ export function UserFormModal({ isOpen, onClose, onSuccess, userToEdit, classes 
                     displayName,
                     role,
                     assignedClassIds,
-                    // Cannot easily update email/studentCode because Firebase Auth manages emails
-                });
+                    });
             } else {
                 // Create mode
                 if (!appUser) throw new Error("Chưa đăng nhập");
 
-                await createUser({
+                const res = await adminCreateUser({
                     displayName,
                     role,
                     email: role !== 'class_monitor' ? email : undefined,
@@ -74,6 +74,8 @@ export function UserFormModal({ isOpen, onClose, onSuccess, userToEdit, classes 
                     assignedClassIds,
                     createdBy: appUser.uid,
                 });
+
+                if (!res.success) throw new Error(res.message);
             }
             onSuccess();
         } catch (err: any) {
