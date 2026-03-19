@@ -31,7 +31,7 @@ export function SiteFooter() {
                             <span className="text-green-700">Online</span>
                         </div>
                         <span className="text-slate-200">|</span>
-                        <span>Phiên bản v03/26</span>
+                        <span>Phiên bản v03/26 (Cập nhật 19/03)</span>
                         <span className="text-slate-200">|</span>
                         <div className="flex gap-4">
                             <Link href="#" className="hover:text-primary transition-colors">Website</Link>
