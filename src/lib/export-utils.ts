@@ -1185,17 +1185,18 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
             classTitleCell.border = BORDER_STYLE;
             currentRowIdx++;
 
-            // --- Table Headers ---
+            // --- Table Headers (3 Rows: Date - Day - s/c) ---
             const hIdx = currentRowIdx;
             const subHIdx = currentRowIdx + 1;
+            const sesHIdx = currentRowIdx + 2;
 
-            sheet.getColumn(1).width = 12; // Mã HS
-            sheet.getColumn(2).width = 28; // Tên
+            sheet.getColumn(1).width = 12; 
+            sheet.getColumn(2).width = 28;
 
             sheet.getCell(`A${hIdx}`).value = "Mã HS";
-            sheet.mergeCells(`A${hIdx}:A${subHIdx}`);
+            sheet.mergeCells(`A${hIdx}:A${sesHIdx}`);
             sheet.getCell(`B${hIdx}`).value = "Họ và Tên";
-            sheet.mergeCells(`B${hIdx}:B${subHIdx}`);
+            sheet.mergeCells(`B${hIdx}:B${sesHIdx}`);
 
             [sheet.getCell(`A${hIdx}`), sheet.getCell(`B${hIdx}`)].forEach(c => setHeaderStyle(c, 'F3F4F6'));
 
@@ -1203,22 +1204,30 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
             dates.forEach(date => {
                 const d = date.getDate();
                 const dayOfWeek = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][date.getDay()];
-                const isWeekend = dayOfWeek === 'CN' || dayOfWeek === 'T7';
-                const bg = isWeekend ? 'FFEDD5' : 'F3F4F6';
+                const isT7 = dayOfWeek === 'T7';
+                const isCN = dayOfWeek === 'CN';
+                
+                const bg = isCN ? 'FEE2E2' : isT7 ? 'FFEDD5' : 'F3F4F6';
+                const fCol = isCN ? 'FFB91C1C' : isT7 ? 'FFDD6B20' : 'FF374151';
 
-                sheet.mergeCells(hIdx, colIdx, hIdx, colIdx + 1);
                 const cellDate = sheet.getRow(hIdx).getCell(colIdx);
-                cellDate.value = `${d}\n${dayOfWeek}`;
+                cellDate.value = d;
+                sheet.mergeCells(hIdx, colIdx, hIdx, colIdx + 1);
                 setHeaderStyle(cellDate, bg);
-                cellDate.font = { ...cellDate.font, size: 10 };
-                if (isWeekend) cellDate.font.color = { argb: 'FFDD6B20' };
+                cellDate.font = { ...cellDate.font, color: { argb: fCol } };
 
-                const cellS = sheet.getRow(subHIdx).getCell(colIdx);
+                const cellDay = sheet.getRow(subHIdx).getCell(colIdx);
+                cellDay.value = dayOfWeek;
+                sheet.mergeCells(subHIdx, colIdx, subHIdx, colIdx + 1);
+                setHeaderStyle(cellDay, bg);
+                cellDay.font = { ...cellDay.font, color: { argb: fCol } };
+
+                const cellS = sheet.getRow(sesHIdx).getCell(colIdx);
                 cellS.value = "s";
                 setHeaderStyle(cellS, bg);
                 sheet.getColumn(colIdx).width = 4.5;
 
-                const cellC = sheet.getRow(subHIdx).getCell(colIdx + 1);
+                const cellC = sheet.getRow(sesHIdx).getCell(colIdx + 1);
                 cellC.value = "c";
                 setHeaderStyle(cellC, bg);
                 sheet.getColumn(colIdx + 1).width = 4.5;
@@ -1229,13 +1238,13 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
             activeSumConfigs.forEach(h => {
                 const cell = sheet.getRow(hIdx).getCell(colIdx);
                 cell.value = h.label;
-                sheet.mergeCells(hIdx, colIdx, subHIdx, colIdx);
+                sheet.mergeCells(hIdx, colIdx, sesHIdx, colIdx);
                 setHeaderStyle(cell, 'FEF3C7');
                 sheet.getColumn(colIdx).width = 5;
                 colIdx++;
             });
 
-            currentRowIdx += 2;
+            currentRowIdx += 3;
 
             // --- Data Rows ---
             let classSumP = 0, classSumK = 0, classSumT = 0, classSumVP = 0, classSumKH = 0;
@@ -1313,7 +1322,8 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
                                     if (counts.hasOwnProperty(code)) (counts as any)[code]++;
                                 });
                             } else if (date.getDay() === 0 || date.getDay() === 6) {
-                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } };
+                                const isCN = date.getDay() === 0;
+                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isCN ? 'FEE2E2' : 'FFEDD5' } };
                             }
                         };
 
@@ -1336,7 +1346,7 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
                 });
             }
 
-            // --- Class Summary Footer ---
+            // --- Class Summary Footer (Merge s/c for centering) ---
             sheet.mergeCells(`A${currentRowIdx}:B${currentRowIdx}`);
             const classSumCell = sheet.getRow(currentRowIdx).getCell(1);
             classSumCell.value = `TỔNG CỘNG LỚP ${classData.className}`;
@@ -1347,12 +1357,13 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
             dates.forEach(date => {
                 const dateStr = format(date, 'yyyy-MM-dd');
                 const val = classDaySums[dateStr] || 0;
-                [0, 1].forEach(offset => {
-                    const c = sheet.getRow(currentRowIdx).getCell(footerIdx + offset);
-                    c.value = offset === 0 && val > 0 ? val : '';
-                    setHeaderStyle(c, 'F3F4F6');
-                    c.font = { bold: true, name: 'Times New Roman' };
-                });
+                
+                sheet.mergeCells(currentRowIdx, footerIdx, currentRowIdx, footerIdx + 1);
+                const c = sheet.getRow(currentRowIdx).getCell(footerIdx);
+                c.value = val > 0 ? val : '';
+                setHeaderStyle(c, 'F3F4F6');
+                c.font = { bold: true, name: 'Times New Roman' };
+                
                 footerIdx += 2;
             });
 
@@ -1374,7 +1385,7 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
         });
 
         // --- Grand Summary for Grade ---
-        sheet.mergeCells(`A${currentRowIdx}:E${currentRowIdx}`);
+        sheet.mergeCells(`A${currentRowIdx}:${getColumnLabel(6)}${currentRowIdx}`);
         const gradeSumTitle = sheet.getCell(`A${currentRowIdx}`);
         gradeSumTitle.value = `BẢNG TỔNG HỢP TOÀN KHỐI ${grade}`;
         gradeSumTitle.font = { bold: true, size: 14, name: 'Times New Roman', color: { argb: 'FFFFFFFF' } };
@@ -1395,6 +1406,8 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
             lbl.border = BORDER_STYLE;
             lbl.font = { name: 'Times New Roman', size: 12 };
 
+            // Merge Value cells (E-F) to avoid text overflow
+            sheet.mergeCells(`E${currentRowIdx}:F${currentRowIdx}`);
             const val = sheet.getCell(`E${currentRowIdx}`);
             val.value = `${item.value} HS`;
             val.font = { bold: true, name: 'Times New Roman', size: 12, color: { argb: item.color } };
