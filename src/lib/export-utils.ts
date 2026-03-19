@@ -1220,9 +1220,9 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
             });
         });
 
-        // Cập nhật tiêu đề lớp (dòng 5)
-        const titleCell = sheet.getCell('A5');
-        sheet.mergeCells(`A5:${lastColChar}5`);
+        // Cập nhật tiêu đề lớp (dòng 4)
+        const titleCell = sheet.getCell('A4');
+        sheet.mergeCells(`A4:${lastColChar}4`);
         titleCell.value = `| LỚP ${classData.className} \t (Sĩ số: ${classData.totalStudents || classData.students.length}, Số HS vắng/vi phạm: ${studentsToDisplay.length})`;
         titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
         titleCell.font = { bold: true, name: 'Times New Roman' };
