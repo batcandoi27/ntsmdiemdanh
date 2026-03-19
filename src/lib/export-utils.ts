@@ -47,42 +47,44 @@ interface ExportData {
 
 // --- Helpers ---
 
-// Hàm helper để convert sang border style
+// Hàm helper để convert sang border style (Xám nhạt thay vì Đen theo feedback Sếp)
 const BORDER_STYLE: Partial<ExcelJS.Borders> = {
-    top: { style: 'thin' },
-    left: { style: 'thin' },
-    bottom: { style: 'thin' },
-    right: { style: 'thin' }
+    top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+    left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+    bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+    right: { style: 'thin', color: { argb: 'FFD1D5DB' } }
 };
 
 // Hàm set style chung cho header
-const setHeaderStyle = (cell: ExcelJS.Cell, bgColor: string = 'E0E0E0') => {
+const setHeaderStyle = (cell: ExcelJS.Cell, bgColor: string = 'F3F4F6') => {
     cell.font = { bold: true, size: 11, name: 'Times New Roman' };
     cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
     cell.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: `FF${bgColor}` } // Add FF for Alpha
+        fgColor: { argb: `FF${bgColor}` } 
     };
     cell.border = BORDER_STYLE;
 };
 
-// Màu cho từng loại trạng thái (ARGB)
+// --- Bảng màu Pastel (Màu nền nhẹ nhàng theo feedback Sếp) ---
 const STATUS_COLORS: Record<string, string> = {
-    P: 'FFEAB308', // Yellow (Vàng) - yellow-500
-    K: 'FFEF4444', // Red (Đỏ) - red-500
-    V: 'FF9CA3AF', // Gray
-    T: 'FF3B82F6', // Blue (Xanh) - blue-500
-    VP: 'FFA855F7', // Purple (Tím) - purple-500
-    KH: 'FFF97316'  // Orange (Cam) - orange-500
+    P: 'FEF9C3',   // Vàng nhạt
+    K: 'FEE2E2',   // Hồng nhạt
+    V: 'F3F4F6',   // Xám nhạt
+    T: 'DBEAFE',   // Xanh lơ nhạt
+    VP: 'F3E8FF',  // Tím nhạt
+    KH: 'FFEDD5'   // Cam nhạt
 };
 
+// --- Màu chữ đậm đi kèm màu Pastel tương ứng ---
 const STATUS_TEXT_COLORS: Record<string, string> = {
-    P: 'FFFFFF', // White text on colored bg
-    K: 'FFFFFF',
-    V: 'FFFFFF',
-    T: 'FFFFFF',
-    VP: 'FFFFFF'
+    P: '854D0E',   // Nâu vàng
+    K: '991B1B',   // Đỏ đậm
+    V: '4B5563',   // Xám đậm
+    T: '1E40AF',   // Xanh dương đậm
+    VP: '6B21A8',  // Tím đậm
+    KH: '9A3412'   // Cam đất
 };
 
 
@@ -1100,6 +1102,10 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
     Object.entries(gradeGroups).sort(([g1], [g2]) => g1.localeCompare(g2)).forEach(([grade, classes]) => {
         const sheet = workbook.addWorksheet(`Khối ${grade}`);
         
+        // --- 1. View Configuration (Freeze Panes theo feedback Sếp) ---
+        // Cố định 8 dòng đầu (Titles + Class + Headers) và 2 cột đầu (Mã HS, Tên)
+        sheet.views = [{ state: 'frozen', xSplit: 2, ySplit: 8 }];
+        
         // --- Chuẩn bị Tên Ngày (Header Cột) chung cho cả Sheet Khối ---
         let dates: Date[] = [];
         const firstClass = classes[0];
@@ -1207,30 +1213,35 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
                 const isT7 = dayOfWeek === 'T7';
                 const isCN = dayOfWeek === 'CN';
                 
-                const bg = isCN ? 'FEE2E2' : isT7 ? 'FFEDD5' : 'F3F4F6';
-                const fCol = isCN ? 'FFB91C1C' : isT7 ? 'FFDD6B20' : 'FF374151';
+                const bg = isCN || isT7 ? 'F3F4F6' : 'F9FAFB'; // Làm chìm ngày nghỉ
+                const fCol = isCN || isT7 ? 'FF6B7280' : 'FF374151'; // Chữ xám đậm cho ngày nghỉ
 
+                // Row 1: Date
                 const cellDate = sheet.getRow(hIdx).getCell(colIdx);
                 cellDate.value = d;
                 sheet.mergeCells(hIdx, colIdx, hIdx, colIdx + 1);
                 setHeaderStyle(cellDate, bg);
                 cellDate.font = { ...cellDate.font, color: { argb: fCol } };
+                cellDate.alignment = { horizontal: 'center', vertical: 'middle' };
 
+                // Row 2: Day
                 const cellDay = sheet.getRow(subHIdx).getCell(colIdx);
                 cellDay.value = dayOfWeek;
                 sheet.mergeCells(subHIdx, colIdx, subHIdx, colIdx + 1);
                 setHeaderStyle(cellDay, bg);
                 cellDay.font = { ...cellDay.font, color: { argb: fCol } };
+                cellDay.alignment = { horizontal: 'center', vertical: 'middle' };
 
+                // Row 3: s / c
                 const cellS = sheet.getRow(sesHIdx).getCell(colIdx);
                 cellS.value = "s";
                 setHeaderStyle(cellS, bg);
-                sheet.getColumn(colIdx).width = 4.5;
+                sheet.getColumn(colIdx).width = 5.5; // Nới rộng thêm không gian thở
 
                 const cellC = sheet.getRow(sesHIdx).getCell(colIdx + 1);
                 cellC.value = "c";
                 setHeaderStyle(cellC, bg);
-                sheet.getColumn(colIdx + 1).width = 4.5;
+                sheet.getColumn(colIdx + 1).width = 5.5;
 
                 colIdx += 2;
             });
@@ -1308,8 +1319,10 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
                                              ps.some(p => p.startsWith('T')) ? 'T' :
                                              ps.some(p => p.startsWith('VP')) ? 'VP' : '';
                                 if (topCode && STATUS_COLORS[topCode]) {
-                                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STATUS_COLORS[topCode] } };
-                                    cell.font = { ...cell.font, color: { argb: 'FFFFFFFF' } };
+                                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${STATUS_COLORS[topCode]}` } };
+                                    if (STATUS_TEXT_COLORS[topCode]) {
+                                        cell.font = { ...cell.font, color: { argb: `FF${STATUS_TEXT_COLORS[topCode]}` } };
+                                    }
                                 }
                                 if (ps.some(p => p.includes('('))) {
                                     cell.note = {
@@ -1374,10 +1387,17 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
                 else if (h.id === 'T') val = classSumT;
                 else if (h.id === 'VP') val = classSumVP;
                 else if (h.id === 'KH') val = classSumKH;
+                
                 const c = sheet.getRow(currentRowIdx).getCell(footerIdx++);
                 c.value = val > 0 ? val : '';
-                setHeaderStyle(c, h.color);
-                c.font = { bold: true, name: 'Times New Roman' };
+                setHeaderStyle(c, 'F1F5F9'); // Nền đồng nhất Xám xanh theo feedback Sếp
+                
+                // Giữ màu chữ khác nhau cho từng loại
+                if (STATUS_TEXT_COLORS[h.id]) {
+                    c.font = { bold: true, name: 'Times New Roman', size: 11, color: { argb: `FF${STATUS_TEXT_COLORS[h.id]}` } };
+                } else {
+                    c.font = { bold: true, name: 'Times New Roman', size: 11 };
+                }
             });
 
             gradeSumP += classSumP; gradeSumK += classSumK; gradeSumT += classSumT; gradeSumVP += classSumVP; gradeSumKH += classSumKH;
