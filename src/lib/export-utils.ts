@@ -1080,44 +1080,57 @@ export const exportSampleClassTemplate = async () => {
     }
 };
 
-// --- BÁO CÁO V2: TÁCH CỘT SÁNG/CHIỀU ---
-export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string, visibleColumns: string[] = ['P', 'K', 'V', 'T', 'VP', 'KH']) => {
+// --- BÁO CÁO V2: TÁCH CỘT SÁNG/CHIỀU (Bản nâng cấp: Group Khối & Định dạng V1) ---
+// --- BÁO CÁO V2: TÁCH CỘT SÁNG/CHIỀU (Bản nâng cấp: Group Khối & Định dạng V1) ---
+export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string, visibleColumns: string[] = ['P', 'K', 'T', 'VP', 'KH']) => {
     const workbook = new ExcelJS.Workbook();
 
+    // 1. Phân loại lớp theo Khối (Dựa vào chữ số đầu tiên của Tên Lớp)
+    const gradeGroups: Record<string, ExportData[]> = {};
     data.forEach(classData => {
-        const sheet = workbook.addWorksheet(`Lớp ${classData.className}`);
+        const match = classData.className.match(/^(\d+)/);
+        const gradeStr = match ? match[1] : 'Khác';
+        if (!gradeGroups[gradeStr]) {
+            gradeGroups[gradeStr] = [];
+        }
+        gradeGroups[gradeStr].push(classData);
+    });
 
-        // --- 1. Chuẩn bị dữ liệu cột ---
-        const dates: Date[] = [];
-        if (classData.startDate && classData.endDate) {
-            let curr = new Date(classData.startDate);
-            const end = new Date(classData.endDate);
+    // 2. Lặp qua từng Khối (Mỗi khối 1 Sheet)
+    Object.entries(gradeGroups).sort(([g1], [g2]) => g1.localeCompare(g2)).forEach(([grade, classes]) => {
+        const sheet = workbook.addWorksheet(`Khối ${grade}`);
+        
+        // --- Chuẩn bị Tên Ngày (Header Cột) chung cho cả Sheet Khối ---
+        let dates: Date[] = [];
+        const firstClass = classes[0];
+        if (firstClass.startDate && firstClass.endDate) {
+            let curr = new Date(firstClass.startDate);
+            const end = new Date(firstClass.endDate);
             while (curr <= end) {
                 dates.push(new Date(curr));
                 curr.setDate(curr.getDate() + 1);
             }
         } else {
-            const daysInMonth = new Date(classData.year, classData.month, 0).getDate();
+            const daysInMonth = new Date(firstClass.year, firstClass.month, 0).getDate();
             for (let d = 1; d <= daysInMonth; d++) {
-                dates.push(new Date(classData.year, classData.month - 1, d));
+                dates.push(new Date(firstClass.year, firstClass.month - 1, d));
             }
         }
 
-        const allSummaryHeadersConfig = [
-            { id: 'P', label: 'P' },
-            { id: 'K', label: 'K' },
-            { id: 'V', label: 'V' },
-            { id: 'T', label: 'T' },
-            { id: 'VP', label: 'VP' },
-            { id: 'KH', label: 'KH' }
-        ];
-        const activeSummaryHeaders = allSummaryHeadersConfig.filter(h => visibleColumns.includes(h.id));
+        const activeSumConfigs = [
+            { id: 'P', label: 'P', color: 'EAB308' },
+            { id: 'K', label: 'K', color: 'EF4444' },
+            { id: 'V', label: 'V', color: '9CA3AF' },
+            { id: 'T', label: 'T', color: '3B82F6' },
+            { id: 'VP', label: 'VP', color: 'A855F7' },
+            { id: 'KH', label: 'KH', color: 'F97316' }
+        ].filter(h => visibleColumns.includes(h.id));
 
-        // TỔNG CỘT (V2): 3 (STT, Tên, Mã) + (dates.length * 2) + activeSummaryHeaders.length + 1
-        const totalCols = 3 + (dates.length * 2) + activeSummaryHeaders.length + 1;
+        // TỔNG CỘT (V2): 2 (Mã, Tên) + (dates.length * 2) + activeSumConfigs.length
+        const totalCols = 2 + (dates.length * 2) + activeSumConfigs.length;
         const lastColChar = getColumnLabel(totalCols);
 
-        // --- 2. Title Section ---
+        // --- 2. Title Section (Giống V1) ---
         sheet.mergeCells(`A1:${lastColChar}1`);
         const title1 = sheet.getCell('A1');
         title1.value = "TRƯỜNG THCS TRẦN BỘI CƠ";
@@ -1126,212 +1139,271 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
 
         sheet.mergeCells(`A2:${lastColChar}2`);
         const titleType = sheet.getCell('A2');
-        titleType.value = "BÁO CÁO ĐIỂM DANH (BẢN V2 - TÁCH CỘT SÁNG/CHIỀU)";
-        titleType.font = { bold: true, size: 18, name: 'Times New Roman', color: { argb: 'FF059669' } };
+        titleType.value = "BÁO CÁO ĐIỂM DANH LỚN (V2: TIẾT/SÁNG/CHIỀU)";
+        titleType.font = { bold: true, size: 18, name: 'Times New Roman', color: { argb: 'FF1E40AF' } }; // Blue V1
         titleType.alignment = { horizontal: 'center' };
 
         sheet.mergeCells(`A3:${lastColChar}3`);
         const titleMain = sheet.getCell('A3');
-        titleMain.value = classData.startDate && classData.endDate 
-            ? `Thời gian: Từ ${format(new Date(classData.startDate), 'dd/MM/yyyy')} đến ${format(new Date(classData.endDate), 'dd/MM/yyyy')}`
-            : `Tháng ${classData.month} - Năm ${classData.year}`;
+        const rangeText = firstClass.startDate && firstClass.endDate 
+            ? `Từ ${format(new Date(firstClass.startDate), 'dd/MM/yyyy')} đến ${format(new Date(firstClass.endDate), 'dd/MM/yyyy')}`
+            : `Tháng ${firstClass.month} / ${firstClass.year}`;
+        titleMain.value = `Khối ${grade} - ${rangeText}`;
         titleMain.font = { italic: true, size: 12, name: 'Times New Roman' };
         titleMain.alignment = { horizontal: 'center' };
 
-        // --- 2. Header Rows ---
-        const headerRowIdx = 5;
-        const subHeaderRowIdx = 6;
+        let currentRowIdx = 5;
+        let gradeTotalStudents = 0;
+        let gradeIssueStudents = 0;
+        let gradeSumP = 0, gradeSumK = 0, gradeSumT = 0, gradeSumVP = 0, gradeSumKH = 0;
 
-        sheet.getColumn(1).width = 5;  // STT
-        sheet.getColumn(2).width = 25; // Họ Tên
-        sheet.getColumn(3).width = 10; // Mã HS
+        // --- 3. Render từng Lớp ---
+        classes.forEach(classData => {
+            // Lọc học sinh có lỗi
+            const studentsToDisplay = classData.students.filter(s => {
+                return Object.values(s.absences).some(raw => {
+                    const parts = raw.split(';').map(p => p.trim());
+                    return parts.some(p => visibleColumns.includes(p.split('(')[0].trim()));
+                });
+            });
 
-        sheet.getCell(`A${headerRowIdx}`).value = "STT";
-        sheet.mergeCells(`A${headerRowIdx}:A${subHeaderRowIdx}`);
-        sheet.getCell(`B${headerRowIdx}`).value = "Họ và Tên";
-        sheet.mergeCells(`B${headerRowIdx}:B${subHeaderRowIdx}`);
-        sheet.getCell(`C${headerRowIdx}`).value = "Mã HS";
-        sheet.mergeCells(`C${headerRowIdx}:C${subHeaderRowIdx}`);
+            gradeTotalStudents += (classData.totalStudents || classData.students.length);
+            gradeIssueStudents += studentsToDisplay.length;
 
-        setHeaderStyle(sheet.getCell(`A${headerRowIdx}`));
-        setHeaderStyle(sheet.getCell(`B${headerRowIdx}`));
-        setHeaderStyle(sheet.getCell(`C${headerRowIdx}`));
-        setHeaderStyle(sheet.getCell(`A${subHeaderRowIdx}`));
-        setHeaderStyle(sheet.getCell(`B${subHeaderRowIdx}`));
-        setHeaderStyle(sheet.getCell(`C${subHeaderRowIdx}`));
+            // --- Class Header (RichText Giống V1) ---
+            sheet.mergeCells(`A${currentRowIdx}:${lastColChar}${currentRowIdx}`);
+            const classTitleCell = sheet.getCell(`A${currentRowIdx}`);
+            const activeSTTLabel = visibleColumns.join('/');
+            classTitleCell.value = {
+                richText: [
+                    { text: `| LỚP ${classData.className} \t`, font: { bold: true, size: 13, name: 'Times New Roman', color: { argb: 'FF059669' } } },
+                    { text: `(Sĩ số: ${classData.totalStudents || classData.students.length}, `, font: { italic: true, size: 11, name: 'Times New Roman', color: { argb: 'FF1E3A8A' } } },
+                    { text: `Số HS ${activeSTTLabel}: ${studentsToDisplay.length})`, font: { bold: true, italic: true, size: 11, name: 'Times New Roman', color: { argb: 'FFEF4444' } } }
+                ]
+            };
+            classTitleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDFA' } };
+            classTitleCell.border = BORDER_STYLE;
+            currentRowIdx++;
 
-        // --- GENERATE DAYS (SPLIT S/C) ---
-        let colIdx = 4;
-        dates.forEach(date => {
-            const d = date.getDate();
-            const dayOfWeek = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][date.getDay()];
-            const isWeekend = dayOfWeek === 'CN' || dayOfWeek === 'T7';
-            const bg = isWeekend ? 'FFEDD5' : 'F3F4F6';
+            // --- Table Headers ---
+            const hIdx = currentRowIdx;
+            const subHIdx = currentRowIdx + 1;
 
-            // Merge Ngày ở dòng 5 (phủ 2 cột S và C)
-            sheet.mergeCells(headerRowIdx, colIdx, headerRowIdx, colIdx + 1);
-            const cellDate = sheet.getRow(headerRowIdx).getCell(colIdx);
-            cellDate.value = `${d}\n${dayOfWeek}`;
-            setHeaderStyle(cellDate, bg);
-            cellDate.alignment = { ...cellDate.alignment, wrapText: true };
+            sheet.getColumn(1).width = 12; // Mã HS
+            sheet.getColumn(2).width = 28; // Tên
 
-            // Cột S và C ở dòng 6
-            const cellS = sheet.getRow(subHeaderRowIdx).getCell(colIdx);
-            cellS.value = "s";
-            setHeaderStyle(cellS, bg);
-            sheet.getColumn(colIdx).width = 4;
+            sheet.getCell(`A${hIdx}`).value = "Mã HS";
+            sheet.mergeCells(`A${hIdx}:A${subHIdx}`);
+            sheet.getCell(`B${hIdx}`).value = "Họ và Tên";
+            sheet.mergeCells(`B${hIdx}:B${subHIdx}`);
 
-            const cellC = sheet.getRow(subHeaderRowIdx).getCell(colIdx + 1);
-            cellC.value = "c";
-            setHeaderStyle(cellC, bg);
-            sheet.getColumn(colIdx + 1).width = 4;
+            [sheet.getCell(`A${hIdx}`), sheet.getCell(`B${hIdx}`)].forEach(c => setHeaderStyle(c, 'F3F4F6'));
 
-            if (isWeekend) {
-                [cellDate, cellS, cellC].forEach(c => {
-                    c.font = { ...c.font, color: { argb: 'FFDD6B20' } };
+            let colIdx = 3;
+            dates.forEach(date => {
+                const d = date.getDate();
+                const dayOfWeek = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][date.getDay()];
+                const isWeekend = dayOfWeek === 'CN' || dayOfWeek === 'T7';
+                const bg = isWeekend ? 'FFEDD5' : 'F3F4F6';
+
+                sheet.mergeCells(hIdx, colIdx, hIdx, colIdx + 1);
+                const cellDate = sheet.getRow(hIdx).getCell(colIdx);
+                cellDate.value = `${d}\n${dayOfWeek}`;
+                setHeaderStyle(cellDate, bg);
+                cellDate.font = { ...cellDate.font, size: 10 };
+                if (isWeekend) cellDate.font.color = { argb: 'FFDD6B20' };
+
+                const cellS = sheet.getRow(subHIdx).getCell(colIdx);
+                cellS.value = "s";
+                setHeaderStyle(cellS, bg);
+                sheet.getColumn(colIdx).width = 4.5;
+
+                const cellC = sheet.getRow(subHIdx).getCell(colIdx + 1);
+                cellC.value = "c";
+                setHeaderStyle(cellC, bg);
+                sheet.getColumn(colIdx + 1).width = 4.5;
+
+                colIdx += 2;
+            });
+
+            activeSumConfigs.forEach(h => {
+                const cell = sheet.getRow(hIdx).getCell(colIdx);
+                cell.value = h.label;
+                sheet.mergeCells(hIdx, colIdx, subHIdx, colIdx);
+                setHeaderStyle(cell, 'FEF3C7');
+                sheet.getColumn(colIdx).width = 5;
+                colIdx++;
+            });
+
+            currentRowIdx += 2;
+
+            // --- Data Rows ---
+            let classSumP = 0, classSumK = 0, classSumT = 0, classSumVP = 0, classSumKH = 0;
+            const classDaySums: Record<string, number> = {};
+
+            if (studentsToDisplay.length === 0) {
+                sheet.mergeCells(`A${currentRowIdx}:${lastColChar}${currentRowIdx}`);
+                const emptyCell = sheet.getCell(`A${currentRowIdx}`);
+                emptyCell.value = "Không có dữ liệu vắng/vi phạm";
+                emptyCell.font = { italic: true, name: 'Times New Roman' };
+                emptyCell.alignment = { horizontal: 'center' };
+                emptyCell.border = BORDER_STYLE;
+                currentRowIdx++;
+            } else {
+                studentsToDisplay.forEach(s => {
+                    const row = sheet.getRow(currentRowIdx);
+                    row.getCell(1).value = s.code;
+                    row.getCell(2).value = s.name;
+                    row.getCell(2).font = { bold: true, name: 'Times New Roman' };
+
+                    [1, 2].forEach(c => {
+                        row.getCell(c).border = BORDER_STYLE;
+                        if (c === 1) row.getCell(c).alignment = { horizontal: 'center' };
+                    });
+
+                    let dayCIdx = 3;
+                    let counts = { P: 0, K: 0, T: 0, VP: 0, KH: 0 };
+
+                    dates.forEach(date => {
+                        const dateStr = format(date, 'yyyy-MM-dd');
+                        const rawStatus = s.absences[dateStr] || '';
+                        const parts = rawStatus.split(';').map(p => p.trim()).filter(Boolean);
+
+                        const getSessionParts = (session: 'S' | 'C') => {
+                            return parts.filter(p => {
+                                const code = p.split('(')[0].trim();
+                                if (!visibleColumns.includes(code)) return false;
+                                const isM = p.includes('(s)') || p.includes('(S)') || p.includes('Sáng') || /T[1-5]/.test(p);
+                                const isA = p.includes('(c)') || p.includes('(C)') || p.includes('Chiều') || /T([6-9]|10)/.test(p);
+                                const isSC = p.includes('(sc)') || p.includes('(SC)');
+                                if (isSC || (!isM && !isA)) return true;
+                                return session === 'S' ? isM : isA;
+                            });
+                        };
+
+                        const sP = getSessionParts('S');
+                        const cP = getSessionParts('C');
+
+                        const renderCell = (idx: number, ps: string[]) => {
+                            const cell = row.getCell(idx);
+                            const codes = Array.from(new Set(ps.map(p => p.split('(')[0].trim()))).join(';');
+                            cell.value = codes;
+                            cell.border = BORDER_STYLE;
+                            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                            cell.font = { name: 'Times New Roman', size: 10, bold: true };
+
+                            if (ps.length > 0) {
+                                classDaySums[dateStr] = (classDaySums[dateStr] || 0) + 1;
+                                let topCode = ps.some(p => p.startsWith('K')) ? 'K' :
+                                             ps.some(p => p.startsWith('P')) ? 'P' :
+                                             ps.some(p => p.startsWith('T')) ? 'T' :
+                                             ps.some(p => p.startsWith('VP')) ? 'VP' : '';
+                                if (topCode && STATUS_COLORS[topCode]) {
+                                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STATUS_COLORS[topCode] } };
+                                    cell.font = { ...cell.font, color: { argb: 'FFFFFFFF' } };
+                                }
+                                if (ps.some(p => p.includes('('))) {
+                                    cell.note = {
+                                        texts: [{ text: ps.join('\n'), font: { size: 9, name: 'Times New Roman' } }],
+                                        width: 1200, height: 600
+                                    } as any;
+                                }
+                                ps.forEach(p => {
+                                    const code = p.split('(')[0].trim();
+                                    if (counts.hasOwnProperty(code)) (counts as any)[code]++;
+                                });
+                            } else if (date.getDay() === 0 || date.getDay() === 6) {
+                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } };
+                            }
+                        };
+
+                        renderCell(dayCIdx, sP);
+                        renderCell(dayCIdx + 1, cP);
+                        dayCIdx += 2;
+                    });
+
+                    activeSumConfigs.forEach(h => {
+                        const val = (counts as any)[h.id] || 0;
+                        const cell = row.getCell(dayCIdx++);
+                        cell.value = val > 0 ? val : '';
+                        cell.border = BORDER_STYLE;
+                        cell.alignment = { horizontal: 'center' };
+                        cell.font = { bold: true, name: 'Times New Roman' };
+                    });
+
+                    classSumP += counts.P; classSumK += counts.K; classSumT += counts.T; classSumVP += counts.VP; classSumKH += counts.KH;
+                    currentRowIdx++;
                 });
             }
 
-            colIdx += 2;
-        });
-
-        // Summary Headers
-        activeSummaryHeaders.forEach(h => {
-            const cell = sheet.getRow(headerRowIdx).getCell(colIdx);
-            cell.value = h.label;
-            sheet.mergeCells(headerRowIdx, colIdx, subHeaderRowIdx, colIdx);
-            setHeaderStyle(cell, 'FEF3C7');
-            sheet.getColumn(colIdx).width = 5;
-            colIdx++;
-        });
-
-        const totalCell = sheet.getRow(headerRowIdx).getCell(colIdx);
-        totalCell.value = "Tổng";
-        sheet.mergeCells(headerRowIdx, colIdx, subHeaderRowIdx, colIdx);
-        setHeaderStyle(totalCell, 'FEF3C7');
-        sheet.getColumn(colIdx).width = 6;
-        colIdx++;
-
-        // --- 3. Data Rows ---
-        const studentsToDisplay = classData.students.filter(s => {
-            return Object.values(s.absences).some(raw => {
-                const parts = raw.split(';').map(p => p.trim());
-                return parts.some(p => visibleColumns.includes(p.split('(')[0].trim()));
-            });
-        });
-
-        // Cập nhật tiêu đề lớp (dòng 4)
-        const titleCell = sheet.getCell('A4');
-        sheet.mergeCells(`A4:${lastColChar}4`);
-        titleCell.value = `| LỚP ${classData.className} \t (Sĩ số: ${classData.totalStudents || classData.students.length}, Số HS vắng/vi phạm: ${studentsToDisplay.length})`;
-        titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
-        titleCell.font = { bold: true, name: 'Times New Roman' };
-
-        let currentRowIdx = 7;
-        studentsToDisplay.forEach((s, index) => {
-            const row = sheet.getRow(currentRowIdx);
-            row.getCell(1).value = index + 1;
-            row.getCell(2).value = s.name;
-            row.getCell(3).value = s.code;
-
-            [1, 2, 3].forEach(c => {
-                const cell = row.getCell(c);
-                cell.border = BORDER_STYLE;
-                cell.font = { name: 'Times New Roman', size: 11 };
-                if (c !== 2) cell.alignment = { horizontal: 'center' };
-            });
-
-            let dayColIdx = 4;
-            let counts = { P: 0, K: 0, V: 0, T: 0, VP: 0, KH: 0 };
-
+            // --- Class Summary Footer ---
+            sheet.mergeCells(`A${currentRowIdx}:B${currentRowIdx}`);
+            const classSumCell = sheet.getRow(currentRowIdx).getCell(1);
+            classSumCell.value = `TỔNG CỘNG LỚP ${classData.className}`;
+            setHeaderStyle(classSumCell, 'FEE2E2');
+            classSumCell.font = { bold: true, size: 11, name: 'Times New Roman', color: { argb: 'FF991B1B' } };
+            
+            let footerIdx = 3;
             dates.forEach(date => {
                 const dateStr = format(date, 'yyyy-MM-dd');
-                const rawStatus = s.absences[dateStr] || '';
-                const parts = rawStatus.split(';').map(p => p.trim()).filter(Boolean);
-
-                const getSessionStatuses = (session: 'S' | 'C') => {
-                    return parts.filter(p => {
-                        const baseCode = p.split('(')[0].trim();
-                        if (!visibleColumns.includes(baseCode)) return false;
-
-                        const isMorning = p.includes('(s)') || p.includes('(S)') || p.includes('Sáng') || /T[1-5]/.test(p);
-                        const isAfternoon = p.includes('(c)') || p.includes('(C)') || p.includes('Chiều') || /T([6-9]|10)/.test(p);
-                        const isSC = p.includes('(sc)') || p.includes('(SC)');
-                        const noMarker = !isMorning && !isAfternoon && !isSC;
-
-                        if (isSC || noMarker) return true; 
-                        if (session === 'S') return isMorning;
-                        return isAfternoon;
-                    });
-                };
-
-                const sParts = getSessionStatuses('S');
-                const cParts = getSessionStatuses('C');
-
-                const renderCell = (idx: number, sessionParts: string[]) => {
-                    const cell = row.getCell(idx);
-                    const displayCode = Array.from(new Set(sessionParts.map(st => st.split('(')[0].trim()))).join(';');
-                    cell.value = displayCode;
-                    cell.border = BORDER_STYLE;
-                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
-                    cell.font = { name: 'Times New Roman', size: 10, bold: true };
-
-                    if (sessionParts.length > 0) {
-                        let colorIdx = sessionParts.some(st => st.startsWith('K')) ? 'K' :
-                                       sessionParts.some(st => st.startsWith('P')) ? 'P' :
-                                       sessionParts.some(st => st.startsWith('T')) ? 'T' :
-                                       sessionParts.some(st => st.startsWith('VP')) ? 'VP' : '';
-                        if (colorIdx && STATUS_COLORS[colorIdx]) {
-                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STATUS_COLORS[colorIdx] } };
-                            cell.font = { ...cell.font, color: { argb: 'FFFFFFFF' } };
-                        }
-
-                        if (sessionParts.some(st => st.includes('('))) {
-                            cell.note = {
-                                texts: [{ text: sessionParts.join('\n'), font: { size: 9, name: 'Times New Roman' } }],
-                                width: 1200, height: 600
-                            } as any;
-                        }
-
-                        // Cập nhật stats
-                        sessionParts.forEach(st => {
-                            const code = st.split('(')[0].trim();
-                            if (counts.hasOwnProperty(code)) {
-                                (counts as any)[code]++;
-                            }
-                        });
-                    } else {
-                        const dayOfWeek = date.getDay();
-                        if (dayOfWeek === 0 || dayOfWeek === 6) {
-                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } };
-                        }
-                    }
-                };
-
-                renderCell(dayColIdx, sParts);
-                renderCell(dayColIdx + 1, cParts);
-                dayColIdx += 2;
+                const val = classDaySums[dateStr] || 0;
+                [0, 1].forEach(offset => {
+                    const c = sheet.getRow(currentRowIdx).getCell(footerIdx + offset);
+                    c.value = offset === 0 && val > 0 ? val : '';
+                    setHeaderStyle(c, 'F3F4F6');
+                    c.font = { bold: true, name: 'Times New Roman' };
+                });
+                footerIdx += 2;
             });
 
-            // Row Summary
-            let rowTotal = 0;
-            activeSummaryHeaders.forEach(h => {
-                const val = (counts as any)[h.id] || 0;
-                row.getCell(dayColIdx).value = val > 0 ? val : '';
-                rowTotal += val;
-                const cell = row.getCell(dayColIdx);
-                cell.border = BORDER_STYLE;
-                cell.alignment = { horizontal: 'center' };
-                cell.font = { bold: true, name: 'Times New Roman' };
-                dayColIdx++;
+            activeSumConfigs.forEach(h => {
+                let val = 0;
+                if (h.id === 'P') val = classSumP;
+                else if (h.id === 'K') val = classSumK;
+                else if (h.id === 'T') val = classSumT;
+                else if (h.id === 'VP') val = classSumVP;
+                else if (h.id === 'KH') val = classSumKH;
+                const c = sheet.getRow(currentRowIdx).getCell(footerIdx++);
+                c.value = val > 0 ? val : '';
+                setHeaderStyle(c, h.color);
+                c.font = { bold: true, name: 'Times New Roman' };
             });
 
-            const totalCellValue = row.getCell(dayColIdx);
-            totalCellValue.value = rowTotal > 0 ? rowTotal : '';
-            totalCellValue.border = BORDER_STYLE;
-            totalCellValue.alignment = { horizontal: 'center' };
-            totalCellValue.font = { bold: true, name: 'Times New Roman' };
+            gradeSumP += classSumP; gradeSumK += classSumK; gradeSumT += classSumT; gradeSumVP += classSumVP; gradeSumKH += classSumKH;
+            currentRowIdx += 3;
+        });
 
+        // --- Grand Summary for Grade ---
+        sheet.mergeCells(`A${currentRowIdx}:E${currentRowIdx}`);
+        const gradeSumTitle = sheet.getCell(`A${currentRowIdx}`);
+        gradeSumTitle.value = `BẢNG TỔNG HỢP TOÀN KHỐI ${grade}`;
+        gradeSumTitle.font = { bold: true, size: 14, name: 'Times New Roman', color: { argb: 'FFFFFFFF' } };
+        gradeSumTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4338CA' } };
+        gradeSumTitle.alignment = { horizontal: 'center', vertical: 'middle' };
+        sheet.getRow(currentRowIdx).height = 30;
+        currentRowIdx++;
+
+        const summaryData = [
+            { label: 'Tổng số học sinh toàn khối:', value: gradeTotalStudents, color: 'FF1E3A8A' },
+            { label: 'Số học sinh có vắng/vi phạm:', value: gradeIssueStudents, color: 'FFB91C1C' }
+        ];
+
+        summaryData.forEach((item, idx) => {
+            sheet.mergeCells(`A${currentRowIdx}:D${currentRowIdx}`);
+            const lbl = sheet.getCell(`A${currentRowIdx}`);
+            lbl.value = item.label;
+            lbl.border = BORDER_STYLE;
+            lbl.font = { name: 'Times New Roman', size: 12 };
+
+            const val = sheet.getCell(`E${currentRowIdx}`);
+            val.value = `${item.value} HS`;
+            val.font = { bold: true, name: 'Times New Roman', size: 12, color: { argb: item.color } };
+            val.border = BORDER_STYLE;
+            val.alignment = { horizontal: 'right' };
+
+            const bg = idx % 2 === 0 ? 'F9FAFB' : 'F3F4F6';
+            lbl.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${bg}` } };
+            val.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${bg}` } };
             currentRowIdx++;
         });
     });
@@ -1339,7 +1411,7 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
     try {
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        triggerDownload(blob, `${fileName}_V2.xlsx`);
+        triggerDownload(blob, `${fileName}_V2_SC.xlsx`);
     } catch (err) {
         console.error("[exportMonthlyReportV2] Lỗi:", err);
         throw err;
