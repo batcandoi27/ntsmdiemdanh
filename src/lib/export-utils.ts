@@ -1212,27 +1212,33 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
                 const isT7 = dayOfWeek === 'T7';
                 const isCN = dayOfWeek === 'CN';
                 
-                const bgS = isCN || isT7 ? 'F3F4F6' : 'F9FAFB'; 
-                const bgC = isCN || isT7 ? 'E5E7EB' : 'F3F4F6'; // Cột chiều đậm hơn sáng một tý
-                const fCol = isCN || isT7 ? 'FF6B7280' : 'FF374151'; 
+                // --- Màu nền tiêu chuẩn ---
+                const bgDate = isCN ? 'FEE2E2' : isT7 ? 'FFEDD5' : 'F9FAFB'; 
+                const bgDay = 'F1F5F9'; // Nền dòng Thứ theo hình 4
+                
+                // --- Phân cấp màu S/C (Hình 3) ---
+                const bgS = isCN ? 'FEE2E2' : isT7 ? 'FFEDD5' : 'FFFFFF'; // S trắng (Hình 3)
+                const bgC = isCN ? 'FEE2E2' : isT7 ? 'FFEDD5' : 'F3F4F6'; // C xám nhạt
+
+                const fCol = isCN ? 'FFB91C1C' : isT7 ? 'FFDD6B20' : 'FF374151'; 
 
                 // Row 1: Date
                 const cellDate = sheet.getRow(hIdx).getCell(colIdx);
                 cellDate.value = d;
                 sheet.mergeCells(hIdx, colIdx, hIdx, colIdx + 1);
-                setHeaderStyle(cellDate, bgS); // Dùng màu S làm nền chung cho date merge
+                setHeaderStyle(cellDate, bgDate);
                 cellDate.font = { ...cellDate.font, color: { argb: fCol } };
                 cellDate.alignment = { horizontal: 'center', vertical: 'middle' };
 
-                // Row 2: Day (Nền chữ màu Xanh)
+                // Row 2: Day (Nền Xám xanh, Chữ Xanh đậm - Hình 4)
                 const cellDay = sheet.getRow(subHIdx).getCell(colIdx);
                 cellDay.value = dayOfWeek;
                 sheet.mergeCells(subHIdx, colIdx, subHIdx, colIdx + 1);
-                setHeaderStyle(cellDay, bgS);
-                cellDay.font = { ...cellDay.font, color: { argb: 'FF1D4ED8' } }; // Màu Xanh (Blue-700)
+                setHeaderStyle(cellDay, bgDay);
+                cellDay.font = { bold: true, size: 11, name: 'Times New Roman', color: { argb: 'FF1E3A8A' } }; 
                 cellDay.alignment = { horizontal: 'center', vertical: 'middle' };
 
-                // Row 3: S / C (Viết hoa)
+                // Row 3: S / C (S trắng, C xám - Hình 3)
                 const cellS = sheet.getRow(sesHIdx).getCell(colIdx);
                 cellS.value = "S";
                 setHeaderStyle(cellS, bgS);
@@ -1257,6 +1263,12 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
                 cell.value = h.label;
                 sheet.mergeCells(hIdx, colIdx, sesHIdx, colIdx);
                 setHeaderStyle(cell, 'FEF9C3'); // Màu vàng nhạt đồng bộ (vàng pastel)
+                
+                // Hình 1: 5 màu chữ khác nhau
+                if (STATUS_TEXT_COLORS[h.id]) {
+                    cell.font = { ...cell.font, color: { argb: `FF${STATUS_TEXT_COLORS[h.id]}` } };
+                }
+                
                 sheet.getColumn(colIdx).width = 5;
                 colIdx++;
             });
@@ -1342,7 +1354,11 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
                                 });
                             } else if (date.getDay() === 0 || date.getDay() === 6) {
                                 const isCN = date.getDay() === 0;
-                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isCN || date.getDay() === 6 ? 'FFF3F4F6' : 'FFF9FAFB' } };
+                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isCN ? 'FFFEE2E2' : 'FFFFEDD5' } };
+                            } else {
+                                // Hình 3: S trắng, C xám
+                                const isC = idx % 2 === 0; // index start from 3 (S) 4 (C)
+                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isC ? 'FFFFFFFF' : 'FFF3F4F6' } };
                             }
                         };
 
