@@ -1079,3 +1079,269 @@ export const exportSampleClassTemplate = async () => {
         throw err;
     }
 };
+
+// --- BÁO CÁO V2: TÁCH CỘT SÁNG/CHIỀU ---
+export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string, visibleColumns: string[] = ['P', 'K', 'V', 'T', 'VP', 'KH']) => {
+    const workbook = new ExcelJS.Workbook();
+
+    data.forEach(classData => {
+        const sheet = workbook.addWorksheet(`Lớp ${classData.className}`);
+
+        // --- 1. Chuẩn bị dữ liệu cột ---
+        const dates: Date[] = [];
+        if (classData.startDate && classData.endDate) {
+            let curr = new Date(classData.startDate);
+            const end = new Date(classData.endDate);
+            while (curr <= end) {
+                dates.push(new Date(curr));
+                curr.setDate(curr.getDate() + 1);
+            }
+        } else {
+            const daysInMonth = new Date(classData.year, classData.month, 0).getDate();
+            for (let d = 1; d <= daysInMonth; d++) {
+                dates.push(new Date(classData.year, classData.month - 1, d));
+            }
+        }
+
+        const allSummaryHeadersConfig = [
+            { id: 'P', label: 'P' },
+            { id: 'K', label: 'K' },
+            { id: 'V', label: 'V' },
+            { id: 'T', label: 'T' },
+            { id: 'VP', label: 'VP' },
+            { id: 'KH', label: 'KH' }
+        ];
+        const activeSummaryHeaders = allSummaryHeadersConfig.filter(h => visibleColumns.includes(h.id));
+
+        // TỔNG CỘT (V2): 3 (STT, Tên, Mã) + (dates.length * 2) + activeSummaryHeaders.length + 1
+        const totalCols = 3 + (dates.length * 2) + activeSummaryHeaders.length + 1;
+        const lastColChar = getColumnLabel(totalCols);
+
+        // --- 2. Title Section ---
+        sheet.mergeCells(`A1:${lastColChar}1`);
+        const title1 = sheet.getCell('A1');
+        title1.value = "TRƯỜNG THCS TRẦN BỘI CƠ";
+        title1.font = { bold: true, size: 14, name: 'Times New Roman' };
+        title1.alignment = { horizontal: 'left' };
+
+        sheet.mergeCells(`A2:${lastColChar}2`);
+        const titleType = sheet.getCell('A2');
+        titleType.value = "BÁO CÁO ĐIỂM DANH (BẢN V2 - TÁCH CỘT SÁNG/CHIỀU)";
+        titleType.font = { bold: true, size: 18, name: 'Times New Roman', color: { argb: 'FF059669' } };
+        titleType.alignment = { horizontal: 'center' };
+
+        sheet.mergeCells(`A3:${lastColChar}3`);
+        const titleMain = sheet.getCell('A3');
+        titleMain.value = classData.startDate && classData.endDate 
+            ? `Thời gian: Từ ${format(new Date(classData.startDate), 'dd/MM/yyyy')} đến ${format(new Date(classData.endDate), 'dd/MM/yyyy')}`
+            : `Tháng ${classData.month} - Năm ${classData.year}`;
+        titleMain.font = { italic: true, size: 12, name: 'Times New Roman' };
+        titleMain.alignment = { horizontal: 'center' };
+
+        // --- 2. Header Rows ---
+        const headerRowIdx = 5;
+        const subHeaderRowIdx = 6;
+
+        sheet.getColumn(1).width = 5;  // STT
+        sheet.getColumn(2).width = 25; // Họ Tên
+        sheet.getColumn(3).width = 10; // Mã HS
+
+        sheet.getCell(`A${headerRowIdx}`).value = "STT";
+        sheet.mergeCells(`A${headerRowIdx}:A${subHeaderRowIdx}`);
+        sheet.getCell(`B${headerRowIdx}`).value = "Họ và Tên";
+        sheet.mergeCells(`B${headerRowIdx}:B${subHeaderRowIdx}`);
+        sheet.getCell(`C${headerRowIdx}`).value = "Mã HS";
+        sheet.mergeCells(`C${headerRowIdx}:C${subHeaderRowIdx}`);
+
+        setHeaderStyle(sheet.getCell(`A${headerRowIdx}`));
+        setHeaderStyle(sheet.getCell(`B${headerRowIdx}`));
+        setHeaderStyle(sheet.getCell(`C${headerRowIdx}`));
+        setHeaderStyle(sheet.getCell(`A${subHeaderRowIdx}`));
+        setHeaderStyle(sheet.getCell(`B${subHeaderRowIdx}`));
+        setHeaderStyle(sheet.getCell(`C${subHeaderRowIdx}`));
+
+        // --- GENERATE DAYS (SPLIT S/C) ---
+        let colIdx = 4;
+        dates.forEach(date => {
+            const d = date.getDate();
+            const dayOfWeek = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][date.getDay()];
+            const isWeekend = dayOfWeek === 'CN' || dayOfWeek === 'T7';
+            const bg = isWeekend ? 'FFEDD5' : 'F3F4F6';
+
+            // Merge Ngày ở dòng 5 (phủ 2 cột S và C)
+            sheet.mergeCells(headerRowIdx, colIdx, headerRowIdx, colIdx + 1);
+            const cellDate = sheet.getRow(headerRowIdx).getCell(colIdx);
+            cellDate.value = `${d}\n${dayOfWeek}`;
+            setHeaderStyle(cellDate, bg);
+            cellDate.alignment = { ...cellDate.alignment, wrapText: true };
+
+            // Cột S và C ở dòng 6
+            const cellS = sheet.getRow(subHeaderRowIdx).getCell(colIdx);
+            cellS.value = "s";
+            setHeaderStyle(cellS, bg);
+            sheet.getColumn(colIdx).width = 4;
+
+            const cellC = sheet.getRow(subHeaderRowIdx).getCell(colIdx + 1);
+            cellC.value = "c";
+            setHeaderStyle(cellC, bg);
+            sheet.getColumn(colIdx + 1).width = 4;
+
+            if (isWeekend) {
+                [cellDate, cellS, cellC].forEach(c => {
+                    c.font = { ...c.font, color: { argb: 'FFDD6B20' } };
+                });
+            }
+
+            colIdx += 2;
+        });
+
+        // Summary Headers
+        activeSummaryHeaders.forEach(h => {
+            const cell = sheet.getRow(headerRowIdx).getCell(colIdx);
+            cell.value = h.label;
+            sheet.mergeCells(headerRowIdx, colIdx, subHeaderRowIdx, colIdx);
+            setHeaderStyle(cell, 'FEF3C7');
+            sheet.getColumn(colIdx).width = 5;
+            colIdx++;
+        });
+
+        const totalCell = sheet.getRow(headerRowIdx).getCell(colIdx);
+        totalCell.value = "Tổng";
+        sheet.mergeCells(headerRowIdx, colIdx, subHeaderRowIdx, colIdx);
+        setHeaderStyle(totalCell, 'FEF3C7');
+        sheet.getColumn(colIdx).width = 6;
+        colIdx++;
+
+        // --- 3. Data Rows ---
+        const studentsToDisplay = classData.students.filter(s => {
+            return Object.values(s.absences).some(raw => {
+                const parts = raw.split(';').map(p => p.trim());
+                return parts.some(p => visibleColumns.includes(p.split('(')[0].trim()));
+            });
+        });
+
+        // Cập nhật tiêu đề lớp (dòng 5)
+        const titleCell = sheet.getCell('A5');
+        sheet.mergeCells(`A5:${lastColChar}5`);
+        titleCell.value = `| LỚP ${classData.className} \t (Sĩ số: ${classData.totalStudents || classData.students.length}, Số HS vắng/vi phạm: ${studentsToDisplay.length})`;
+        titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+        titleCell.font = { bold: true, name: 'Times New Roman' };
+
+        let currentRowIdx = 7;
+        studentsToDisplay.forEach((s, index) => {
+            const row = sheet.getRow(currentRowIdx);
+            row.getCell(1).value = index + 1;
+            row.getCell(2).value = s.name;
+            row.getCell(3).value = s.code;
+
+            [1, 2, 3].forEach(c => {
+                const cell = row.getCell(c);
+                cell.border = BORDER_STYLE;
+                cell.font = { name: 'Times New Roman', size: 11 };
+                if (c !== 2) cell.alignment = { horizontal: 'center' };
+            });
+
+            let dayColIdx = 4;
+            let counts = { P: 0, K: 0, V: 0, T: 0, VP: 0, KH: 0 };
+
+            dates.forEach(date => {
+                const dateStr = format(date, 'yyyy-MM-dd');
+                const rawStatus = s.absences[dateStr] || '';
+                const parts = rawStatus.split(';').map(p => p.trim()).filter(Boolean);
+
+                const getSessionStatuses = (session: 'S' | 'C') => {
+                    return parts.filter(p => {
+                        const baseCode = p.split('(')[0].trim();
+                        if (!visibleColumns.includes(baseCode)) return false;
+
+                        const isMorning = p.includes('(s)') || p.includes('(S)') || p.includes('Sáng') || /T[1-5]/.test(p);
+                        const isAfternoon = p.includes('(c)') || p.includes('(C)') || p.includes('Chiều') || /T([6-9]|10)/.test(p);
+                        const isSC = p.includes('(sc)') || p.includes('(SC)');
+                        const noMarker = !isMorning && !isAfternoon && !isSC;
+
+                        if (isSC || noMarker) return true; 
+                        if (session === 'S') return isMorning;
+                        return isAfternoon;
+                    });
+                };
+
+                const sParts = getSessionStatuses('S');
+                const cParts = getSessionStatuses('C');
+
+                const renderCell = (idx: number, sessionParts: string[]) => {
+                    const cell = row.getCell(idx);
+                    const displayCode = Array.from(new Set(sessionParts.map(st => st.split('(')[0].trim()))).join(';');
+                    cell.value = displayCode;
+                    cell.border = BORDER_STYLE;
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    cell.font = { name: 'Times New Roman', size: 10, bold: true };
+
+                    if (sessionParts.length > 0) {
+                        let colorIdx = sessionParts.some(st => st.startsWith('K')) ? 'K' :
+                                       sessionParts.some(st => st.startsWith('P')) ? 'P' :
+                                       sessionParts.some(st => st.startsWith('T')) ? 'T' :
+                                       sessionParts.some(st => st.startsWith('VP')) ? 'VP' : '';
+                        if (colorIdx && STATUS_COLORS[colorIdx]) {
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STATUS_COLORS[colorIdx] } };
+                            cell.font = { ...cell.font, color: { argb: 'FFFFFFFF' } };
+                        }
+
+                        if (sessionParts.some(st => st.includes('('))) {
+                            cell.note = {
+                                texts: [{ text: sessionParts.join('\n'), font: { size: 9, name: 'Times New Roman' } }],
+                                width: 1200, height: 600
+                            } as any;
+                        }
+
+                        // Cập nhật stats
+                        sessionParts.forEach(st => {
+                            const code = st.split('(')[0].trim();
+                            if (counts.hasOwnProperty(code)) {
+                                (counts as any)[code]++;
+                            }
+                        });
+                    } else {
+                        const dayOfWeek = date.getDay();
+                        if (dayOfWeek === 0 || dayOfWeek === 6) {
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } };
+                        }
+                    }
+                };
+
+                renderCell(dayColIdx, sParts);
+                renderCell(dayColIdx + 1, cParts);
+                dayColIdx += 2;
+            });
+
+            // Row Summary
+            let rowTotal = 0;
+            activeSummaryHeaders.forEach(h => {
+                const val = (counts as any)[h.id] || 0;
+                row.getCell(dayColIdx).value = val > 0 ? val : '';
+                rowTotal += val;
+                const cell = row.getCell(dayColIdx);
+                cell.border = BORDER_STYLE;
+                cell.alignment = { horizontal: 'center' };
+                cell.font = { bold: true, name: 'Times New Roman' };
+                dayColIdx++;
+            });
+
+            const totalCellValue = row.getCell(dayColIdx);
+            totalCellValue.value = rowTotal > 0 ? rowTotal : '';
+            totalCellValue.border = BORDER_STYLE;
+            totalCellValue.alignment = { horizontal: 'center' };
+            totalCellValue.font = { bold: true, name: 'Times New Roman' };
+
+            currentRowIdx++;
+        });
+    });
+
+    try {
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        triggerDownload(blob, `${fileName}_V2.xlsx`);
+    } catch (err) {
+        console.error("[exportMonthlyReportV2] Lỗi:", err);
+        throw err;
+    }
+};

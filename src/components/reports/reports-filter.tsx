@@ -25,6 +25,7 @@ interface ReportsFilterProps {
     onExport: (isCompact: boolean) => void;
     onExportAdvanced?: () => void;
     onExportGrid?: () => void;
+    onExportV2?: () => void;
     onGenerateReport: () => void;
     isLoading?: boolean;
     isExporting?: boolean;
@@ -51,6 +52,7 @@ export function ReportsFilter({
     onExport,
     onExportAdvanced,
     onExportGrid,
+    onExportV2,
     onGenerateReport,
     isLoading = false,
     isExporting = false
@@ -391,8 +393,6 @@ export function ReportsFilter({
                                         </button>
                                     </>
                                 )}
-                                {onExportAdvanced && (
-                                    <>
                                         <div className="h-px bg-gray-200 my-1"></div>
                                         <button
                                             onClick={() => { setOpenExportDropdown(false); setTimeout(() => onExportAdvanced(), 0); }}
@@ -400,6 +400,21 @@ export function ReportsFilter({
                                         >
                                             <span>Báo Cáo Tổng Hợp</span>
                                             <span className="text-[11px] text-purple-500 font-normal">Xuất kèm cột tùy chỉnh</span>
+                                        </button>
+                                    </>
+                                )}
+                                {onExportV2 && (
+                                    <>
+                                        <div className="h-px bg-gray-200 my-1 border-dashed"></div>
+                                        <button
+                                            onClick={() => { setOpenExportDropdown(false); setTimeout(() => onExportV2(), 0); }}
+                                            className="w-full text-left px-3 py-2 text-sm font-bold text-orange-700 hover:bg-orange-50 rounded-lg flex flex-col transition-colors border border-orange-100 mt-1"
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                <span>Xuất Báo Cáo V2</span>
+                                                <span className="bg-orange-600 text-white text-[9px] px-1 rounded uppercase">New</span>
+                                            </div>
+                                            <span className="text-[11px] text-orange-600 font-normal italic">Tách cột Sáng/Chiều (Test)</span>
                                         </button>
                                     </>
                                 )}

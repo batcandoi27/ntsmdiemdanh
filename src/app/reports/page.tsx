@@ -5,7 +5,7 @@ import { getReports, getMonthlyReportData, getAdvancedReportData, getExcelExport
 import { getAllClasses, getClassAndStudents } from '@/app/actions/common';
 import { Class, Student } from '@/types/models';
 import { FileBarChart, Plus, X, Loader2, AlertTriangle } from 'lucide-react';
-import { exportToExcel, exportTermReport, exportGradeReport } from '@/lib/export-utils';
+import { exportToExcel, exportTermReport, exportGradeReport, exportMonthlyReportV2 } from '@/lib/export-utils';
 import { ReportsStats } from '@/components/reports/reports-stats';
 import { ReportsFilter } from '@/components/reports/reports-filter';
 import { ReportsListView } from '@/components/reports/reports-list-view';
@@ -188,6 +188,33 @@ export default function ReportsPage() {
         }
     };
 
+    const handleExportV2 = async () => {
+        if (selectedClasses.length === 0) {
+            alert('Vui lòng chọn ít nhất một lớp để xuất báo cáo.');
+            return;
+        }
+        if (exportLoading) return;
+        setExportLoading(true);
+        showLoading('Đang chuẩn bị Báo cáo V2 (Tách cột Sáng/Chiều)...');
+        try {
+            const data = await getExcelExportData(dateRange.start, dateRange.end, selectedClasses, false, appUser?.role);
+            if (!data || data.length === 0) {
+                alert('Chưa có dữ liệu để xuất.');
+                return;
+            }
+            const rangeStr = dateRange.start === dateRange.end 
+                ? format(new Date(dateRange.start), 'dd-MM-yyyy')
+                : `${format(new Date(dateRange.start), 'dd-MM-yyyy')}_den_${format(new Date(dateRange.end), 'dd-MM-yyyy')}`;
+            await exportMonthlyReportV2(data, `BaoCao_V2_S-C_${rangeStr}`, visibleColumns);
+        } catch (error) {
+            console.error("[handleExportV2] Lỗi:", error);
+            alert('Lỗi xuất báo cáo V2: ' + (error as Error).message);
+        } finally {
+            setExportLoading(false);
+            hideLoading();
+        }
+    };
+
     if (flagsLoading) {
         return <div className="p-8 text-center text-gray-500 flex justify-center items-center h-[50vh]"><Loader2 className="animate-spin mr-2" /> Đang tải...</div>;
     }
@@ -237,6 +264,7 @@ export default function ReportsPage() {
                     onExport={handleExport}
                     onExportAdvanced={handleExportAdvanced}
                     onExportGrid={handleExportGrid}
+                    onExportV2={handleExportV2}
                     onGenerateReport={handleManualFetch}
                     isLoading={loading}
                     isExporting={exportLoading}
