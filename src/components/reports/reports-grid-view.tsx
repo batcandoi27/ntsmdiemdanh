@@ -3,11 +3,12 @@ import { useMemo, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { format, eachDayOfInterval, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
-import { ShieldCheck, Plus, X, Loader2 } from "lucide-react";
+import { ShieldCheck, Plus, X, Loader2, MessageSquare } from "lucide-react";
 import { getClassAndStudents } from "@/app/actions/common";
 import { Class, Student } from "@/types/models";
 import { AttendanceSheet } from "@/components/attendance-sheet";
 import { useAuth } from "@/context/auth-context";
+import { ReportMessageModal } from "./report-message-modal";
 
 const getGradeColor = (className: string) => {
     if (className.startsWith('6')) return "bg-emerald-100 border-emerald-200 text-emerald-900";
@@ -41,6 +42,12 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
     const [isSaving, setIsSaving] = useState(false);
     const [showAddModalForClass, setShowAddModalForClass] = useState<string | null>(null);
     const [quickAtt, setQuickAtt] = useState<{ classId: string, date: string } | null>(null);
+    const [showMessageModal, setShowMessageModal] = useState<{
+        classId: string,
+        className: string,
+        absences: AbsenceDetail[]
+    } | null>(null);
+
     // ...
     const dates = eachDayOfInterval({ start: parseISO(dateRange.start), end: parseISO(dateRange.end) });
 
@@ -152,21 +159,38 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
 
                 return (
                     <div key={clsId} className="bg-white rounded-xl border border-gray-400 shadow-sm overflow-hidden flex flex-col">
-                        <div className={cn("px-4 py-3 border-b border-gray-400 shrink-0", headerStyle)}>
-                            <h3 className="font-black uppercase flex items-center gap-2 text-base">
-                                <div className={cn("w-1.5 h-6 rounded-full", barColor)}></div>
-                                <span>LỚP {group.className}</span>
-                                <button
-                                    onClick={() => setShowAddModalForClass(clsId)}
-                                    className="bg-white/30 hover:bg-white/60 text-emerald-900 border border-emerald-700/30 p-1 rounded cursor-pointer transition-colors"
-                                    title="Thêm học sinh vắng"
-                                >
-                                    <Plus size={14} className="stroke-[3px]" />
-                                </button>
-                                <span className="text-sm opacity-90 normal-case ml-2 font-bold text-gray-700 text-white bg-black/10 px-2 py-0.5 rounded-full inline-block mt-[-2px] tracking-wide">
+                        <div className={cn("px-4 py-3 border-b border-gray-400 flex items-center justify-between shrink-0", headerStyle)}>
+                            <div className="flex items-center gap-3">
+                                <h3 className="font-black uppercase flex items-center gap-2 text-base">
+                                    <div className={cn("w-1.5 h-6 rounded-full", barColor)}></div>
+                                    <span>LỚP {group.className}</span>
+                                </h3>
+                                <span className="text-sm font-black text-emerald-900 bg-white/70 border-2 border-white/60 px-3 py-0.5 rounded-full shadow-sm tracking-wide">
                                     (SS: {classSizes[clsId] || '?'}, V: {students.length})
                                 </span>
-                            </h3>
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setShowAddModalForClass(clsId)}
+                                    className="bg-white hover:bg-gray-50 text-emerald-700 border border-emerald-200 p-1.5 rounded-lg shadow-sm cursor-pointer transition-colors"
+                                    title="Thêm học sinh vắng"
+                                >
+                                    <Plus size={16} className="stroke-[3px]" />
+                                </button>
+                                <button
+                                    onClick={() => setShowMessageModal({ 
+                                        classId: clsId, 
+                                        className: group.className, 
+                                        absences: absences.filter(a => a.classId === clsId && visibleColumns.some(vc => a.status.includes(vc))) 
+                                    })}
+                                    className="bg-teal-600 hover:bg-teal-700 text-white border border-transparent px-3 py-1.5 rounded-lg shadow-sm cursor-pointer transition-colors flex items-center gap-1.5 font-bold text-sm"
+                                    title="Soạn tin nhắn"
+                                >
+                                    <MessageSquare size={16} className="stroke-[2.5px] mt-px" />
+                                    Soạn tin nhắn
+                                </button>
+                            </div>
                         </div>
 
                         {/* Scrollable Container - Chỉnh thành overflow-x-auto, overflow-y-visible để tip không bị che */}
@@ -459,6 +483,66 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                     }}
                 />
             )}
+
+            {/* Report Message Modal */}
+            {showMessageModal && (
+                <ReportMessageModal
+                    isOpen={!!showMessageModal}
+                    onClose={() => setShowMessageModal(null)}
+                    classId={showMessageModal.classId}
+                    className={showMessageModal.className}
+                    dateRange={{
+                        start: dateRange.start || showMessageModal.absences.reduce((min, p) => p.date < min ? p.date : min, showMessageModal.absences[0]?.date || ''),
+                        end: dateRange.end || showMessageModal.absences.reduce((max, p) => p.date > max ? p.date : max, showMessageModal.absences[0]?.date || '')
+                    }}
+                    absences={showMessageModal.absences}
+                    totalStudents={classSizes[showMessageModal.classId] || 0}
+                />
+            )}
+
+            {/* Bảng Chú thích Ký hiệu & Màu sắc */}
+            <div className="mt-8 p-4 bg-white border border-gray-100 rounded-xl shadow-sm space-y-4">
+                <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 pb-3 border-b border-gray-50">
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
+                        <span className="text-[11px] font-bold text-yellow-700 uppercase tracking-tight">Phép (P)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                        <span className="text-[11px] font-bold text-red-700 uppercase tracking-tight">Không (K)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                        <span className="text-[11px] font-bold text-blue-700 uppercase tracking-tight">Trễ (T)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                        <span className="text-[11px] font-bold text-purple-700 uppercase tracking-tight">Vi Phạm (VP)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                        <span className="text-[11px] font-bold text-orange-700 uppercase tracking-tight">Khen (KH)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-red-600 font-extrabold text-[11px] tracking-tighter">(SC)</span>
+                        <span className="text-[11px] font-bold text-gray-600 uppercase tracking-tight">Vắng cả ngày</span>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px]">
+                    <div className="flex flex-wrap items-center gap-3 justify-center md:justify-start">
+                        <span className="font-black text-gray-400 uppercase tracking-widest text-[10px]">Ký hiệu tiết:</span>
+                        <span className="text-gray-600"><b>s</b>: Sáng</span>
+                        <span className="text-gray-600"><b>c</b>: Chiều</span>
+                        <span className="text-gray-600"><b>1, 2, 3...</b>: Số tiết vắng</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 justify-center md:justify-end border-t md:border-t-0 pt-2 md:pt-0">
+                        <span className="font-black text-gray-400 uppercase tracking-widest text-[10px]">Ví dụ:</span>
+                        <span className="bg-yellow-50 text-yellow-700 px-1.5 py-0.5 rounded border border-yellow-100 font-bold">Ps: Phép sáng</span>
+                        <span className="bg-red-50 text-red-700 px-1.5 py-0.5 rounded border border-red-100 font-bold">Ks1: Không phép sáng tiết 1</span>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }
@@ -638,49 +722,6 @@ function GridCell({ status, visibleColumns }: { status: string, visibleColumns: 
                 );
             })}
 
-            {/* Bảng Chú thích Ký hiệu & Màu sắc */}
-            <div className="mt-8 p-4 bg-white border border-gray-100 rounded-xl shadow-sm space-y-4">
-                <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 pb-3 border-b border-gray-50">
-                    <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
-                        <span className="text-[11px] font-bold text-yellow-700 uppercase tracking-tight">Phép (P)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                        <span className="text-[11px] font-bold text-red-700 uppercase tracking-tight">Không (K)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                        <span className="text-[11px] font-bold text-blue-700 uppercase tracking-tight">Trễ (T)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-purple-500"></div>
-                        <span className="text-[11px] font-bold text-purple-700 uppercase tracking-tight">Vi Phạm (VP)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-                        <span className="text-[11px] font-bold text-orange-700 uppercase tracking-tight">Khen (KH)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className="text-red-600 font-extrabold text-[11px] tracking-tighter">(SC)</span>
-                        <span className="text-[11px] font-bold text-gray-600 uppercase tracking-tight">Vắng cả ngày</span>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px]">
-                    <div className="flex flex-wrap items-center gap-3 justify-center md:justify-start">
-                        <span className="font-black text-gray-400 uppercase tracking-widest text-[10px]">Ký hiệu tiết:</span>
-                        <span className="text-gray-600"><b>s</b>: Sáng</span>
-                        <span className="text-gray-600"><b>c</b>: Chiều</span>
-                        <span className="text-gray-600"><b>1, 2, 3...</b>: Số tiết vắng</span>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3 justify-center md:justify-end border-t md:border-t-0 pt-2 md:pt-0">
-                        <span className="font-black text-gray-400 uppercase tracking-widest text-[10px]">Ví dụ:</span>
-                        <span className="bg-yellow-50 text-yellow-700 px-1.5 py-0.5 rounded border border-yellow-100 font-bold">Ps: Phép sáng</span>
-                        <span className="bg-red-50 text-red-700 px-1.5 py-0.5 rounded border border-red-100 font-bold">Ks1: Không phép sáng tiết 1</span>
-                    </div>
-                </div>
-            </div>
         </div>
     );
 }

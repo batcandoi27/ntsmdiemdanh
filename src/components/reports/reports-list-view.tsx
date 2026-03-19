@@ -158,8 +158,8 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
 
                                         // Hiển thị "(SS: 51, V: 5)"
                                         return (
-                                            <span className="ml-2 text-xs font-medium opacity-80 bg-white/30 px-2 py-0.5 rounded-full inline-block mt-[-2px]">
-                                                {`(SS: ${totalStudents || '?'}, V: ${vCount})`}
+                                            <span className="ml-2 text-[11px] font-black text-gray-700 bg-white border border-gray-300 px-2.5 py-1 rounded-md shadow-sm tracking-wide">
+                                                {`SS: ${totalStudents || '?'} • Vắng: ${vCount}`}
                                             </span>
                                         );
                                     })()}
@@ -169,21 +169,21 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                 <div className="flex items-center gap-2">
                                     <button
                                         onClick={() => setAddModalConfig({ className: key })}
-                                        className="bg-white/30 hover:bg-white/60 text-emerald-900 border border-emerald-700/30 p-1 rounded shadow-sm transition-colors"
+                                        className="bg-white hover:bg-gray-50 text-emerald-700 border border-emerald-200 p-1.5 rounded-lg shadow-sm cursor-pointer transition-colors"
                                         title={`Thêm học sinh vắng Lớp ${key}`}
                                     >
-                                        <Plus size={14} className="stroke-[3px]" />
+                                        <Plus size={16} className="stroke-[3px]" />
                                     </button>
                                     <button
                                         onClick={() => setShowMessageModal({ 
-                                            classId: items[0]?.classId, 
+                                            classId: items[0]?.classId || '', 
                                             className: key, 
                                             absences: items 
                                         })}
-                                        className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white px-3 py-1 rounded-lg text-xs font-black shadow-sm transition-all active:scale-95"
+                                        className="bg-teal-600 hover:bg-teal-700 text-white border border-transparent px-3 py-1.5 rounded-lg shadow-sm cursor-pointer transition-colors flex items-center gap-1.5 font-bold text-sm"
                                     >
-                                        <MessageSquare size={14} />
-                                        <span className="hidden sm:inline">Soạn tin nhắn</span>
+                                        <MessageSquare size={16} className="stroke-[2.5px] mt-px" />
+                                        Soạn tin nhắn
                                     </button>
                                 </div>
                             )}
