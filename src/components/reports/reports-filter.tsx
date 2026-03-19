@@ -393,6 +393,8 @@ export function ReportsFilter({
                                         </button>
                                     </>
                                 )}
+                                {onExportAdvanced && (
+                                    <>
                                         <div className="h-px bg-gray-200 my-1"></div>
                                         <button
                                             onClick={() => { setOpenExportDropdown(false); setTimeout(() => onExportAdvanced(), 0); }}
