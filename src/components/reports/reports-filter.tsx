@@ -285,6 +285,40 @@ export function ReportsFilter({
                                     </div>
                                     <span className="text-sm font-bold text-black">{appUser?.assignedClassIds?.length ? "Chọn Lớp Của Tôi" : "Chọn Tất Cả"}</span>
                                 </div>
+
+                                {/* Quick Grade Selection (New Request Image 3) */}
+                                <div className="grid grid-cols-4 gap-1 p-1 mb-2 bg-gray-50 rounded-lg border border-gray-100">
+                                    {[
+                                        { g: 6, color: "bg-blue-600 border-blue-600", hover: "hover:border-blue-400 hover:text-blue-600" },
+                                        { g: 7, color: "bg-emerald-600 border-emerald-600", hover: "hover:border-emerald-400 hover:text-emerald-600" },
+                                        { g: 8, color: "bg-amber-600 border-amber-600", hover: "hover:border-amber-400 hover:text-amber-600" },
+                                        { g: 9, color: "bg-rose-600 border-rose-600", hover: "hover:border-rose-400 hover:text-rose-600" }
+                                    ].map(spec => {
+                                        const gradeClasses = classes.filter(c => c.name.startsWith(`${spec.g}`));
+                                        const isAllSelected = gradeClasses.length > 0 && gradeClasses.every(c => selectedClasses.includes(c.id));
+                                        
+                                        return (
+                                            <button
+                                                key={spec.g}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (isAllSelected) {
+                                                        setSelectedClasses(selectedClasses.filter(id => !gradeClasses.some(gc => gc.id === id)));
+                                                    } else {
+                                                        const newIds = Array.from(new Set([...selectedClasses, ...gradeClasses.map(gc => gc.id)]));
+                                                        setSelectedClasses(newIds);
+                                                    }
+                                                }}
+                                                className={cn(
+                                                    "py-1 text-[10px] font-black rounded border transition-all",
+                                                    isAllSelected ? `${spec.color} text-white` : `bg-white border-gray-200 text-gray-600 ${spec.hover}`
+                                                )}
+                                            >
+                                                Khối {spec.g}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                                 {classes.map(cls => (
                                     <div
                                         key={cls.id}

@@ -713,8 +713,8 @@ function GridCell({ status, visibleColumns }: { status: string, visibleColumns: 
                                 <div className="w-3 h-3 bg-gray-900 rotate-45 mx-auto mt-[-6px] border-r border-b border-gray-700"></div>
                                 
                                 {/* Nội dung tooltip */}
-                                <div className="bg-gray-900 text-white text-[11px] font-medium px-3 py-2 rounded-lg shadow-2xl min-w-[120px] max-w-[260px] w-max whitespace-normal break-words leading-relaxed border border-gray-700 text-center animate-in fade-in slide-in-from-bottom-1 duration-200">
-                                    {note}
+                                <div className="bg-gray-900 text-white text-[11px] font-medium px-3 py-2 rounded-lg shadow-2xl min-w-[120px] max-w-[260px] w-max whitespace-pre-wrap break-words leading-relaxed border border-gray-700 text-center animate-in fade-in slide-in-from-bottom-1 duration-200">
+                                    {note.replace(/; /g, '\n')}
                                 </div>
                             </div>
                         )}

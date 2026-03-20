@@ -9,7 +9,7 @@ import { useAuth } from '@/context/auth-context';
 import { AttendanceStatus } from '@/types/models';
 
 import { SessionType } from '@/types/timetable';
-import { Search, Loader2, Save, X, CheckCircle2, Edit3 } from 'lucide-react';
+import { Search, Loader2, Save, X, CheckCircle2, Edit3, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const triggerHapticFeedback = () => {
@@ -60,6 +60,7 @@ export function StudentSelectorDialog({
     onSaved
 }: StudentSelectorDialogProps) {
     const [students, setStudents] = useState<StudentAttendanceDetail[]>([]);
+    const [lastActivePeriod, setLastActivePeriod] = useState<number | null>(null);
     // Map studentCode -> main status ('P', 'K', 'T', 'V', or '' for present)
     const [localStatusMap, setLocalStatusMap] = useState<Record<string, AttendanceStatus>>({});
     // Map studentCode -> boolean for violation/praise
@@ -246,29 +247,31 @@ export function StudentSelectorDialog({
     };
 
     const handleNoteChange = (studentCode: string, note: string) => {
-        // Find the "current" active period to apply the note to
+        // LUÔN GÁN CHO TẤT CẢ CÁC TIẾT ĐANG BÔI ĐẬM (HIGHLIGHTED)
         const periods = targetStatus === 'VP' 
             ? (localViolationPeriodsMap[studentCode] || []) 
             : (targetStatus === 'KH' ? (localRewardPeriodsMap[studentCode] || []) : (localMissedPeriodsMap[studentCode] || []));
         
-        // Use the first period in the list, or 0 if none
-        const targetPeriod = periods[0] || 0;
+        const targetPeriods = periods.length > 0 ? periods : [0];
 
         if (targetStatus === 'VP') {
-            setLocalViolationNotesMap(prev => ({
-                ...prev,
-                [studentCode]: { ...(prev[studentCode] || {}), [targetPeriod]: note }
-            }));
+            setLocalViolationNotesMap(prev => {
+                const updated = { ...(prev[studentCode] || {}) };
+                targetPeriods.forEach(p => updated[p] = note);
+                return { ...prev, [studentCode]: updated };
+            });
         } else if (targetStatus === 'KH') {
-            setLocalRewardNotesMap(prev => ({
-                ...prev,
-                [studentCode]: { ...(prev[studentCode] || {}), [targetPeriod]: note }
-            }));
+            setLocalRewardNotesMap(prev => {
+                const updated = { ...(prev[studentCode] || {}) };
+                targetPeriods.forEach(p => updated[p] = note);
+                return { ...prev, [studentCode]: updated };
+            });
         } else {
-            setLocalNotesMap(prev => ({
-                ...prev,
-                [studentCode]: { ...(prev[studentCode] || {}), [targetPeriod]: note }
-            }));
+            setLocalNotesMap(prev => {
+                const updated = { ...(prev[studentCode] || {}) };
+                targetPeriods.forEach(p => updated[p] = note);
+                return { ...prev, [studentCode]: updated };
+            });
         }
     };
 
@@ -297,10 +300,14 @@ export function StudentSelectorDialog({
                 else if (status === 'T') v3Status = 'late';
                 else if (status === 'V') v3Status = 'absent';
 
-                const selectedMissed = localMissedPeriodsMap[code] || [];
-                const missedPeriods = (status && selectedMissed.length === 0) 
-                    ? [1, 2, 3, 4, 5] 
-                    : (status ? selectedMissed : []);
+                const getCombinedPeriods = (sel: number[], nMap: Record<number, string>) => {
+                    const noteP = Object.keys(nMap).map(Number).filter(p => p > 0);
+                    return Array.from(new Set([...sel, ...noteP])).sort();
+                };
+
+                const missedPeriods = (status) 
+                    ? getCombinedPeriods(localMissedPeriodsMap[code] || [], localNotesMap[code] || {})
+                    : [];
 
                 // Chuyển đổi Record<number, string> sang string gộp cho API backend cũ hỗ trợ đa tầng
                 // Nếu backend đã hỗ trợ mảng record thì tốt, nhưng hiện tại ta gộp để tương thích
@@ -308,13 +315,32 @@ export function StudentSelectorDialog({
                     const entries = Object.entries(nMap).filter(([_, v]) => v);
                     if (entries.length === 0) return "";
                     
-                    // Nếu tất cả các tiết lẻ có cùng nội dung ghi chú -> Chỉ hiện nội dung đó (gọn)
-                    const uniqueNotes = Array.from(new Set(entries.map(([_, v]) => v)));
-                    if (uniqueNotes.length === 1 && entries.length > 1) {
-                        return uniqueNotes[0];
-                    }
+                    // Nhóm theo nội dung ghi chú để tìm dải tiết
+                    const noteToPs: Record<string, number[]> = {};
+                    entries.forEach(([p, v]) => {
+                        if (!noteToPs[v]) noteToPs[v] = [];
+                        noteToPs[v].push(Number(p));
+                    });
 
-                    return entries.map(([p, v]) => p === "0" ? v : `T${p}: ${v}`).join(", ");
+                    return Object.entries(noteToPs).map(([noteText, periods]) => {
+                        if (periods.includes(0)) return noteText;
+                        
+                        const sorted = [...periods].sort((a,b) => a - b);
+                        const ranges: string[] = [];
+                        let start = sorted[0];
+                        let prev = sorted[0];
+
+                        for (let i = 1; i <= sorted.length; i++) {
+                            if (i < sorted.length && sorted[i] === prev + 1) {
+                                prev = sorted[i];
+                            } else {
+                                if (start === prev) ranges.push(`${start}`);
+                                else ranges.push(`${start}-${prev}`);
+                                if (i < sorted.length) { start = sorted[i]; prev = sorted[i]; }
+                            }
+                        }
+                        return `T${ranges.join(',')}: ${noteText}`;
+                    }).join(", ");
                 };
 
                 marks.push({
@@ -327,12 +353,15 @@ export function StudentSelectorDialog({
                     violation: hasViolation || false,
                     violationNote: formatNotes(localViolationNotesMap[code] || {}),
                     violationNotes: localViolationNotesMap[code],
-                    violationPeriods: hasViolation ? (localViolationPeriodsMap[code] || []) : undefined,
+                    violationPeriods: hasViolation 
+                        ? getCombinedPeriods(localViolationPeriodsMap[code] || [], localViolationNotesMap[code] || {}) 
+                        : undefined,
                     reward: hasReward || false,
                     rewardNote: formatNotes(localRewardNotesMap[code] || {}),
                     rewardNotes: localRewardNotesMap[code],
-                    // @ts-ignore
-                    rewardPeriods: hasReward ? (localRewardPeriodsMap[code] || []) : undefined
+                    rewardPeriods: hasReward 
+                        ? getCombinedPeriods(localRewardPeriodsMap[code] || [], localRewardNotesMap[code] || {}) 
+                        : undefined
                 });
             });
 
@@ -452,7 +481,33 @@ export function StudentSelectorDialog({
                                 </button>
                             </div>
 
-                            <div className="flex gap-1 shrink-0">
+                            <div className="flex gap-1 shrink-0 items-center">
+                                <div className="flex flex-col gap-0.5 mr-1">
+                                    <button 
+                                        onClick={() => {
+                                            const codes = Array.from(selectedHs);
+                                            const setFn = targetStatus === 'VP' ? setLocalViolationPeriodsMap : (targetStatus === 'KH' ? setLocalRewardPeriodsMap : setLocalMissedPeriodsMap);
+                                            const next: any = {};
+                                            codes.forEach(c => next[c] = [1, 2, 3, 4, 5]);
+                                            setFn(prev => ({ ...prev, ...next }));
+                                        }}
+                                        className="text-[8px] font-black bg-white/20 hover:bg-white/40 text-white px-1 rounded uppercase transition-colors"
+                                    >
+                                        Tất cả
+                                    </button>
+                                    <button 
+                                        onClick={() => {
+                                            const codes = Array.from(selectedHs);
+                                            const setFn = targetStatus === 'VP' ? setLocalViolationPeriodsMap : (targetStatus === 'KH' ? setLocalRewardPeriodsMap : setLocalMissedPeriodsMap);
+                                            const next: any = {};
+                                            codes.forEach(c => next[c] = []);
+                                            setFn(prev => ({ ...prev, ...next }));
+                                        }}
+                                        className="text-[8px] font-black bg-black/20 hover:bg-black/40 text-white/70 px-1 rounded uppercase transition-colors"
+                                    >
+                                        Hủy
+                                    </button>
+                                </div>
                                 {[1, 2, 3, 4, 5].map(p => {
                                     const firstCode = Array.from(selectedHs)[0];
                                     const periods = targetStatus === 'VP' ? (localViolationPeriodsMap[firstCode] || []) : (targetStatus === 'KH' ? (localRewardPeriodsMap[firstCode] || []) : (localMissedPeriodsMap[firstCode] || []));
@@ -464,6 +519,28 @@ export function StudentSelectorDialog({
                                             onClick={() => {
                                                 const codes = Array.from(selectedHs);
                                                 const setFn = targetStatus === 'VP' ? setLocalViolationPeriodsMap : (targetStatus === 'KH' ? setLocalRewardPeriodsMap : setLocalMissedPeriodsMap);
+                                                
+                                                // TỰ ĐỘNG BẬT TRẠNG THÁI CHÍNH HÀNG LOẠT
+                                                if (targetStatus === 'VP') {
+                                                    setLocalViolationMap(prev => {
+                                                        const next = { ...prev };
+                                                        codes.forEach(c => next[c] = true);
+                                                        return next;
+                                                    });
+                                                } else if (targetStatus === 'KH') {
+                                                    setLocalRewardMap(prev => {
+                                                        const next = { ...prev };
+                                                        codes.forEach(c => next[c] = true);
+                                                        return next;
+                                                    });
+                                                } else {
+                                                    setLocalStatusMap(prev => {
+                                                        const next = { ...prev };
+                                                        codes.forEach(c => next[c] = targetStatus);
+                                                        return next;
+                                                    });
+                                                }
+
                                                 codes.forEach(c => setFn(prev => {
                                                     const current = prev[c] || [];
                                                     const next = current.includes(p) ? current.filter(x => x !== p) : [...current, p].sort();
@@ -497,9 +574,13 @@ export function StudentSelectorDialog({
                                             const codes = Array.from(selectedHs);
                                             codes.forEach(code => {
                                                 const periods = targetStatus === 'VP' ? (localViolationPeriodsMap[code] || []) : (targetStatus === 'KH' ? (localRewardPeriodsMap[code] || []) : (localMissedPeriodsMap[code] || []));
-                                                const targetPeriod = periods[0] || 0;
+                                                const targetPeriods = periods.length > 0 ? periods : [0];
                                                 const setNFn = targetStatus === 'VP' ? setLocalViolationNotesMap : (targetStatus === 'KH' ? setLocalRewardNotesMap : setLocalNotesMap);
-                                                setNFn(prev => ({ ...prev, [code]: { ...(prev[code] || {}), [targetPeriod]: val } }));
+                                                setNFn(prev => {
+                                                    const updated = { ...(prev[code] || {}) };
+                                                    targetPeriods.forEach(p => updated[p] = val);
+                                                    return { ...prev, [code]: updated };
+                                                });
                                             });
                                             (e.target as HTMLInputElement).value = '';
                                             triggerHapticFeedback();
@@ -522,12 +603,13 @@ export function StudentSelectorDialog({
                                                                     const codes = Array.from(selectedHs);
                                                                     codes.forEach(code => {
                                                                         const periods = targetStatus === 'VP' ? (localViolationPeriodsMap[code] || []) : (targetStatus === 'KH' ? (localRewardPeriodsMap[code] || []) : (localMissedPeriodsMap[code] || []));
-                                                                        const targetPeriod = periods[0] || 0;
+                                                                        const targetPeriods = periods.length > 0 ? periods : [0];
                                                                         const setNFn = targetStatus === 'VP' ? setLocalViolationNotesMap : (targetStatus === 'KH' ? setLocalRewardNotesMap : setLocalNotesMap);
                                                                         setNFn(prev => {
-                                                                            const current = prev[code]?.[targetPeriod] || '';
-                                                                            const newVal = current ? `${current}, ${item}` : item;
-                                                                            return { ...prev, [code]: { ...(prev[code] || {}), [targetPeriod]: newVal } };
+                                                                            const updated = { ...(prev[code] || {}) };
+                                                                            const newVal = item; // Ở Bulk Mode, gán đè luôn hoặc cộng dồn tùy Sếp, hiện tại em gán đè cho chắc
+                                                                            targetPeriods.forEach(p => updated[p] = updated[p] ? `${updated[p]}, ${newVal}` : newVal);
+                                                                            return { ...prev, [code]: updated };
                                                                         });
                                                                     });
                                                                     triggerHapticFeedback();
@@ -692,7 +774,41 @@ export function StudentSelectorDialog({
                                                 <div className="space-y-1.5">
                                                     <div className="flex items-center justify-between">
                                                         <div className="text-[10px] text-gray-400 font-medium capitalize">
-                                                            {targetStatus === 'VP' ? 'Vi phạm tiết:' : (targetStatus === 'KH' ? 'Khen thưởng tiết:' : 'Tiết vắng/muộn:')}
+                                                            {targetStatus === 'VP' ? 'Vi phạm tiết:' : (targetStatus === 'KH' ? 'Khen thưởng tiết:' : 'Tiết vắng/muộn:')}:
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            <button 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    const setFn = targetStatus === 'VP' ? setLocalViolationPeriodsMap : (targetStatus === 'KH' ? setLocalRewardPeriodsMap : setLocalMissedPeriodsMap);
+                                                                    setFn(prev => ({ ...prev, [item.student.code]: [1, 2, 3, 4, 5] }));
+                                                                }}
+                                                                className="text-[9px] font-bold text-blue-500 hover:underline"
+                                                            >
+                                                                Tất cả
+                                                            </button>
+                                                            <button 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    const setFn = targetStatus === 'VP' ? setLocalViolationPeriodsMap : (targetStatus === 'KH' ? setLocalRewardPeriodsMap : setLocalMissedPeriodsMap);
+                                                                    setFn(prev => ({ ...prev, [item.student.code]: [] }));
+                                                                    setLastActivePeriod(null);
+                                                                }}
+                                                                className="text-[9px] font-bold text-red-500 hover:underline"
+                                                            >
+                                                                Hủy chọn
+                                                            </button>
+                                                            <button 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    const setFn = targetStatus === 'VP' ? setLocalViolationPeriodsMap : (targetStatus === 'KH' ? setLocalRewardPeriodsMap : setLocalMissedPeriodsMap);
+                                                                    setFn(prev => ({ ...prev, [item.student.code]: [] }));
+                                                                    setLastActivePeriod(null);
+                                                                }}
+                                                                className="ml-1 text-[9px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 hover:bg-green-100 flex items-center gap-0.5"
+                                                            >
+                                                                <Plus size={10} /> Tiết
+                                                            </button>
                                                         </div>
                                                     </div>
                                                     <div className="flex flex-wrap gap-1.5">
@@ -704,6 +820,7 @@ export function StudentSelectorDialog({
                                                                     : (localMissedPeriodsMap[item.student.code] || []));
                                                             
                                                             const isActive = periods.includes(p);
+                                                            const isLast = lastActivePeriod === p;
                                                             
                                                             return (
                                                                 <button
@@ -711,20 +828,38 @@ export function StudentSelectorDialog({
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
                                                                         const setFn = targetStatus === 'VP' ? setLocalViolationPeriodsMap : (targetStatus === 'KH' ? setLocalRewardPeriodsMap : setLocalMissedPeriodsMap);
+                                                                        
+                                                                        // TỰ ĐỘNG BẬT TRẠNG THÁI CHÍNH KHI CHỌN TIẾT LẺ
+                                                                        if (targetStatus === 'VP') {
+                                                                            setLocalViolationMap(prev => ({ ...prev, [item.student.code]: true }));
+                                                                        } else if (targetStatus === 'KH') {
+                                                                            setLocalRewardMap(prev => ({ ...prev, [item.student.code]: true }));
+                                                                        } else {
+                                                                            setLocalStatusMap(prev => ({ ...prev, [item.student.code]: targetStatus }));
+                                                                        }
+
                                                                         setFn(prev => {
                                                                             const current = prev[item.student.code] || [];
                                                                             const next = current.includes(p) ? current.filter(x => x !== p) : [...current, p].sort();
+                                                                            if (next.includes(p)) setLastActivePeriod(p);
+                                                                            else if (lastActivePeriod === p) setLastActivePeriod(next[0] || null);
+
+                                                                            // Nếu sau khi bỏ chọn mà không còn tiết nào -> Có thể giữ status hoặc bỏ tùy Sếp, hiện tại em giữ status để Sếp gán ghi chú nếu cần
                                                                             return { ...prev, [item.student.code]: next };
                                                                         });
                                                                     }}
                                                                     className={cn(
-                                                                        "text-[10px] min-w-[32px] px-2 py-1 rounded border transition-colors font-bold",
+                                                                        "text-[10px] min-w-[32px] px-2 py-1 rounded border transition-colors font-bold relative",
                                                                         isActive
                                                                             ? (targetStatus === 'VP' ? 'bg-purple-100 text-purple-700 border-purple-200' : (targetStatus === 'KH' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-blue-100 text-blue-700 border-blue-200'))
-                                                                            : 'bg-white text-gray-400 border-gray-100 hover:bg-gray-50 font-normal outline-none'
+                                                                            : 'bg-white text-gray-400 border-gray-100 hover:bg-gray-50 font-normal outline-none',
+                                                                        isLast && "ring-2 ring-yellow-400 ring-offset-1"
                                                                     )}
                                                                 >
                                                                     T{p}
+                                                                    {isLast && (
+                                                                        <div className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full border border-white" />
+                                                                    )}
                                                                 </button>
                                                             );
                                                         })}
@@ -739,31 +874,53 @@ export function StudentSelectorDialog({
                                                         const entries = Object.entries(currentNotesMap || {}).filter(([p, v]) => v && p !== "0");
                                                         if (entries.length === 0) return null;
 
+                                                        // Nhóm theo ghi chú để gộp dải tiết
+                                                        const notePs: Record<string, number[]> = {};
+                                                        entries.forEach(([p, v]) => {
+                                                            if (!notePs[v]) notePs[v] = [];
+                                                            notePs[v].push(Number(p));
+                                                        });
+
                                                         return (
                                                             <div className="space-y-1 bg-gray-50 p-2 rounded-lg border border-gray-100">
-                                                                {entries.map(([p, v]) => (
-                                                                    <div key={p} className="flex items-center justify-between text-[11px]">
-                                                                        <div className="truncate pr-2">
-                                                                            <span className="font-bold text-blue-600">
-                                                                                {p === "0" ? "Cả buổi:" : `t${p}:`}
-                                                                            </span> {v}
+                                                                {Object.entries(notePs).map(([v, periods]) => {
+                                                                    const sorted = [...periods].sort((a,b) => a - b);
+                                                                    const ranges: string[] = [];
+                                                                    let start = sorted[0], prev = sorted[0];
+                                                                    for (let i = 1; i <= sorted.length; i++) {
+                                                                        if (i < sorted.length && sorted[i] === prev + 1) prev = sorted[i];
+                                                                        else {
+                                                                            if (start === prev) ranges.push(`${start}`);
+                                                                            else ranges.push(`${start}-${prev}`);
+                                                                            if (i < sorted.length) { start = sorted[i]; prev = sorted[i]; }
+                                                                        }
+                                                                    }
+                                                                    const label = `T${ranges.join(',')}:`;
+                                                                    
+                                                                    return (
+                                                                        <div key={v} className="flex items-center justify-between text-[11px]">
+                                                                            <div className="truncate pr-2">
+                                                                                <span className="font-bold text-blue-600">
+                                                                                    {periods.length === 5 ? "Cả buổi:" : label}
+                                                                                </span> {v}
+                                                                            </div>
+                                                                            <button 
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    const setNFn = targetStatus === 'VP' ? setLocalViolationNotesMap : (targetStatus === 'KH' ? setLocalRewardNotesMap : setLocalNotesMap);
+                                                                                    setNFn(prev => {
+                                                                                        const next = { ...(prev[item.student.code] || {}) };
+                                                                                        periods.forEach(p => delete next[p]);
+                                                                                        return { ...prev, [item.student.code]: next };
+                                                                                    });
+                                                                                }}
+                                                                                className="text-red-400 hover:text-red-600"
+                                                                            >
+                                                                                <X size={10} />
+                                                                            </button>
                                                                         </div>
-                                                                        <button 
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                const setNFn = targetStatus === 'VP' ? setLocalViolationNotesMap : (targetStatus === 'KH' ? setLocalRewardNotesMap : setLocalNotesMap);
-                                                                                setNFn(prev => {
-                                                                                    const next = { ...(prev[item.student.code] || {}) };
-                                                                                    delete next[parseInt(p)];
-                                                                                    return { ...prev, [item.student.code]: next };
-                                                                                });
-                                                                            }}
-                                                                            className="text-red-400 hover:text-red-600"
-                                                                        >
-                                                                            <X size={10} />
-                                                                        </button>
-                                                                    </div>
-                                                                ))}
+                                                                    );
+                                                                })}
                                                             </div>
                                                         );
                                                     })()}
@@ -774,7 +931,7 @@ export function StudentSelectorDialog({
                                                             <div key={group.group} className="flex flex-wrap gap-1.5">
                                                                 {group.items.map(suggestion => {
                                                                     const periods = targetStatus === 'VP' ? (localViolationPeriodsMap[item.student.code] || []) : (targetStatus === 'KH' ? (localRewardPeriodsMap[item.student.code] || []) : (localMissedPeriodsMap[item.student.code] || []));
-                                                                    const targetPeriod = periods[0] || 0;
+                                                                    const targetPeriod = lastActivePeriod || (periods.includes(0) ? 0 : (periods[0] || 0));
                                                                     const currentNote = (targetStatus === 'VP' ? (localViolationNotesMap[item.student.code]?.[targetPeriod]) : (targetStatus === 'KH' ? (localRewardNotesMap[item.student.code]?.[targetPeriod]) : (localNotesMap[item.student.code]?.[targetPeriod]))) || '';
                                                                     const isSelected = currentNote.split(', ').includes(suggestion);
 
@@ -783,11 +940,21 @@ export function StudentSelectorDialog({
                                                                             key={suggestion}
                                                                             onClick={(e) => {
                                                                                 e.stopPropagation();
-                                                                                const parts = currentNote.split(', ').filter(Boolean);
-                                                                                let newVal = parts.includes(suggestion) ? parts.filter(p => p !== suggestion).join(', ') : (currentNote ? `${currentNote}, ${suggestion}` : suggestion);
+                                                                                const periods = targetStatus === 'VP' ? (localViolationPeriodsMap[item.student.code] || []) : (targetStatus === 'KH' ? (localRewardPeriodsMap[item.student.code] || []) : (localMissedPeriodsMap[item.student.code] || []));
+                                                                                const targetPeriods = lastActivePeriod ? [lastActivePeriod] : (periods.length > 0 ? periods : [0]);
                                                                                 
                                                                                 const setNFn = targetStatus === 'VP' ? setLocalViolationNotesMap : (targetStatus === 'KH' ? setLocalRewardNotesMap : setLocalNotesMap);
-                                                                                setNFn(prev => ({ ...prev, [item.student.code]: { ...(prev[item.student.code] || {}), [targetPeriod]: newVal } }));
+                                                                                
+                                                                                setNFn(prev => {
+                                                                                    const updated = { ...(prev[item.student.code] || {}) };
+                                                                                    targetPeriods.forEach(p => {
+                                                                                        const currentNote = updated[p] || '';
+                                                                                        const parts = currentNote.split(', ').filter(Boolean);
+                                                                                        const newVal = parts.includes(suggestion) ? parts.filter(pt => pt !== suggestion).join(', ') : (currentNote ? `${currentNote}, ${suggestion}` : suggestion);
+                                                                                        updated[p] = newVal;
+                                                                                    });
+                                                                                    return { ...prev, [item.student.code]: updated };
+                                                                                });
                                                                             }}
                                                                             className={cn(
                                                                                 "text-[10px] px-2 py-1 rounded border transition-colors",
@@ -802,23 +969,39 @@ export function StudentSelectorDialog({
                                                         ))}
 
                                                         {/* Manual Note Input */}
-                                                        <input
-                                                            type="text"
-                                                            placeholder="Ghi chú khác..."
-                                                            value={(() => {
-                                                                const periods = targetStatus === 'VP' ? (localViolationPeriodsMap[item.student.code] || []) : (targetStatus === 'KH' ? (localRewardPeriodsMap[item.student.code] || []) : (localMissedPeriodsMap[item.student.code] || []));
-                                                                const targetPeriod = periods[0] || 0;
-                                                                return (targetStatus === 'VP' ? (localViolationNotesMap[item.student.code]?.[targetPeriod]) : (targetStatus === 'KH' ? (localRewardNotesMap[item.student.code]?.[targetPeriod]) : (localNotesMap[item.student.code]?.[targetPeriod]))) || '';
-                                                            })()}
-                                                            onChange={(e) => {
-                                                                const periods = targetStatus === 'VP' ? (localViolationPeriodsMap[item.student.code] || []) : (targetStatus === 'KH' ? (localRewardPeriodsMap[item.student.code] || []) : (localMissedPeriodsMap[item.student.code] || []));
-                                                                const targetPeriod = periods[0] || 0;
-                                                                const setNFn = targetStatus === 'VP' ? setLocalViolationNotesMap : (targetStatus === 'KH' ? setLocalRewardNotesMap : setLocalNotesMap);
-                                                                setNFn(prev => ({ ...prev, [item.student.code]: { ...(prev[item.student.code] || {}), [targetPeriod]: e.target.value } }));
-                                                            }}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 outline-none"
-                                                        />
+                                                        <div className="relative">
+                                                            {lastActivePeriod !== null && (
+                                                                <div className="absolute -top-3 left-2 px-1 bg-white text-[9px] font-bold text-blue-600 z-10">
+                                                                    Đang sửa Tiết {lastActivePeriod}
+                                                                </div>
+                                                            )}
+                                                            <input
+                                                                type="text"
+                                                                placeholder={lastActivePeriod ? `Ghi chú cho Tiết ${lastActivePeriod}...` : "Ghi chú khác..."}
+                                                                value={(() => {
+                                                                    const periods = targetStatus === 'VP' ? (localViolationPeriodsMap[item.student.code] || []) : (targetStatus === 'KH' ? (localRewardPeriodsMap[item.student.code] || []) : (localMissedPeriodsMap[item.student.code] || []));
+                                                                    const targetPeriod = lastActivePeriod || (periods.includes(0) ? 0 : (periods[0] || 0));
+                                                                    return (targetStatus === 'VP' ? (localViolationNotesMap[item.student.code]?.[targetPeriod]) : (targetStatus === 'KH' ? (localRewardNotesMap[item.student.code]?.[targetPeriod]) : (localNotesMap[item.student.code]?.[targetPeriod]))) || '';
+                                                                })()}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value;
+                                                                    const periods = targetStatus === 'VP' ? (localViolationPeriodsMap[item.student.code] || []) : (targetStatus === 'KH' ? (localRewardPeriodsMap[item.student.code] || []) : (localMissedPeriodsMap[item.student.code] || []));
+                                                                    const targetPeriods = lastActivePeriod ? [lastActivePeriod] : (periods.length > 0 ? periods : [0]);
+                                                                    const setNFn = targetStatus === 'VP' ? setLocalViolationNotesMap : (targetStatus === 'KH' ? setLocalRewardNotesMap : setLocalNotesMap);
+                                                                    
+                                                                    setNFn(prev => {
+                                                                        const updated = { ...(prev[item.student.code] || {}) };
+                                                                        targetPeriods.forEach(p => updated[p] = val);
+                                                                        return { ...prev, [item.student.code]: updated };
+                                                                    });
+                                                                }}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className={cn(
+                                                                    "w-full px-3 py-1.5 text-xs border rounded-lg focus:ring-1 focus:ring-blue-500 outline-none",
+                                                                    lastActivePeriod ? "border-blue-400 bg-blue-50/30" : "border-gray-200"
+                                                                )}
+                                                            />
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -831,8 +1014,8 @@ export function StudentSelectorDialog({
                 </div>
 
 
-                <div className="pt-4 pb-20 sm:pb-4 border-t flex items-center justify-between bg-white shrink-0 shadow-[0_-15px_15px_-15px_rgba(0,0,0,0.1)] z-20 sticky bottom-0">
-                    <div className="text-sm font-bold text-gray-500">
+                <div className="mt-auto pt-4 border-t border-gray-100 flex items-center justify-between shrink-0">
+                    <div className="text-xs font-bold text-gray-500">
                         Đã chọn: <span className="text-blue-600">
                             {students.filter(item => {
                                 const currentStatus = localStatusMap[item.student.code];
@@ -844,20 +1027,27 @@ export function StudentSelectorDialog({
                             }).length}
                         </span> em
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-3 px-2">
                         <button
                             onClick={() => onOpenChange(false)}
-                            className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 font-medium text-gray-700"
+                            className="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-colors"
                         >
                             Hủy
                         </button>
                         <button
                             onClick={handleSave}
-                            disabled={isSaving || loading}
-                            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md flex items-center gap-2 disabled:opacity-50"
+                            disabled={isSaving}
+                            className={cn(
+                                "px-6 py-2 text-sm font-black rounded-xl shadow-lg transition-all flex items-center gap-2",
+                                isSaving ? "bg-gray-400 cursor-not-allowed" : theme.bg + " text-white hover:scale-105 active:scale-95"
+                            )}
                         >
-                            {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                            Lưu Thay Đổi
+                            {isSaving ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <Save className="w-4 h-4" />
+                            )}
+                            LƯU THAY ĐỔI
                         </button>
                     </div>
                 </div>

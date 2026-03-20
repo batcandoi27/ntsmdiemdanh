@@ -92,13 +92,16 @@ function resolveDailyStatus(rawItems: any[]) {
             const item = board[sess][p];
             if (item) {
                 const type = item.base;
-                const note = item.note || ''; // Key is the note text
+                const noteText = item.note || ''; 
+                // Xóa tiền tố T cũ nếu có để gộp chính xác
+                const cleanNote = noteText.replace(/^T\d+[0-9,-]*:\s*/, '');
+                
                 if (!groupByType[type]) groupByType[type] = {};
-                if (!groupByType[type][note]) {
-                    groupByType[type][note] = { sessions: new Set(), periodsBySession: { 'S': new Set(), 'C': new Set() } };
+                if (!groupByType[type][cleanNote]) {
+                    groupByType[type][cleanNote] = { sessions: new Set(), periodsBySession: { 'S': new Set(), 'C': new Set() } };
                 }
-                groupByType[type][note].sessions.add(sess);
-                groupByType[type][note].periodsBySession[sess].add(p);
+                groupByType[type][cleanNote].sessions.add(sess);
+                groupByType[type][cleanNote].periodsBySession[sess].add(p);
             }
         }
     });
@@ -192,7 +195,25 @@ function resolveDailyStatus(rawItems: any[]) {
             }
             
             if (note) {
-                segmentStrings.push(`${periodPart} [${note}]`);
+                // Xây dựng tiền tố T gộp (ví dụ: T1-3) cho nhãn ghi chú
+                const sPs = Array.from(info.periodsBySession['S']);
+                const cPs = Array.from(info.periodsBySession['C']);
+                const allPs = Array.from(new Set([...sPs, ...cPs])).sort();
+                let prefix = "";
+                if (allPs.length > 0 && allPs.length < 5) {
+                    const ranges: string[] = [];
+                    let start = allPs[0], prev = allPs[0];
+                    for (let i = 1; i <= allPs.length; i++) {
+                        if (i < allPs.length && allPs[i] === prev + 1) prev = allPs[i];
+                        else {
+                            if (start === prev) ranges.push(`${start}`);
+                            else ranges.push(`${start}-${prev}`);
+                            if (i < allPs.length) { start = allPs[i]; prev = allPs[i]; }
+                        }
+                    }
+                    prefix = `T${ranges.join(',')}: `;
+                }
+                segmentStrings.push(`${periodPart} [${prefix}${note}]`);
             } else {
                 segmentStrings.push(periodPart);
             }
@@ -574,8 +595,8 @@ export async function getExcelExportData(
         }
     }
 
-    // Sort by class name
-    result.sort((a, b) => a.className.localeCompare(b.className));
+    // Sort by class name naturally (e.g. 6A1, 6A2, 6A10)
+    result.sort((a, b) => a.className.localeCompare(b.className, undefined, { numeric: true }));
     return result;
 }
 

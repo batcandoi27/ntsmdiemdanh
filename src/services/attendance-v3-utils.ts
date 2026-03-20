@@ -8,16 +8,33 @@ export function normalizeAttendanceRecord(record: any): AttendanceRecordV3 {
     if (!record) return record;
     const normalized = { ...record };
 
-    // Fallback cho dữ liệu cũ (period: null và không có missedPeriods)
-    if (normalized.period === null && !normalized.missedPeriods) {
-        if (['absent', 'late', 'excused', 'K', 'T', 'P'].includes(normalized.status)) {
-            normalized.missedPeriods = [1, 2, 3, 4, 5];
+    // Fallback cho dữ liệu (missedPeriods)
+    if (!normalized.missedPeriods) {
+        if (normalized.period === null) {
+            if (['absent', 'late', 'excused', 'K', 'T', 'P'].includes(normalized.status)) {
+                normalized.missedPeriods = [1, 2, 3, 4, 5];
+            }
+        } else if (typeof normalized.period === 'number') {
+            normalized.missedPeriods = [normalized.period];
         }
     }
 
-    // Fallback cho Violation cũ
+    // Fallback cho Violation
     if (normalized.violation === true && !normalized.violationPeriods) {
-        normalized.violationPeriods = [1, 2, 3, 4, 5];
+        if (normalized.period === null) {
+            normalized.violationPeriods = [1, 2, 3, 4, 5];
+        } else if (typeof normalized.period === 'number') {
+            normalized.violationPeriods = [normalized.period];
+        }
+    }
+    
+    // Fallback cho Reward
+    if (normalized.reward === true && !normalized.rewardPeriods) {
+        if (normalized.period === null) {
+            normalized.rewardPeriods = [1, 2, 3, 4, 5];
+        } else if (typeof normalized.period === 'number') {
+            normalized.rewardPeriods = [normalized.period];
+        }
     }
 
     // Map praise sang reward

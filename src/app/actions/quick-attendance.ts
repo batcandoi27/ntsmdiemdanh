@@ -145,39 +145,73 @@ export async function getGradeAttendanceSummary(grade: number, dateStr: string, 
                     reward: false
                 };
 
+                const periodNotes: Record<number, string> = {};
+
                 records.forEach(r => {
                     // Chuyên cần
                     if (['excused', 'absent', 'late', 'absent_unknown', 'P', 'K', 'T', 'V'].includes(r.status)) {
                         aggregated.status = r.status;
-                        aggregated.note = r.note || aggregated.note;
+                        const pKey = r.period || 0;
+                        if (r.note) periodNotes[pKey] = r.note;
                         if (r.period) aggregated.missedPeriods.push(r.period);
                         else if (r.period === null) aggregated.missedPeriods = [1, 2, 3, 4, 5];
                     }
                     // Vi phạm
                     if (r.violation || r.status === 'violation' || r.status === 'VP') {
                         aggregated.violation = true;
-                        aggregated.violationNote = r.violationNote || r.note || aggregated.violationNote;
+                        const pKey = r.period || 0;
+                        if (r.violationNote || r.note) periodNotes[pKey] = r.violationNote || r.note;
                         if (r.period) aggregated.violationPeriods.push(r.period);
                         else if (r.period === null) aggregated.violationPeriods = [1, 2, 3, 4, 5];
                     }
                     // Khen thưởng
                     if (r.reward || r.status === 'reward' || r.status === 'praise' || r.status === 'KH') {
                         aggregated.reward = true;
-                        aggregated.rewardNote = r.rewardNote || r.note || aggregated.rewardNote;
+                        const pKey = r.period || 0;
+                        if (r.rewardNote || r.note) periodNotes[pKey] = r.rewardNote || r.note;
                         if (r.period) aggregated.rewardPeriods = Array.from(new Set([...(aggregated.rewardPeriods || []), r.period])).sort();
                         else if (r.period === null) aggregated.rewardPeriods = [1, 2, 3, 4, 5];
                     }
                 });
+
+                // Nhóm theo ghi chú để gộp tiết (T1-2: A, T4: B)
+                const noteToPs: Record<string, number[]> = {};
+                Object.entries(periodNotes).forEach(([p, v]) => {
+                    if (v) {
+                        if (!noteToPs[v]) noteToPs[v] = [];
+                        noteToPs[v].push(Number(p));
+                    }
+                });
+
+                const resultParts: string[] = [];
+                Object.entries(noteToPs).forEach(([noteText, periods]) => {
+                    if (periods.includes(0)) { resultParts.push(noteText); return; }
+                    const sorted = [...periods].sort((a, b) => a - b);
+                    const ranges: string[] = [];
+                    let start = sorted[0], prev = sorted[0];
+                    for (let i = 1; i <= sorted.length; i++) {
+                        if (i < sorted.length && sorted[i] === prev + 1) prev = sorted[i];
+                        else {
+                            if (start === prev) ranges.push(`${start}`);
+                            else ranges.push(`${start}-${prev}`);
+                            if (i < sorted.length) { start = sorted[i]; prev = sorted[i]; }
+                        }
+                    }
+                    resultParts.push(`T${ranges.join(',')}: ${noteText}`);
+                });
+
+                aggregated.note = resultParts.join(", ");
+                aggregated.violationNote = aggregated.note;
+                aggregated.rewardNote = aggregated.note;
                 
                 // Chuẩn hóa mảng tiết
                 aggregated.missedPeriods = Array.from(new Set(aggregated.missedPeriods)).sort();
                 aggregated.violationPeriods = Array.from(new Set(aggregated.violationPeriods)).sort();
                 aggregated.rewardPeriods = Array.from(new Set(aggregated.rewardPeriods || [])).sort();
 
-                // Tạo Suffix hiển thị tiết lẻ
+                // Tạo Suffix hiển thị tiết lẻ: Chỉ hiện nếu KHÔNG có ghi chú tiết lẻ để đỡ rối
                 const getSuffix = (pArr: number[]) => {
-                    // Nếu vắng >= 5 tiết (hoặc đủ 5 tiết 1,2,3,4,5) thì coi như toàn buổi -> KHÔNG HIỆN
-                    if (pArr.length >= 5 || pArr.length === 0) return "";
+                    if (pArr.length >= 5 || pArr.length === 0 || aggregated.note.includes("T")) return "";
                     return ` (T${pArr.join(',')})`;
                 };
 
@@ -450,13 +484,46 @@ export async function getClassesAttendanceSummary(classIds: string[], dateStr: s
                 aggregated.missedPeriods = Array.from(new Set(aggregated.missedPeriods)).sort();
                 aggregated.violationPeriods = Array.from(new Set(aggregated.violationPeriods)).sort();
 
-                const getSuffix = (pArr: number[]) => (pArr.length > 0 && pArr.length < 5) ? ` (T${pArr.join(',')})` : "";
+                // Rebuild note for summary
+                const pNotes: Record<number, string> = {};
+                records.forEach(r => {
+                    const pk = r.period || 0;
+                    const nt = r.violationNote || r.rewardNote || r.note || "";
+                    if (nt) pNotes[pk] = nt;
+                });
+                
+                const notePs: Record<string, number[]> = {};
+                Object.entries(pNotes).forEach(([p, v]) => {
+                    if (v) {
+                        if (!notePs[v]) notePs[v] = [];
+                        notePs[v].push(Number(p));
+                    }
+                });
 
-                // 1. Chuyên cần chính
+                const combinedNoteParts: string[] = [];
+                Object.entries(notePs).forEach(([noteText, periods]) => {
+                    if (periods.includes(0)) { combinedNoteParts.push(noteText); return; }
+                    const sorted = [...periods].sort((a,b) => a - b);
+                    const ranges: string[] = [];
+                    let start = sorted[0], prev = sorted[0];
+                    for (let i = 1; i <= sorted.length; i++) {
+                        if (i < sorted.length && sorted[i] === prev + 1) prev = sorted[i];
+                        else {
+                            if (start === prev) ranges.push(`${start}`);
+                            else ranges.push(`${start}-${prev}`);
+                            if (i < sorted.length) { start = sorted[i]; prev = sorted[i]; }
+                        }
+                    }
+                    combinedNoteParts.push(`T${ranges.join(',')}: ${noteText}`);
+                });
+                
+                let combinedNote = combinedNoteParts.join(", ");
+                const getSuffix = (pArr: number[]) => (pArr.length > 0 && pArr.length < 5 && !combinedNote.includes("T")) ? ` (T${pArr.join(',')})` : "";
+
                 if (aggregated.status) {
                     const status = aggregated.status;
                     const suffix = getSuffix(aggregated.missedPeriods);
-                    const itemWithSuffix = { ...item, name: item.name + suffix, note: aggregated.note };
+                    const itemWithSuffix = { ...item, name: item.name + suffix, note: combinedNote };
                     if (status === 'excused' || status === 'P') { counts.P++; lists.P.push(itemWithSuffix); }
                     else if (status === 'absent' || status === 'K') { counts.K++; lists.K.push(itemWithSuffix); }
                     else if (status === 'late' || status === 'T') { counts.T++; lists.T.push(itemWithSuffix); }

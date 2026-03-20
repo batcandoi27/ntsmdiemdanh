@@ -155,6 +155,7 @@ function SwipeableStudentRow({
                                 ) : (
                                     <span className="text-[10px] font-bold text-gray-500">
                                         {status === 'P' ? 'Có phép' : status === 'K' ? 'Không phép' : status === 'V' ? 'Vắng?' : 'Đi trễ'}
+                                        {violationNote && <span className="font-normal opacity-70 ml-1">({violationNote})</span>}
                                     </span>
                                 )}
                             </div>
@@ -312,7 +313,13 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
 
                 // 2. Get Existing Attendance (V3 API)
                 const allRecords = await getClassAttendance(classId, date, session);
-                const records = allRecords.filter(r => r.period === period);
+                
+                // Nếu đang ở mode Cả Buổi (period === null), ta lấy tất cả records để gộp icon
+                // Nếu đang ở mode Tiết cụ thể, ta mới lọc đúng tiết đó.
+                const records = (period === null || period === 0) 
+                    ? allRecords 
+                    : allRecords.filter(r => r.period === period);
+
                 const attMap: Record<string, AttendanceStatus> = {};
                 const noteMap: Record<string, Record<number, string>> = {};
                 const lateMap: Record<string, number[]> = {};
@@ -338,8 +345,17 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                         if (r.note) noteMap[r.studentId][pKey] = r.note;
                         if (r.violation && r.violationNote) noteMap[r.studentId][pKey] = r.violationNote;
                         
-                        if (attMap[r.studentId] === 'T' && r.missedPeriods) {
-                            lateMap[r.studentId] = r.missedPeriods;
+                        if (attMap[r.studentId] === 'T' && r.period) {
+                            const current = lateMap[r.studentId] || [];
+                            if (!current.includes(r.period)) {
+                                lateMap[r.studentId] = [...current, r.period].sort();
+                            }
+                        } else if (r.period) {
+                            // Gộp cho cả P, K, V nếu có tiết lẻ
+                            const current = lateMap[r.studentId] || [];
+                            if (!current.includes(r.period)) {
+                                lateMap[r.studentId] = [...current, r.period].sort();
+                            }
                         }
                     }
                 });
@@ -743,8 +759,30 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                     const status = attendance[hs.code] || '';
                     const studentNotes = notes[hs.code] || {};
                     // Display note for currently selected periods, or first available
-                    const selected = latePeriods[hs.code] || [0];
-                    const violationNote = selected.map(p => studentNotes[p]).find(n => !!n) || Object.values(studentNotes)[0];
+                    const selected = latePeriods[hs.code] || [];
+                    const notePs: Record<string, number[]> = {};
+                    Object.entries(studentNotes).forEach(([p, v]) => {
+                        if (v) {
+                            if (!notePs[v]) notePs[v] = [];
+                            notePs[v].push(Number(p));
+                        }
+                    });
+
+                    const violationNote = Object.entries(notePs).map(([noteText, periods]) => {
+                        if (periods.includes(0)) return noteText;
+                        const sorted = [...periods].sort((a, b) => a - b);
+                        const ranges: string[] = [];
+                        let start = sorted[0], prev = sorted[0];
+                        for (let i = 1; i <= sorted.length; i++) {
+                            if (i < sorted.length && sorted[i] === prev + 1) prev = sorted[i];
+                            else {
+                                if (start === prev) ranges.push(`${start}`);
+                                else ranges.push(`${start}-${prev}`);
+                                if (i < sorted.length) { start = sorted[i]; prev = sorted[i]; }
+                            }
+                        }
+                        return `T${ranges.join(',')}: ${noteText}`;
+                    }).join(", ");
                     const isLeave = getEffectiveStatus(hs) === 'temporary_leave';
 
                     return (

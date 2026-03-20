@@ -376,9 +376,9 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
 
                                                             {student.notes && (
                                                                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/student:block z-[100] pointer-events-none animate-in fade-in slide-in-from-bottom-1 duration-200">
-                                                                    <div className="bg-gray-900 border border-gray-700 px-2 py-1.5 rounded-lg shadow-2xl z-[100] max-w-xs break-words text-center relative leading-tight">
-                                                                        <span className="text-sky-400 font-bold block mb-1">Ghi chú:</span>
-                                                                        <span className="text-white text-[11px]">{student.notes}</span>
+                                                                    <div className="bg-gray-900 border border-gray-700 px-3 py-2 rounded-lg shadow-2xl z-[100] max-w-xs whitespace-pre-wrap text-left relative leading-snug">
+                                                                        <span className="text-sky-400 font-bold block mb-1 border-b border-gray-700 pb-1">Ghi chú chi tiết:</span>
+                                                                        <span className="text-white text-[11px] font-medium">{student.notes.replace(/; /g, '\n')}</span>
                                                                         <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 -mt-1 border-r border-b border-gray-700"></div>
                                                                     </div>
                                                                 </div>

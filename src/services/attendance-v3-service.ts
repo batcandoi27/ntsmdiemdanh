@@ -321,8 +321,13 @@ export async function batchMarkAttendance(
                 });
 
                 const getNoteForPeriod = (p: number | null, mainNote?: string, notesMap?: Record<number, string>) => {
-                    if (notesMap && p !== null && notesMap[p]) return notesMap[p];
-                    if (notesMap && notesMap[0]) return notesMap[0];
+                    if (notesMap && p !== null) {
+                        const note = (notesMap as any)[p] || (notesMap as any)[String(p)];
+                        if (note) return note;
+                    }
+                    if (notesMap && (notesMap[0] || (notesMap as any)["0"])) {
+                        return notesMap[0] || (notesMap as any)["0"];
+                    }
                     return mainNote || '';
                 };
 
@@ -339,7 +344,7 @@ export async function batchMarkAttendance(
                     studentsToResetAttendance.push(sId);
                     const stData = statusCodeMap.get(statusCode);
                     if (stData) {
-                        const periods = (m.missedPeriods && m.missedPeriods.length > 0) ? m.missedPeriods : [1, 2, 3, 4, 5];
+                        const periods = (m.missedPeriods && m.missedPeriods.length > 0) ? m.missedPeriods : [null as any];
                         periods.forEach(p => {
                             inserts.push(createLine(p, stData.id, stData.type_id, getNoteForPeriod(p, m.note, m.statusNotes)));
                         });
@@ -351,7 +356,7 @@ export async function batchMarkAttendance(
                     studentsToResetViolation.push(sId);
                     const vpData = statusCodeMap.get('VP');
                     if (vpData) {
-                        const vpPeriods = (m.violationPeriods && m.violationPeriods.length > 0) ? m.violationPeriods : [1, 2, 3, 4, 5];
+                        const vpPeriods = (m.violationPeriods && m.violationPeriods.length > 0) ? m.violationPeriods : [null as any];
                         vpPeriods.forEach(p => inserts.push(createLine(p, vpData.id, vpData.type_id, getNoteForPeriod(p, m.violationNote, m.violationNotes))));
                     }
                 } else {
@@ -363,7 +368,7 @@ export async function batchMarkAttendance(
                     studentsToResetReward.push(sId);
                     const khData = statusCodeMap.get('KH');
                     if (khData) {
-                        const khPeriods = (m.rewardPeriods && m.rewardPeriods.length > 0) ? m.rewardPeriods : [1, 2, 3, 4, 5];
+                        const khPeriods = (m.rewardPeriods && m.rewardPeriods.length > 0) ? m.rewardPeriods : [null as any];
                         khPeriods.forEach(p => inserts.push(createLine(p, khData.id, khData.type_id, getNoteForPeriod(p, m.rewardNote, m.rewardNotes))));
                     }
                 } else {
