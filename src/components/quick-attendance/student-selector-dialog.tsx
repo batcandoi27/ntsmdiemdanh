@@ -297,7 +297,7 @@ export function StudentSelectorDialog({
                 const formatNotes = (nMap: Record<number, string>) => {
                     const entries = Object.entries(nMap).filter(([_, v]) => v);
                     if (entries.length === 0) return "";
-                    return entries.map(([p, v]) => p === "0" ? `[Cả buổi] ${v}` : `T${p}: ${v}`).join(", ");
+                    return entries.map(([p, v]) => p === "0" ? v : `T${p}: ${v}`).join(", ");
                 };
 
                 marks.push({

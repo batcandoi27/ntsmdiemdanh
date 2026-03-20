@@ -202,7 +202,7 @@ function SwipeableStudentRow({
                 {status !== '' && status !== 'C' && (
                     <div className="mt-3 pt-3 border-t border-blue-50 relative animate-in slide-in-from-top-2 duration-200">
                         <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-white px-2 text-[10px] text-gray-500 font-medium whitespace-nowrap">
-                            Đánh dấu tiết học <span className="text-gray-400 font-normal">({(!latePeriods || latePeriods.length === 0) ? "Đang chọn: Trọn cả buổi" : "Đã chọn một số tiết lẻ"})</span>
+                            Đánh dấu tiết học <span className="text-gray-400 font-normal">({(!latePeriods || latePeriods.length === 0) ? "Mặc định: Cả buổi" : "Đã chọn một số tiết lẻ"})</span>
                         </div>
                         <div className="flex gap-2 justify-between mt-1 px-1">
                             {[1, 2, 3, 4, 5].map(p => {
