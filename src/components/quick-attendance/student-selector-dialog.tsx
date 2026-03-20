@@ -123,7 +123,17 @@ export function StudentSelectorDialog({
             setLoading(true);
             getClassAttendanceDetails(classId, date, session)
                 .then(data => {
-                    setStudents(data);
+                    // Sắp xếp học sinh theo mã (phần số sau dấu gạch dưới)
+                    const sortedData = [...data].sort((a, b) => {
+                        const codeA = a.student.code || '';
+                        const codeB = b.student.code || '';
+                        const numA = parseInt(codeA.split('_').pop() || '0');
+                        const numB = parseInt(codeB.split('_').pop() || '0');
+                        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+                        return codeA.localeCompare(codeB, undefined, { numeric: true });
+                    });
+
+                    setStudents(sortedData);
                     // Initialize local maps
                     const statusMap: Record<string, AttendanceStatus> = {};
                     const violationMap: Record<string, boolean> = {};
@@ -135,7 +145,7 @@ export function StudentSelectorDialog({
                     const vNoteMap: Record<string, Record<number, string>> = {};
                     const rNoteMap: Record<string, Record<number, string>> = {};
 
-                    data.forEach(s => {
+                    sortedData.forEach(s => {
                         const code = s.student.code;
                         statusMap[code] = s.status || '';
                         violationMap[code] = !!s.violation;
@@ -297,6 +307,13 @@ export function StudentSelectorDialog({
                 const formatNotes = (nMap: Record<number, string>) => {
                     const entries = Object.entries(nMap).filter(([_, v]) => v);
                     if (entries.length === 0) return "";
+                    
+                    // Nếu tất cả các tiết lẻ có cùng nội dung ghi chú -> Chỉ hiện nội dung đó (gọn)
+                    const uniqueNotes = Array.from(new Set(entries.map(([_, v]) => v)));
+                    if (uniqueNotes.length === 1 && entries.length > 1) {
+                        return uniqueNotes[0];
+                    }
+
                     return entries.map(([p, v]) => p === "0" ? v : `T${p}: ${v}`).join(", ");
                 };
 
@@ -306,11 +323,14 @@ export function StudentSelectorDialog({
                     status: v3Status,
                     missedPeriods,
                     note: v3Status !== 'present' ? formatNotes(localNotesMap[code] || {}) : '',
+                    statusNotes: localNotesMap[code],
                     violation: hasViolation || false,
                     violationNote: formatNotes(localViolationNotesMap[code] || {}),
+                    violationNotes: localViolationNotesMap[code],
                     violationPeriods: hasViolation ? (localViolationPeriodsMap[code] || []) : undefined,
                     reward: hasReward || false,
                     rewardNote: formatNotes(localRewardNotesMap[code] || {}),
+                    rewardNotes: localRewardNotesMap[code],
                     // @ts-ignore
                     rewardPeriods: hasReward ? (localRewardPeriodsMap[code] || []) : undefined
                 });

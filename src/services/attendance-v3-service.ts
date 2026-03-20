@@ -79,6 +79,9 @@ export interface BatchMarkInput {
         reward?: boolean;
         rewardNote?: string;
         rewardPeriods?: number[];
+        statusNotes?: Record<number, string>;
+        violationNotes?: Record<number, string>;
+        rewardNotes?: Record<number, string>;
     }[];
 }
 
@@ -293,9 +296,13 @@ export async function batchMarkAttendance(
 
             // 1. CHUẨN BỊ DỮ LIỆU INSERT & DANH SÁCH CẦN XÓA
             const inserts: any[] = [];
-            const studentsToClearAttendance: string[] = [];
-            const studentsToClearViolation: string[] = [];
-            const studentsToClearReward: string[] = [];
+            const studentsToResetAttendance: string[] = [];
+            const studentsToResetViolation: string[] = [];
+            const studentsToResetReward: string[] = [];
+
+            const dailyTypeId = statusCodeMap.get('K')?.type_id || statusCodeMap.get('P')?.type_id || statusCodeMap.get('T')?.type_id;
+            const violationTypeId = statusCodeMap.get('VP')?.type_id;
+            const rewardTypeId = statusCodeMap.get('KH')?.type_id;
 
             input.marks.forEach(m => {
                 const sId = codeToIdMap.get(m.studentId);
@@ -313,6 +320,12 @@ export async function batchMarkAttendance(
                     marked_by: user.uid || (user as any).id || 'system'
                 });
 
+                const getNoteForPeriod = (p: number | null, mainNote?: string, notesMap?: Record<number, string>) => {
+                    if (notesMap && p !== null && notesMap[p]) return notesMap[p];
+                    if (notesMap && notesMap[0]) return notesMap[0];
+                    return mainNote || '';
+                };
+
                 // --- A. XỬ LÝ CHUYÊN CẦN ---
                 let statusCode = m.status as string;
                 if (statusCode === 'absent') statusCode = 'K';
@@ -321,86 +334,78 @@ export async function batchMarkAttendance(
                 else if (statusCode === 'present') statusCode = 'C';
 
                 if (['C', 'present', ''].includes(statusCode)) {
-                    studentsToClearAttendance.push(sId);
+                    studentsToResetAttendance.push(sId);
                 } else {
+                    studentsToResetAttendance.push(sId);
                     const stData = statusCodeMap.get(statusCode);
                     if (stData) {
                         const periods = (m.missedPeriods && m.missedPeriods.length > 0) ? m.missedPeriods : [1, 2, 3, 4, 5];
                         periods.forEach(p => {
-                            inserts.push(createLine(p, stData.id, stData.type_id, m.note));
+                            inserts.push(createLine(p, stData.id, stData.type_id, getNoteForPeriod(p, m.note, m.statusNotes)));
                         });
-                        // Đặc biệt: Nếu chỉ chọn 1 số tiết, ta cũng nên xóa các tiết còn lại? 
-                        // Nhưng để an toàn trong lúc khẩn cấp này, ta ưu tiên INSERT thành công đã.
                     }
                 }
 
                 // --- B. XỬ LÝ VI PHẠM ---
                 if (m.violation) {
+                    studentsToResetViolation.push(sId);
                     const vpData = statusCodeMap.get('VP');
                     if (vpData) {
                         const vpPeriods = (m.violationPeriods && m.violationPeriods.length > 0) ? m.violationPeriods : [1, 2, 3, 4, 5];
-                        vpPeriods.forEach(p => inserts.push(createLine(p, vpData.id, vpData.type_id, m.violationNote)));
+                        vpPeriods.forEach(p => inserts.push(createLine(p, vpData.id, vpData.type_id, getNoteForPeriod(p, m.violationNote, m.violationNotes))));
                     }
                 } else {
-                    studentsToClearViolation.push(sId);
+                    studentsToResetViolation.push(sId);
                 }
 
                 // --- C. XỬ LÝ KHEN THƯỞNG ---
                 if (m.reward) {
+                    studentsToResetReward.push(sId);
                     const khData = statusCodeMap.get('KH');
                     if (khData) {
                         const khPeriods = (m.rewardPeriods && m.rewardPeriods.length > 0) ? m.rewardPeriods : [1, 2, 3, 4, 5];
-                        khPeriods.forEach(p => inserts.push(createLine(p, khData.id, khData.type_id, m.rewardNote)));
+                        khPeriods.forEach(p => inserts.push(createLine(p, khData.id, khData.type_id, getNoteForPeriod(p, m.rewardNote, m.rewardNotes))));
                     }
                 } else {
-                    studentsToClearReward.push(sId);
+                    studentsToResetReward.push(sId);
                 }
             });
 
-            // 2. THỰC THI UPSERT (Thêm/Sửa)
-            if (inserts.length > 0) {
-                console.log('DEBUG: Upserting', inserts.length, 'records');
-                const { error: upsertError } = await dbClient.from('attendance').upsert(inserts as any, { 
-                    onConflict: 'student_id, type_id, date, period, session' 
-                });
-                if (upsertError) {
-                    console.error('Supabase Upsert Error:', upsertError);
-                    // NẾU LỖI vì chưa chạy script SQL, ta thông báo rõ
-                    if (upsertError.message.includes('attendance_upsert_key')) {
-                        throw new Error(`Cậu chưa chạy Script SQL bảo trì DB rồi! Vui lòng copy code trong file fix_constraint.sql và chạy trong Supabase SQL Editor nhé.`);
-                    }
-                    throw new Error(`Lỗi PostgreSQL: ${upsertError.message}`);
-                }
-            }
-
-            // 3. THỰC THI XÓA (Chỉ chạy khi người dùng bỏ tick)
-            const dailyTypeId = statusCodeMap.get('K')?.type_id;
-            const violationTypeId = statusCodeMap.get('VP')?.type_id;
-            const rewardTypeId = statusCodeMap.get('KH')?.type_id;
-
-            if (studentsToClearAttendance.length > 0 && dailyTypeId) {
+            // 2. THỰC THI XÓA (Reset danh sách cũ để ghi mới)
+            if (studentsToResetAttendance.length > 0 && dailyTypeId) {
                 await dbClient.from('attendance').delete()
-                    .in('student_id', studentsToClearAttendance)
+                    .in('student_id', studentsToResetAttendance)
                     .eq('type_id', dailyTypeId)
                     .eq('date', dateKey)
                     .eq('session', input.session);
             }
-            if (studentsToClearViolation.length > 0 && violationTypeId) {
+            if (studentsToResetViolation.length > 0 && violationTypeId) {
                 await dbClient.from('attendance').delete()
-                    .in('student_id', studentsToClearViolation)
+                    .in('student_id', studentsToResetViolation)
                     .eq('type_id', violationTypeId)
                     .eq('date', dateKey)
                     .eq('session', input.session);
             }
-            if (studentsToClearReward.length > 0 && rewardTypeId) {
+            if (studentsToResetReward.length > 0 && rewardTypeId) {
                 await dbClient.from('attendance').delete()
-                    .in('student_id', studentsToClearReward)
+                    .in('student_id', studentsToResetReward)
                     .eq('type_id', rewardTypeId)
                     .eq('date', dateKey)
                     .eq('session', input.session);
             }
 
-            return { written: inserts.length, deleted: studentsToClearAttendance.length + studentsToClearViolation.length + studentsToClearReward.length };
+            // 3. THỰC THI UPSERT (Thêm mới)
+            if (inserts.length > 0) {
+                const { error: upsertError } = await dbClient.from('attendance').upsert(inserts as any, { 
+                    onConflict: 'student_id, type_id, date, period, session' 
+                });
+                if (upsertError) {
+                    console.error('Supabase Upsert Error:', upsertError);
+                    throw new Error(`Lỗi PostgreSQL: ${upsertError.message}`);
+                }
+            }
+
+            return { written: inserts.length, deleted: studentsToResetAttendance.length };
         } catch (err) {
             console.error('Lỗi nghiêm trọng trong batchMarkAttendance (Supabase):', err);
             throw err;
