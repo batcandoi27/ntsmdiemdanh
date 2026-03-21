@@ -87,6 +87,16 @@ const STATUS_TEXT_COLORS: Record<string, string> = {
     KH: '9A3412'   // Cam đất
 };
 
+// --- Helpers: Mã băm & Nhận diện ---
+/**
+ * Trích xuất mã gốc (P, K, T, VP, KH) từ các nhãn phức tạp (ví dụ: Ks, Ps, VPc1-5, T(S))
+ */
+const getBaseCode = (label: string): string => {
+    if (!label) return '';
+    const match = label.trim().match(/^([A-Z]+)/);
+    return match ? match[1] : label.split('(')[0].trim();
+};
+
 
 // --- Main Export Function ---
 
@@ -209,7 +219,14 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
             const cell = sheet.getRow(headerRowIdx).getCell(colIdx);
             cell.value = h.label;
             sheet.mergeCells(headerRowIdx, colIdx, subHeaderRowIdx, colIdx);
-            setHeaderStyle(cell, 'FEF3C7'); // Light Yellow
+            
+            // Màu sắc đồng bộ Web Grid
+            const bgColor = STATUS_COLORS[h.id] || 'FEF3C7';
+            setHeaderStyle(cell, bgColor);
+            if (STATUS_TEXT_COLORS[h.id]) {
+                cell.font = { ...cell.font, color: { argb: `FF${STATUS_TEXT_COLORS[h.id]}` } };
+            }
+
             sheet.getColumn(colIdx).width = 5;
             colIdx++;
         });
@@ -229,7 +246,7 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
             // Kiểm tra xem có bất kỳ lỗi nào NẰM TRONG visibleColumns không
             return Object.values(s.absences).some(raw => {
                 const parts = raw.split(';').map(p => p.trim());
-                return parts.some(p => visibleColumns.includes(p.split('(')[0].trim()));
+                return parts.some(p => visibleColumns.includes(getBaseCode(p)));
             });
         });
 
@@ -243,12 +260,19 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
         const titleCell = sheet.getCell('A5');
         const activeSTTLabel = ['P', 'K', 'T', 'VP', 'KH'].filter(id => visibleColumns.includes(id)).join('/');
         
+        const vCount = classData.students.reduce((acc, s) => {
+            const subTotal = Object.values(s.absences).filter(v => 
+                v && (v.toUpperCase().startsWith('P') || v.toUpperCase().startsWith('K'))
+            ).length;
+            return acc + subTotal;
+        }, 0);
+        
         sheet.mergeCells(`A5:${lastColChar}5`);
         titleCell.value = {
             richText: [
                 { text: `| LỚP ${classData.className} \t`, font: { bold: true, size: 12, name: 'Times New Roman', color: { argb: 'FF059669' } } },
                 { text: `(Sĩ số: ${totalStudents}, `, font: { italic: true, size: 11, name: 'Times New Roman', color: { argb: 'FF1E3A8A' } } }, // Blue
-                { text: `Số HS ${activeSTTLabel}: ${studentsToDisplay.length})`, font: { bold: true, italic: true, size: 11, name: 'Times New Roman', color: { argb: 'FFEF4444' } } } // Red
+                { text: `Tổng lượt Vắng (P/K): ${vCount})`, font: { bold: true, italic: true, size: 11, name: 'Times New Roman', color: { argb: 'FFEF4444' } } } // Red
             ]
         };
         titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } }; // Light Green BG
@@ -286,25 +310,25 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
                     .map(st => st.trim())
                     .filter(Boolean)
                     .filter(st => {
-                        const baseCode = st.split('(')[0].trim(); // Trích xuất P/K/T/VP/KH
+                        const baseCode = getBaseCode(st); // Trích xuất P/K/T/VP/KH
                         return visibleColumns.includes(baseCode);
                     });
                     
                 // Tách mã gốc để hiển thị trong ô, chi tiết đưa vào Comment
                 // Tách mã gốc để hiển thị trong ô, chi tiết đưa vào Comment
-                const displayStatus = statuses.map(st => st.split('(')[0].trim()).join('; ');
+                const displayStatus = statuses.map(st => getBaseCode(st)).join('; ');
                 const fullDetails = statuses.join('\n');
                 
                 const cell = row.getCell(dayColIdx);
                 cell.value = displayStatus;
 
                 // DEBUG LOG: Hiển thị trong Console F12 để kiểm tra trích xuất
-                if (fullDetails.includes('(')) {
+                if (fullDetails.includes('[')) {
                     console.log(`[Export-Monthly] Student: ${s.name}, Date: ${dateStr}, Note: ${fullDetails}`);
                 }
 
                 // Thêm Comment nếu có chi tiết (VD: vắng tiết, lỗi vi phạm)
-                if (fullDetails.trim().includes('(')) {
+                if (fullDetails.trim().includes('[')) {
                     cell.note = {
                         texts: [
                             { 
@@ -358,17 +382,25 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
                 if (h.id === 'P') val = countP;
                 else if (h.id === 'K') val = countK;
                 else if (h.id === 'V') val = countV;
-                else if (h.id === 'T') val = Object.values(s.absences).filter(v => v.split(';').some(x => x.trim().split('(')[0].trim() === 'T')).length;
-                else if (h.id === 'VP') val = Object.values(s.absences).filter(v => v.split(';').some(x => x.trim().split('(')[0].trim() === 'VP')).length;
-                else if (h.id === 'KH') val = Object.values(s.absences).filter(v => v.split(';').some(x => x.trim().split('(')[0].trim() === 'KH')).length;
-                
-                row.getCell(dayColIdx).value = val > 0 ? val : '';
-                rowTotal += val;
+                else if (h.id === 'T') val = Object.values(s.absences).filter(v => (v || '').split(';').some(x => getBaseCode(x.trim()) === 'T')).length;
+                else if (h.id === 'VP') val = Object.values(s.absences).filter(v => (v || '').split(';').some(x => getBaseCode(x.trim()) === 'VP')).length;
+                else if (h.id === 'KH') val = Object.values(s.absences).filter(v => (v || '').split(';').some(x => getBaseCode(x.trim()) === 'KH')).length;
                 
                 const cell = row.getCell(dayColIdx);
+                cell.value = val > 0 ? val : '';
+                rowTotal += val;
+                
                 cell.border = BORDER_STYLE;
                 cell.alignment = { horizontal: 'center' };
                 cell.font = { bold: true, name: 'Times New Roman' };
+
+                // Tô màu Pastel đồng bộ Web Grid
+                if (STATUS_COLORS[h.id]) {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${STATUS_COLORS[h.id]}` } };
+                    if (STATUS_TEXT_COLORS[h.id]) {
+                        cell.font = { ...cell.font, color: { argb: `FF${STATUS_TEXT_COLORS[h.id]}` } };
+                    }
+                }
                 dayColIdx++;
             });
 
@@ -400,7 +432,7 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
             studentsToDisplay.forEach(s => {
                 const raw = s.absences[dateStr] || '';
                 const parts = raw.split(';').map(p => p.trim());
-                const activeOnThisDay = parts.some(p => visibleColumns.includes(p.split('(')[0].trim()));
+                const activeOnThisDay = parts.some(p => visibleColumns.includes(getBaseCode(p)));
                 if (activeOnThisDay) {
                     dayTotal++;
                 }
@@ -428,8 +460,14 @@ export const exportMonthlyReport = async (data: ExportData[], fileName: string, 
             
             const cell = summaryRow.getCell(colIdx);
             cell.value = hSum > 0 ? hSum : '';
-            setHeaderStyle(cell, 'FEF3C7');
-            cell.font = { bold: true, name: 'Times New Roman', size: 10 };
+            
+            // Màu sắc đồng bộ
+            const bgColor = STATUS_COLORS[h.id] || 'FEF3C7';
+            setHeaderStyle(cell, bgColor);
+            if (STATUS_TEXT_COLORS[h.id]) {
+                cell.font = { ...cell.font, color: { argb: `FF${STATUS_TEXT_COLORS[h.id]}` } };
+            }
+            
             grandTotal += hSum;
             colIdx++;
         });
@@ -703,11 +741,12 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
 
         // Summary Columns (P, K, T, VP, KH) - Lọc theo visibleColumns
         const allSumConfig = [
-            { id: 'P', label: 'P', color: 'FEF08A' }, // Yellow-100
-            { id: 'K', label: 'K', color: 'FECACA' }, // Red-100
-            { id: 'T', label: 'T', color: 'DBEAFE' }, // Blue-100
-            { id: 'VP', label: 'VP', color: 'F3E8FF' }, // Purple-100
-            { id: 'KH', label: 'KH', color: 'FFEDD5' }  // Orange-100
+            { id: 'P', label: 'P', color: 'EAB308' },
+            { id: 'K', label: 'K', color: 'EF4444' },
+            { id: 'V', label: 'V', color: '9CA3AF' },
+            { id: 'T', label: 'T', color: '3B82F6' },
+            { id: 'VP', label: 'VP', color: 'A855F7' },
+            { id: 'KH', label: 'KH', color: 'F97316' }
         ];
         const activeSumConfigs = allSumConfig.filter(h => visibleColumns.includes(h.id));
 
@@ -719,7 +758,7 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
                 return Object.values(s.absences).some((raw: any) => {
                     const parts = (raw || '').split(';').map((p: string) => p.trim());
                     return parts.some((p: string) => {
-                        const baseCode = p.split('(')[0].trim(); // Lấy "T" từ "T(S)"
+                        const baseCode = getBaseCode(p); // Lấy "T" từ "T(S)" hoặc "Ts"
                         return visibleColumns.includes(baseCode);
                     });
                 });
@@ -736,15 +775,22 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
             const titleRow = sheet.getRow(currentRowIdx);
             const titleCell = titleRow.getCell(1);
 
-            const activeSTTLabel = ['P', 'K', 'T', 'VP', 'KH'].filter(id => visibleColumns.includes(id)).join('/');
+            // Đồng bộ V2: Chỉ đếm vắng P/K (không đếm T/VP/KH)
+            const vCount = classData.students.reduce((acc: number, s: any) => {
+                const subTotal = Object.values(s.absences || {}).filter((v: any) => 
+                    v && (v.toUpperCase().startsWith('P') || v.toUpperCase().startsWith('K'))
+                ).length;
+                return acc + subTotal;
+            }, 0);
+
             titleCell.value = {
                 richText: [
-                    { text: `| LỚP ${classData.className} \t`, font: { bold: true, size: 12, name: 'Times New Roman', color: { argb: 'FF059669' } } },
-                    { text: `(Sĩ số: ${totalStudents}, `, font: { italic: true, size: 11, name: 'Times New Roman', color: { argb: 'FF1E3A8A' } } }, // Blue
-                    { text: `Số HS ${activeSTTLabel}: ${issueStudentsCount})`, font: { bold: true, italic: true, size: 11, name: 'Times New Roman', color: { argb: 'FFEF4444' } } } // Red
+                    { text: `| LỚP ${classData.className} \t`, font: { bold: true, size: 13, name: 'Times New Roman', color: { argb: 'FF059669' } } },
+                    { text: `(Sĩ số: ${totalStudents}, `, font: { italic: true, size: 11, name: 'Times New Roman', color: { argb: 'FF1E3A8A' } } },
+                    { text: `Tổng lượt Vắng (P/K): ${vCount})`, font: { bold: true, italic: true, size: 11, name: 'Times New Roman', color: { argb: 'FFEF4444' } } }
                 ]
             };
-            titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } }; // Light Green BG
+            titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDFA' } }; // Đồng bộ V2
             titleCell.alignment = { horizontal: 'left', vertical: 'middle' };
             titleRow.height = 25;
             
@@ -796,8 +842,13 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
                 const hCell = sheet.getRow(headerRowIdx).getCell(colIdx);
                 hCell.value = h.label;
                 sheet.mergeCells(headerRowIdx, colIdx, subHeaderRowIdx, colIdx);
-                setHeaderStyle(hCell, h.color);
-                sheet.getColumn(colIdx).width = 6;
+                // Đồng bộ V2: Dùng STATUS_COLORS
+                const bgColor = STATUS_COLORS[h.id] || h.color;
+                setHeaderStyle(hCell, bgColor);
+                if (STATUS_TEXT_COLORS[h.id]) {
+                    hCell.font = { ...hCell.font, color: { argb: `FF${STATUS_TEXT_COLORS[h.id]}` } };
+                }
+                sheet.getColumn(colIdx).width = 5;
                 colIdx++;
             });
 
@@ -843,25 +894,21 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
                             .map(st => st.trim())
                             .filter(Boolean)
                             .filter(st => {
-                                const baseCode = st.split('(')[0].trim();
+                                const baseCode = getBaseCode(st);
                                 return visibleColumns.includes(baseCode);
                             });
                         
-                        // Tách mã gốc để hiển thị, chi tiết đưa vào Comment
-                        const displayStatus = statuses.map(st => st.split('(')[0].trim()).join('; ');
+                        // Đồng bộ V2: Giá trị ô chỉ hiển thị base code rút gọn
+                        const codes = Array.from(new Set(statuses.map(p => getBaseCode(p)))).join(';');
                         const fullDetails = statuses.join('\n');
                         
                         const cell = row.getCell(cIdx);
-                        cell.value = displayStatus;
+                        cell.value = codes;
 
-                        // DEBUG LOG: Hiển thị trong Console F12 để kiểm tra trích xuất
-                        // Kiểm tra cả dấu ngoặc đơn ()
-                        if (fullDetails.trim().includes('(')) {
-                            (cell as any).note = {
-                                texts: [{ text: fullDetails, font: { size: 9, name: 'Times New Roman' } }],
-                                width: 1000,
-                                height: 500,
-                                margins: { inset: [0.4, 0.4, 0.4, 0.4], insetmode: 'custom' }
+                        // Đồng bộ V2: Comment note không dùng width/height cứng, font 9pt
+                        if (fullDetails.trim().includes('[')) {
+                            cell.note = {
+                                texts: [{ text: fullDetails, font: { size: 9, name: 'Times New Roman' } }]
                             };
                         }
                         cell.border = BORDER_STYLE;
@@ -874,13 +921,15 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
                         if (statuses.some(st => st.startsWith('VP'))) sVP++;
                         if (statuses.some(st => st.startsWith('KH'))) sKH++;
 
-                        // Lấy màu trạng thái đầu tiên được hiển thị
+                        // Đồng bộ V2: Lấy màu trạng thái đầu tiên, dùng STATUS_COLORS/STATUS_TEXT_COLORS
                         const firstActive = statuses[0];
                         if (firstActive) {
-                            const baseCode = firstActive.split('(')[0].trim().toUpperCase();
+                            const baseCode = getBaseCode(firstActive);
                             if (STATUS_COLORS[baseCode]) {
-                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STATUS_COLORS[baseCode] } };
-                                cell.font = { ...cell.font, color: { argb: 'FFFFFFFF' } };
+                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${STATUS_COLORS[baseCode]}` } };
+                                if (STATUS_TEXT_COLORS[baseCode]) {
+                                    cell.font = { ...cell.font, color: { argb: `FF${STATUS_TEXT_COLORS[baseCode]}` } };
+                                }
                             }
                         }
                         
@@ -896,6 +945,7 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
                         let val = 0;
                         if (h.id === 'P') val = sP;
                         else if (h.id === 'K') val = sK;
+                        else if (h.id === 'V') val = sP + sK; // Đồng bộ V2: Vắng = P + K
                         else if (h.id === 'T') val = sT;
                         else if (h.id === 'VP') val = sVP;
                         else if (h.id === 'KH') val = sKH;
@@ -904,7 +954,15 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
                         cell.value = val > 0 ? val : '';
                         cell.border = BORDER_STYLE;
                         cell.alignment = { horizontal: 'center' };
-                        cell.font = { name: 'Times New Roman' };
+                        cell.font = { bold: true, name: 'Times New Roman' };
+                        
+                        // Đồng bộ V2: Tô màu Pastel cho ô dữ liệu thống kê
+                        if (STATUS_COLORS[h.id]) {
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${STATUS_COLORS[h.id]}` } };
+                            if (STATUS_TEXT_COLORS[h.id]) {
+                                cell.font = { ...cell.font, color: { argb: `FF${STATUS_TEXT_COLORS[h.id]}` } };
+                            }
+                        }
                     });
 
                     classSumP += sP; classSumK += sK; classSumT += sT; classSumVP += sVP; classSumKH += sKH;
@@ -933,14 +991,21 @@ export const exportGradeReport = async (data: ExportData[], fileName: string, vi
                     let val = 0;
                     if (h.id === 'P') val = classSumP;
                     else if (h.id === 'K') val = classSumK;
+                    else if (h.id === 'V') val = classSumP + classSumK; // Đồng bộ V2: Vắng = P + K
                     else if (h.id === 'T') val = classSumT;
                     else if (h.id === 'VP') val = classSumVP;
                     else if (h.id === 'KH') val = classSumKH;
 
-                    const cell = sheet.getRow(currentRowIdx).getCell(footerCIdx++);
-                    cell.value = val > 0 ? val : '';
-                    setHeaderStyle(cell, h.color);
-                    cell.font = { bold: true, name: 'Times New Roman' };
+                    const c = sheet.getRow(currentRowIdx).getCell(footerCIdx++);
+                    c.value = val > 0 ? val : '';
+                    setHeaderStyle(c, STATUS_COLORS[h.id] || h.color);
+                    
+                    // Đồng bộ V2: Giữ màu chữ khác nhau cho từng loại
+                    if (STATUS_TEXT_COLORS[h.id]) {
+                        c.font = { bold: true, name: 'Times New Roman', size: 11, color: { argb: `FF${STATUS_TEXT_COLORS[h.id]}` } };
+                    } else {
+                        c.font = { bold: true, name: 'Times New Roman', size: 11 };
+                    }
                 });
                 currentRowIdx++;
             }
@@ -1165,10 +1230,16 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
         // --- 3. Render từng Lớp ---
         classes.forEach(classData => {
             // Lọc học sinh có lỗi
-            const studentsToDisplay = classData.students.filter(s => {
-                return Object.values(s.absences).some(raw => {
-                    const parts = raw.split(';').map(p => p.trim());
-                    return parts.some(p => visibleColumns.includes(p.split('(')[0].trim()));
+            const studentsToDisplay = classData.students.filter((s: any) => {
+                const absencesArray = Object.values(s.absences || {});
+                return absencesArray.some((raw: any) => {
+                    const parts = (raw || '').split(';').map((p: string) => p.trim());
+                    return parts.some((p: string) => {
+                        // Regex trích xuất phần chữ cái hoa đầu tiên (P, K, T, VP, KH)
+                        const baseCodeMatch = p.match(/^([A-Z]+)/);
+                        const baseCode = baseCodeMatch ? baseCodeMatch[1] : p.split('(')[0].trim();
+                        return visibleColumns.includes(baseCode);
+                    });
                 });
             });
 
@@ -1178,12 +1249,18 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
             // --- Class Header (RichText Giống V1) ---
             sheet.mergeCells(`A${currentRowIdx}:${lastColChar}${currentRowIdx}`);
             const classTitleCell = sheet.getCell(`A${currentRowIdx}`);
-            const activeSTTLabel = visibleColumns.join('/');
+            const vCount = classData.students.reduce((acc: number, s: any) => {
+                const subTotal = Object.values(s.absences || {}).filter((v: any) => 
+                    v && (v.toUpperCase().startsWith('P') || v.toUpperCase().startsWith('K'))
+                ).length;
+                return acc + subTotal;
+            }, 0);
+
             classTitleCell.value = {
                 richText: [
                     { text: `| LỚP ${classData.className} \t`, font: { bold: true, size: 13, name: 'Times New Roman', color: { argb: 'FF059669' } } },
                     { text: `(Sĩ số: ${classData.totalStudents || classData.students.length}, `, font: { italic: true, size: 11, name: 'Times New Roman', color: { argb: 'FF1E3A8A' } } },
-                    { text: `Số HS ${activeSTTLabel}: ${studentsToDisplay.length})`, font: { bold: true, italic: true, size: 11, name: 'Times New Roman', color: { argb: 'FFEF4444' } } }
+                    { text: `Tổng lượt Vắng (P/K): ${vCount})`, font: { bold: true, italic: true, size: 11, name: 'Times New Roman', color: { argb: 'FFEF4444' } } }
                 ]
             };
             classTitleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDFA' } };
@@ -1262,9 +1339,11 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
                 const cell = sheet.getRow(hIdx).getCell(colIdx);
                 cell.value = h.label;
                 sheet.mergeCells(hIdx, colIdx, sesHIdx, colIdx);
-                setHeaderStyle(cell, 'FEF9C3'); // Màu vàng nhạt đồng bộ (vàng pastel)
                 
-                // Hình 1: 5 màu chữ khác nhau
+                // Màu sắc đồng bộ Web Grid
+                const bgColor = STATUS_COLORS[h.id] || 'FEF9C3';
+                setHeaderStyle(cell, bgColor);
+                
                 if (STATUS_TEXT_COLORS[h.id]) {
                     cell.font = { ...cell.font, color: { argb: `FF${STATUS_TEXT_COLORS[h.id]}` } };
                 }
@@ -1309,10 +1388,10 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
 
                         const getSessionParts = (session: 'S' | 'C') => {
                             return parts.filter(p => {
-                                const code = p.split('(')[0].trim();
+                                const code = getBaseCode(p);
                                 if (!visibleColumns.includes(code)) return false;
-                                const isM = p.includes('(s)') || p.includes('(S)') || p.includes('Sáng') || /T[1-5]/.test(p);
-                                const isA = p.includes('(c)') || p.includes('(C)') || p.includes('Chiều') || /T([6-9]|10)/.test(p);
+                                const isM = p.includes('(s)') || p.includes('(S)') || p.includes('Sáng') || /T[1-5]/.test(p) || /^[A-Z]+s/i.test(p);
+                                const isA = p.includes('(c)') || p.includes('(C)') || p.includes('Chiều') || /T([6-9]|10)/.test(p) || /^[A-Z]+c/i.test(p);
                                 const isSC = p.includes('(sc)') || p.includes('(SC)');
                                 if (isSC || (!isM && !isA)) return true;
                                 return session === 'S' ? isM : isA;
@@ -1324,7 +1403,7 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
 
                         const renderCell = (idx: number, ps: string[]) => {
                             const cell = row.getCell(idx);
-                            const codes = Array.from(new Set(ps.map(p => p.split('(')[0].trim()))).join(';');
+                            const codes = Array.from(new Set(ps.map(p => getBaseCode(p)))).join(';');
                             cell.value = codes;
                             cell.border = BORDER_STYLE;
                             cell.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -1332,24 +1411,24 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
 
                             if (ps.length > 0) {
                                 classDaySums[dateStr] = (classDaySums[dateStr] || 0) + 1;
-                                let topCode = ps.some(p => p.startsWith('K')) ? 'K' :
-                                             ps.some(p => p.startsWith('P')) ? 'P' :
-                                             ps.some(p => p.startsWith('T')) ? 'T' :
-                                             ps.some(p => p.startsWith('VP')) ? 'VP' : '';
+                                let topCode = ps.some(p => getBaseCode(p).startsWith('K')) ? 'K' :
+                                             ps.some(p => getBaseCode(p).startsWith('P')) ? 'P' :
+                                             ps.some(p => getBaseCode(p).startsWith('T')) ? 'T' :
+                                             ps.some(p => getBaseCode(p).startsWith('VP')) ? 'VP' : '';
                                 if (topCode && STATUS_COLORS[topCode]) {
                                     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${STATUS_COLORS[topCode]}` } };
                                     if (STATUS_TEXT_COLORS[topCode]) {
                                         cell.font = { ...cell.font, color: { argb: `FF${STATUS_TEXT_COLORS[topCode]}` } };
                                     }
                                 }
-                                if (ps.some(p => p.includes('('))) {
+                                if (ps.some(p => p.includes('['))) {
                                     // Sửa lỗi kiểu dữ liệu: ExcelJS Comment không có width/height trực tiếp
                                     cell.note = {
                                         texts: [{ text: ps.join('\n'), font: { size: 9, name: 'Times New Roman' } }]
                                     };
                                 }
                                 ps.forEach(p => {
-                                    const code = p.split('(')[0].trim();
+                                    const code = getBaseCode(p);
                                     if (counts.hasOwnProperty(code)) (counts as any)[code]++;
                                 });
                             } else if (date.getDay() === 0 || date.getDay() === 6) {
@@ -1381,6 +1460,14 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
                         cell.border = BORDER_STYLE;
                         cell.alignment = { horizontal: 'center' };
                         cell.font = { bold: true, name: 'Times New Roman' };
+                        
+                        // Tô màu Pastel cho ô dữ liệu thống kê
+                        if (STATUS_COLORS[h.id]) {
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${STATUS_COLORS[h.id]}` } };
+                            if (STATUS_TEXT_COLORS[h.id]) {
+                                cell.font = { ...cell.font, color: { argb: `FF${STATUS_TEXT_COLORS[h.id]}` } };
+                            }
+                        }
                     });
 
                     classSumP += counts.P; classSumK += counts.K; classSumT += counts.T; classSumVP += counts.VP; classSumKH += counts.KH;
@@ -1422,7 +1509,7 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
                 
                 const c = sheet.getRow(currentRowIdx).getCell(footerIdx++);
                 c.value = val > 0 ? val : '';
-                setHeaderStyle(c, 'FEE2E2'); // Nền hồng nhạt đồng nhất cho cả phần tổng phía sau
+                setHeaderStyle(c, STATUS_COLORS[h.id] || 'FEF9C3');
                 
                 // Giữ màu chữ khác nhau cho từng loại
                 if (STATUS_TEXT_COLORS[h.id]) {

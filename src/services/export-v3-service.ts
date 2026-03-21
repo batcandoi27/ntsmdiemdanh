@@ -126,60 +126,160 @@ export async function buildExcelWorkbook(
     const attendanceMap = new Map<string, Map<string, string>>();
     const notesMap = new Map<string, Map<string, string>>();
 
+    // Helper: Build Display text for Excel cell (VPc1-5 style)
+    const getShortCode = (type: string, periods: number[]) => {
+        if (periods.length === 0) return type; // If no periods, just return the type
+        if (periods.length >= 5) {
+            // If 5 or more periods are present, assume full session and simplify to just the type
+            return type;
+        }
+        const sorted = Array.from(new Set(periods)).sort((a,b) => a - b);
+        const ranges: string[] = [];
+        let start = sorted[0], prev = sorted[0];
+        for (let i = 1; i <= sorted.length; i++) {
+            if (i < sorted.length && sorted[i] === prev + 1) prev = sorted[i];
+            else {
+                if (start === prev) ranges.push(`${start}`); else ranges.push(`${start}-${prev}`);
+                if (i < sorted.length) { start = sorted[i]; prev = sorted[i]; }
+            }
+        }
+        return `${type}c${ranges.join(',')}`;
+    };
+
+    // Helper: Deep format notes (T1,3: ...)
+    const formatDeepNotes = (notesMap: Record<number, string>) => {
+        const notePs: Record<string, number[]> = {};
+        Object.entries(notesMap).forEach(([p, v]) => {
+            if (!v) return;
+            if (!notePs[v]) notePs[v] = [];
+            notePs[v].push(Number(p));
+        });
+        const parts: string[] = [];
+        Object.entries(notePs).forEach(([noteText, periods]) => {
+            const sorted = Array.from(new Set(periods)).sort((a,b) => a - b);
+            if (sorted.length >= 5 && sorted.includes(1) && sorted.includes(5)) {
+                 parts.push(noteText);
+            } else {
+                const ranges: string[] = [];
+                let start = sorted[0], prev = sorted[0];
+                for (let i = 1; i <= sorted.length; i++) {
+                    if (i < sorted.length && sorted[i] === prev + 1) prev = sorted[i];
+                    else {
+                        if (start === prev) ranges.push(`${start}`); else ranges.push(`${start}-${prev}`);
+                        if (i < sorted.length) { start = sorted[i]; prev = sorted[i]; }
+                    }
+                }
+                parts.push(`T${ranges.join(',')}: ${noteText}`);
+            }
+        });
+        return parts.join(", ");
+    };
+
+    const getCoreType = (st: string) => {
+        if (!st) return '';
+        const core = st.split(/[\(\[sc]/)[0].trim().toUpperCase();
+        return core;
+    };
+
     for (const [date, records] of Object.entries(data.attendance)) {
-        for (const record of records) {
-            const sKey = record.studentId; // This is student_code in Supabase branch
+        // Group records by student
+        const studentToRecords = new Map<string, typeof records>();
+        records.forEach(r => {
+            const sid = r.studentId;
+            if (!studentToRecords.has(sid)) studentToRecords.set(sid, []);
+            studentToRecords.get(sid)!.push(r);
+        });
+
+        studentToRecords.forEach((sRecords, sKey) => {
             if (!attendanceMap.has(sKey)) {
                 attendanceMap.set(sKey, new Map());
                 notesMap.set(sKey, new Map());
             }
+
+            const aggregated: any = {
+                statuses: new Set<string>(),
+                vPs: new Set<number>(),
+                kHs: new Set<number>(),
+                vNotes: {} as Record<number, string>,
+                sNotes: {} as Record<number, string>
+            };
+
+            const explode = (notes?: Record<number, string>, fallbackNote?: string, p?: number | null) => {
+                const result: Record<number, string> = { ...notes };
+                if (result[0]) {
+                    const n = result[0];
+                    [1,2,3,4,5].forEach(i => { if (!result[i]) result[i] = n; });
+                    delete result[0];
+                }
+                if (Object.keys(result).length === 0 && fallbackNote) {
+                    if (p) result[p] = fallbackNote;
+                    else [1,2,3,4,5].forEach(i => { result[i] = fallbackNote; });
+                }
+                return result;
+            };
+
+            sRecords.forEach(r => {
+                // Status chính
+                const st = r.status as string;
+                if (['absent', 'K', 'V', 'excused', 'P', 'late', 'T'].includes(st)) {
+                    let code = 'K';
+                    if (st === 'excused' || st === 'P') code = 'P';
+                    else if (st === 'late' || st === 'T') code = 'T';
+                    aggregated.statuses.add(code);
+                    
+                    const decoded = explode((r as any).statusNotes, r.note, r.period);
+                    Object.entries(decoded).forEach(([p, v]) => { aggregated.sNotes[Number(p)] = v; });
+                }
+
+                // Vi phạm
+                if (r.violation || st === 'violation' || st === 'VP') {
+                    aggregated.statuses.add('VP');
+                    if (r.violationPeriods) r.violationPeriods.forEach(p => aggregated.vPs.add(p));
+                    else if (r.period) aggregated.vPs.add(r.period);
+                    else [1,2,3,4,5].forEach(p => aggregated.vPs.add(p));
+
+                    const decoded = explode((r as any).violationNotes, r.violationNote || r.note, r.period);
+                    Object.entries(decoded).forEach(([p, v]) => { 
+                        const pk = Number(p);
+                        aggregated.vNotes[pk] = aggregated.vNotes[pk] ? `${aggregated.vNotes[pk]}, ${v}` : v;
+                    });
+                }
+                
+                // Khen thưởng
+                if (r.reward || (r as any).praise || st === 'KH' || st === 'reward') {
+                    aggregated.statuses.add('KH');
+                }
+            });
+
+            // Build Short Codes for Cell
+            const codes: string[] = [];
+            if (aggregated.statuses.has('P')) codes.push('P');
+            if (aggregated.statuses.has('K')) codes.push('K');
+            if (aggregated.statuses.has('T')) codes.push('T');
+            if (aggregated.statuses.has('VP')) codes.push(getShortCode('VP', Array.from(aggregated.vPs)));
+            if (aggregated.statuses.has('KH')) codes.push('KH');
             
-            let statusCode = '';
-            let cellNote = record.note || record.violationNote || record.rewardNote || '';
+            attendanceMap.get(sKey)!.set(date, codes.join(', '));
 
-            // Map status codes
-            const s = record.status as string;
-            if (s === 'absent' || s === 'K' || s === 'V') statusCode = 'K';
-            else if (s === 'excused' || s === 'P') statusCode = 'P';
-            else if (s === 'late' || s === 'T') {
-                statusCode = 'T';
-                if (record.missedPeriods && record.missedPeriods.length > 0) {
-                    cellNote = `Vắng tiết: ${record.missedPeriods.join(', ')}. ${cellNote}`;
-                }
+            // Build Full Note for Comment
+            const part1 = formatDeepNotes(aggregated.sNotes);
+            const part2 = formatDeepNotes(aggregated.vNotes);
+            const fullComment = [part1, part2].filter(Boolean).join(" | ");
+            if (fullComment) {
+                notesMap.get(sKey)!.set(date, fullComment);
             }
-            else if (s === 'violation' || s === 'VP') {
-                statusCode = 'VP';
-            }
-            else if (s === 'praise' || s === 'KH' || s === 'reward') {
-                statusCode = 'KH';
-            }
-
-            // Flag-based V3 priority (Ghi đè/Bổ sung nếu có flag explicit)
-            if (record.violation) statusCode = 'VP';
-            if (record.reward || (record as any).praise) statusCode = 'KH';
-
-            if (statusCode) {
-                const currentVal = attendanceMap.get(sKey)!.get(date) || '';
-                const parts = currentVal ? currentVal.split(', ') : [];
-                if (!parts.includes(statusCode)) {
-                    parts.push(statusCode);
-                    // Sort order: P, K, T, VP, KH (tùy chọn)
-                    attendanceMap.get(sKey)!.set(date, parts.join(', '));
-                }
-            }
-
-            if (cellNote) {
-                const currentNote = notesMap.get(sKey)!.get(date) || '';
-                if (!currentNote.includes(cellNote)) {
-                    notesMap.get(sKey)!.set(date, currentNote ? `${currentNote} | ${cellNote}` : cellNote);
-                }
-            }
-        }
+        });
     }
 
-    data.students.forEach(s => {
+    const sortedStudents = [...data.students].sort((a, b) => {
+        const nameA = (a as any).name || a.fullName || '';
+        const nameB = (b as any).name || b.fullName || '';
+        return nameA.localeCompare(nameB, 'vi', { sensitivity: 'base' });
+    });
+
+    sortedStudents.forEach(s => {
         const sKey = s.code || s.id; // Fallback to id if code not present (legacy)
-        const rowData: any[] = [s.order, s.fullName, s.classId || ''];
+        const rowData: any[] = [(s as any).stt || '', (s as any).name || s.fullName, s.classId || ''];
         
         dates.forEach(date => {
             rowData.push(attendanceMap.get(sKey)?.get(date) || '');

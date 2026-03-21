@@ -45,6 +45,11 @@ export interface AttendanceRecordV3 {
     rewardNote?: string;
     rewardType?: string;            // Loai khen thuong: good_deed, helpful...
 
+    // Deep Merge Records (v2.8+)
+    statusNotes?: Record<number, string>;
+    violationNotes?: Record<number, string>;
+    rewardNotes?: Record<number, string>;
+
     markedBy: string;               // UID
     markedByName: string;
     markedByRole: UserRole;

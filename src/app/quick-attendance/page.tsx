@@ -726,6 +726,7 @@ export default function QuickAttendancePage() {
                         date={date}
                         session={session}
                         onDateChange={setDate}
+                        onSessionChange={setSession}
                         onSaved={fetchBlockData}
                     />
                 )

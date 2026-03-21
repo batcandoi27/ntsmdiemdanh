@@ -9,9 +9,11 @@ interface ModalProps {
     onClose: () => void;
     title: string;
     children: React.ReactNode;
+    overlayClassName?: string;
+    className?: string;
 }
 
-export function Modal({ isOpen, onClose, title, children }: ModalProps) {
+export function Modal({ isOpen, onClose, title, children, overlayClassName, className }: ModalProps) {
     const overlayRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -41,10 +43,10 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
     return (
         <div
             ref={overlayRef}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+            className={cn("fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200", overlayClassName)}
             onClick={handleOverlayClick}
         >
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className={cn("bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200", className)}>
                 <div className="flex items-center justify-between p-4 border-b">
                     <h3 className="text-lg font-bold text-gray-800">{title}</h3>
                     <button

@@ -383,7 +383,7 @@ export function ReportsFilter({
                     {/* Export Dropdown Button */}
                     <div className="relative flex-1 md:flex-none flex" ref={exportDropdownRef}>
                         <button
-                            onClick={() => onExport(false)}
+                            onClick={() => onExportV2 ? onExportV2() : onExport(false)}
                             disabled={isLoading || isExporting}
                             className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 disabled:cursor-not-allowed text-white px-3 sm:px-4 py-2 rounded-l-lg font-bold text-sm shadow-md flex items-center justify-center gap-1.5 sm:gap-2 transition-all active:scale-95 border border-emerald-700 border-r-emerald-800 whitespace-nowrap"
                         >

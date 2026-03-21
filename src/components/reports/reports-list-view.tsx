@@ -25,6 +25,18 @@ const getGradeBarColor = (className: string) => {
     return "bg-gray-500";
 };
 
+const compareVietnameseNames = (nameA: string, nameB: string) => {
+    const a = (nameA || '').trim();
+    const b = (nameB || '').trim();
+    const partsA = a.split(' ');
+    const partsB = b.split(' ');
+    const lastNameA = partsA.pop() || '';
+    const lastNameB = partsB.pop() || '';
+    const cmp = lastNameA.localeCompare(lastNameB, 'vi', { sensitivity: 'base' });
+    if (cmp !== 0) return cmp;
+    return a.localeCompare(b, 'vi', { sensitivity: 'base' });
+};
+
 interface ReportsListViewProps {
     data: AbsenceDetail[];
     classSizes?: Record<string, number>;
@@ -40,7 +52,7 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
     const [isSaving, setIsSaving] = useState(false);
     const [addModalConfig, setAddModalConfig] = useState<{ className: string, date?: string } | null>(null);
 
-    const [showMessageModal, setShowMessageModal] = useState<{ classId: string, className: string, absences: AbsenceDetail[] } | null>(null);
+    const [showMessageModal, setShowMessageModal] = useState<{ classId: string, className: string, absences: AbsenceDetail[], visibleColumns?: string[] } | null>(null);
 
     const handleSaveStatus = async (newStatus: string) => {
         if (!editCell) return;
@@ -94,8 +106,14 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
     const groups: Record<string, AbsenceDetail[]> = {};
 
     data.forEach(item => {
-        const statuses = item.status.split('; ');
-        if (!statuses.some(st => visibleColumns.includes(st.split('(')[0].trim()))) return; // Filter
+        const statuses = (item.status || '').split('; ').filter(Boolean);
+        const isVisible = statuses.some(st => {
+            const base = st.split(/[\(\[sc]/)[0].trim().toUpperCase();
+            const res = visibleColumns.includes(base);
+            return res;
+        });
+        if (!isVisible) return; 
+
         const key = groupBy === 'DATE' ? item.date : item.className;
         if (!groups[key]) groups[key] = [];
         groups[key].push(item);
@@ -150,16 +168,20 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                         const classId = items.find(i => i.className === key)?.classId;
                                         const totalStudents = classId ? (classSizes[classId] || 0) : 0;
                                         
-                                        // Hiệu chỉnh logic: Chỉ đếm Vắng (P hoặc K)
-                                        const vCount = items.filter(item => {
-                                            const statuses = item.status.split('; ').map(s => s.split('(')[0].trim());
-                                            return statuses.includes('P') || statuses.includes('K');
-                                        }).length;
+                                        // Hiệu chỉnh logic: Đếm TỔNG LƯỢT Vắng (P hoặc K) từ DỮ LIỆU GỐC (Không phụ thuộc Filter cột)
+                                        const vCount = data.reduce((acc, a) => {
+                                            if (a.className !== key) return acc;
+                                            const subTotal = (a.status || '').split('; ').filter(st => {
+                                                const base = st.split(/[\(\[sc]/)[0].trim().toUpperCase();
+                                                return base === 'P' || base === 'K';
+                                            }).length;
+                                            return acc + subTotal;
+                                        }, 0);
 
-                                        // Hiển thị "(SS: 51, V: 5)"
+                                        // Hiển thị "(SS: 51 • Lượt vắng (P/K): 5)"
                                         return (
                                             <span className="ml-2 text-[11px] font-black text-gray-700 bg-white border border-gray-300 px-2.5 py-1 rounded-md shadow-sm tracking-wide">
-                                                {`SS: ${totalStudents || '?'} • Vắng: ${vCount}`}
+                                                {`SS: ${totalStudents || '?'} • Lượt vắng (P/K): ${vCount}`}
                                             </span>
                                         );
                                     })()}
@@ -178,7 +200,8 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                         onClick={() => setShowMessageModal({ 
                                             classId: items[0]?.classId || '', 
                                             className: key, 
-                                            absences: items 
+                                            absences: data.filter(a => a.className === key),
+                                            visibleColumns
                                         })}
                                         className="bg-teal-600 hover:bg-teal-700 text-white border border-transparent px-3 py-1.5 rounded-lg shadow-sm cursor-pointer transition-colors flex items-center gap-1.5 font-bold text-sm"
                                     >
@@ -233,8 +256,7 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
 
                                     const consolidatedStudents = Object.entries(consolidatedMap)
                                         .map(([code, info]) => {
-                                            // Split by comma or space to handle various status strings
-                                            const rawStatuses = info.status.split('; ').map(s => s.trim()).filter(Boolean);
+                                            const rawStatuses = (info.status || '').split('; ').map(s => s.trim()).filter(Boolean);
                                             
                                             let pCount = 0;
                                             let kCount = 0;
@@ -242,7 +264,8 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
 
                                             const seenBases = new Set<string>();
                                             rawStatuses.forEach(st => {
-                                                const base = st.split('(')[0].trim().toUpperCase();
+                                                const label = st.split(' [')[0].trim();
+                                                const base = label.split(/[\(\[sc]/)[0].trim().toUpperCase();
                                                 if (!seenBases.has(base)) {
                                                     if (base.startsWith('P')) pCount++;
                                                     else if (base.startsWith('K')) kCount++;
@@ -251,12 +274,13 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                                 displayStatuses.add(st);
                                             });
                                             
-                                            const hasMorning = rawStatuses.some(st => (st.toUpperCase().startsWith('P') || st.toUpperCase().startsWith('K')) && st.includes('(S)'));
-                                            const hasAfternoon = rawStatuses.some(st => (st.toUpperCase().startsWith('P') || st.toUpperCase().startsWith('K')) && st.includes('(C)'));
+                                            const hasMorning = rawStatuses.some(st => (st.toUpperCase().startsWith('P') || st.toUpperCase().startsWith('K')) && st.includes('s'));
+                                            const hasAfternoon = rawStatuses.some(st => (st.toUpperCase().startsWith('P') || st.toUpperCase().startsWith('K')) && st.includes('c'));
                                             const isSC = (hasMorning && hasAfternoon) || (pCount + kCount >= 2);
 
                                             const filteredStatuses = Array.from(displayStatuses).filter(st => {
-                                                const baseCode = st.split('(')[0].trim();
+                                                const label = st.split(' [')[0].trim();
+                                                const baseCode = label.split(/[\(\[sc]/)[0].trim().toUpperCase();
                                                 return visibleColumns.includes(baseCode);
                                             });
 
@@ -264,11 +288,11 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                                 code,
                                                 ...info,
                                                 status: filteredStatuses.join('; '),
-                                                isSC: isSC // Explicitly pass isSC
+                                                isSC: isSC
                                             };
                                         })
-                                        .filter(s => s.status !== "") // Only show if they have at least one visible status
-                                        .sort((a, b) => a.name.localeCompare(b.name));
+                                        .filter(s => s.status !== "")
+                                        .sort((a, b) => compareVietnameseNames(a.name, b.name));
 
                                     return (
                                         <div key={subKey} className="bg-white border border-gray-100 rounded-lg p-3 grid grid-cols-12 gap-4 items-start shadow-sm hover:shadow-md transition-shadow">
@@ -285,14 +309,22 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                                             })()}
                                                             {(() => {
                                                                 // SS and V for 'CLASS' group -> Date subGroup
-                                                                const classId = items[0]?.classId;
-                                                                const ss = classId ? (classSizes[classId] || 0) : 0;
+                                                                const classIdAttr = items[0]?.classId;
+                                                                const ss = classIdAttr ? (classSizes[classIdAttr] || 0) : 0;
                                                                 
-                                                                // Chỉ đếm học sinh có P hoặc K
-                                                                const v = consolidatedStudents.filter(s => {
-                                                                    const statuses = s.status.split(', ').map(st => st.split('(')[0].trim());
-                                                                    return statuses.includes('P') || statuses.includes('K');
-                                                                }).length;
+                                                                // Tính v trực tiếp từ data gốc (không lọc) để đảm bảo số liệu chính xác
+                                                                // Phải lọc theo classIdAttr và ngày (phần đầu của subKey)
+                                                                const dateKey = subKey.split('_')[0];
+                                                                const v = data.reduce((acc, a) => {
+                                                                    if (a.classId !== classIdAttr || a.date !== dateKey) return acc;
+                                                                    const rawStatuses = (a.status || '').split('; ').map(s => s.trim()).filter(Boolean);
+                                                                    let count = 0;
+                                                                    rawStatuses.forEach(st => {
+                                                                        const base = st.split(/[\(\[sc]/)[0].trim().toUpperCase();
+                                                                        if (base.startsWith('P') || base.startsWith('K')) count++;
+                                                                    });
+                                                                    return acc + count;
+                                                                }, 0);
 
                                                                 return (
                                                                     <span className="text-[10px] font-bold flex gap-1">
@@ -310,14 +342,20 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                                                 {subKey}
                                                                 {(() => {
                                                                     // SS and V for 'DATE' group -> Class subGroup
-                                                                    const classId = subGroupItems[0]?.classId;
-                                                                    const ss = classId ? classSizes[classId] : 0;
+                                                                    const classIdAttr = subGroupItems[0]?.classId;
+                                                                    const ss = classIdAttr ? classSizes[classIdAttr] : 0;
                                                                     
-                                                                    // Chỉ đếm học sinh có P hoặc K (Ngoại lệ)
-                                                                    const v = subGroupItems.filter(item => {
-                                                                        const statuses = item.status.split('; ').map(st => st.split('(')[0].trim());
-                                                                        return statuses.includes('P') || statuses.includes('K');
-                                                                    }).length;
+                                                                    // subKey là className, key là date
+                                                                    const v = data.reduce((acc, a) => {
+                                                                        if (a.className !== subKey || a.date !== key) return acc;
+                                                                        const rawStatuses = (a.status || '').split('; ').map(s => s.trim()).filter(Boolean);
+                                                                        let count = 0;
+                                                                        rawStatuses.forEach(st => {
+                                                                            const base = st.split(/[\(\[sc]/)[0].trim().toUpperCase();
+                                                                            if (base.startsWith('P') || base.startsWith('K')) count++;
+                                                                        });
+                                                                        return acc + count;
+                                                                    }, 0);
 
                                                                     return (
                                                                         <span className="text-[10px] font-bold flex gap-1 bg-white px-1.5 py-0.5 rounded shadow-sm opacity-90 whitespace-nowrap">
@@ -363,26 +401,16 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                                             </span>
                                                             <span className={cn(
                                                                 "font-medium truncate max-w-[150px]",
-                                                                statuses[0]?.startsWith('P') ? "text-yellow-600" :
-                                                                statuses[0]?.startsWith('K') ? "text-red-600" :
-                                                                statuses[0]?.startsWith('VP') ? "text-purple-600" :
-                                                                statuses[0]?.startsWith('T') ? "text-blue-600" :
-                                                                statuses[0]?.startsWith('KH') ? "text-orange-600" :
+                                                                statuses[0]?.split(/[(\[sc]/)[0].toUpperCase().startsWith('P') ? "text-yellow-600" :
+                                                                statuses[0]?.split(/[(\[sc]/)[0].toUpperCase().startsWith('K') ? "text-red-600" :
+                                                                statuses[0]?.split(/[(\[sc]/)[0].toUpperCase().startsWith('VP') ? "text-purple-600" :
+                                                                statuses[0]?.split(/[(\[sc]/)[0].toUpperCase().startsWith('T') ? "text-blue-600" :
+                                                                statuses[0]?.split(/[(\[sc]/)[0].toUpperCase().startsWith('KH') ? "text-orange-600" :
                                                                 "text-slate-700"
                                                             )}>
                                                                 {student.name}
                                                             </span>
                                                             {(student as any).isSC && <span className="text-red-600 font-extrabold text-[10px] leading-none tracking-tighter flex-shrink-0">(SC)</span>}
-
-                                                            {student.notes && (
-                                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/student:block z-[100] pointer-events-none animate-in fade-in slide-in-from-bottom-1 duration-200">
-                                                                    <div className="bg-gray-900 border border-gray-700 px-3 py-2 rounded-lg shadow-2xl z-[100] max-w-xs whitespace-pre-wrap text-left relative leading-snug">
-                                                                        <span className="text-sky-400 font-bold block mb-1 border-b border-gray-700 pb-1">Ghi chú chi tiết:</span>
-                                                                        <span className="text-white text-[11px] font-medium">{student.notes.replace(/; /g, '\n')}</span>
-                                                                        <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 -mt-1 border-r border-b border-gray-700"></div>
-                                                                    </div>
-                                                                </div>
-                                                            )}
 
                                                             <div className="flex gap-1 flex-shrink-0">
                                                                 {statuses.map((st, i) => (
@@ -497,6 +525,7 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                     }}
                     absences={showMessageModal.absences}
                     totalStudents={classSizes[showMessageModal.classId] || 0}
+                    visibleColumns={showMessageModal.visibleColumns}
                 />
             )}
 
@@ -641,9 +670,10 @@ function AddAttendanceModal({ className, defaultDate, onClose, onRefresh }: { cl
 }
 
 function CompactStatusBadge({ status }: { status: string }) {
-    const baseCode = status.split('(')[0].trim();
-    const hasDetail = status.includes('[');
-    const detail = hasDetail ? status.substring(status.indexOf('[') + 1, status.lastIndexOf(']')) : '';
+    const label = (status || '').split(' [')[0].trim();
+    const baseCode = label.split(/[\(\[sc]/)[0].trim().toUpperCase();
+    const hasDetail = (status || '').includes('[');
+    const detail = hasDetail ? status.match(/\[(.*?)\]/)?.[1] || '' : '';
 
     const map = {
         'P': { text: 'P', color: 'text-yellow-600', size: 'text-[15px] font-black' },
@@ -656,21 +686,13 @@ function CompactStatusBadge({ status }: { status: string }) {
     };
     const style = map[baseCode as keyof typeof map] || { text: baseCode, color: 'text-gray-600', size: 'text-xs font-bold' };
 
-    // Parse session indicator: (s), (c), (sc), (s12), etc.
-    const sessionMatch = status.match(/\(([^)]+)\)/);
-    const sessionTag = sessionMatch ? sessionMatch[1] : '';
-    const isSC = sessionTag.toLowerCase() === 'sc';
-
     return (
-        <span className={cn("uppercase group/badge relative inline-flex items-center justify-center leading-none", style.color, style.size)}>
-            {style.text}
-            {sessionTag && !isSC && (
-                <span className="text-[9px] font-bold lowercase mt-1.5 ml-0.5 opacity-80">{sessionTag}</span>
-            )}
+        <span className={cn("group/badge relative inline-flex items-center justify-center leading-none", style.color, style.size)}>
+            {label}
             {hasDetail && (
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/badge:block z-[9999] pointer-events-none">
-                    <div className="bg-gray-900 text-white text-[11px] px-3 py-1.5 rounded-lg shadow-2xl w-max min-w-[80px] text-center border border-gray-700 font-bold animate-in fade-in slide-in-from-bottom-1 duration-200">
-                        {detail}
+                    <div className="bg-gray-900 text-white text-[11px] px-3 py-1.5 rounded-lg shadow-2xl w-max min-w-[100px] max-w-[260px] text-center border border-gray-700 font-bold animate-in fade-in slide-in-from-bottom-1 duration-200">
+                        {detail.replace(/; /g, '\n').replace(/, /g, '\n')}
                     </div>
                     <div className="w-2 h-2 bg-gray-900 rotate-45 mx-auto -mt-1 border-r border-b border-gray-700"></div>
                 </div>
@@ -680,9 +702,10 @@ function CompactStatusBadge({ status }: { status: string }) {
 }
 
 function StatusBadge({ status }: { status: string }) {
-    const baseCode = status.split('(')[0].trim();
-    const hasNote = status.includes('[');
-    const note = hasNote ? status.substring(status.indexOf('[') + 1, status.lastIndexOf(']')) : '';
+    const label = (status || '').split(' [')[0].trim();
+    const baseCode = label.split(/[\(\[sc]/)[0].trim().toUpperCase();
+    const hasNote = (status || '').includes('[');
+    const note = hasNote ? status.match(/\[(.*?)\]/)?.[1] || '' : '';
 
     const map = {
         'P': { text: 'Phép (P)', bg: 'bg-yellow-50', color: 'text-yellow-600', border: 'border-yellow-200' },
@@ -696,11 +719,11 @@ function StatusBadge({ status }: { status: string }) {
 
     return (
         <span className={cn("px-2 py-1 rounded text-xs font-bold border group relative cursor-help", style.bg, style.color, style.border)}>
-            {style.text}
+            {label}
             {hasNote && (
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-[100] pointer-events-none">
-                    <div className="bg-gray-900 text-white text-[11px] px-2 py-1.5 rounded-lg shadow-2xl whitespace-nowrap border border-gray-700 font-bold">
-                        {note}
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/block z-[100] pointer-events-none">
+                    <div className="bg-gray-900 text-white text-[11px] px-2 py-1.5 rounded-lg shadow-2xl min-w-[100px] max-w-[260px] text-center border border-gray-700 font-bold">
+                        {note.replace(/; /g, '\n').replace(/, /g, '\n')}
                     </div>
                     <div className="w-2 h-2 bg-gray-900 rotate-45 mx-auto -mt-1 border-r border-b border-gray-700"></div>
                 </div>

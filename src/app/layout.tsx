@@ -12,6 +12,9 @@ import { Analytics } from "@vercel/analytics/next"
 
 import { LoadingProvider } from '@/context/loading-context';
 import { LoadingOverlay } from '@/components/ui/loading-overlay';
+import { ChatProvider } from '@/context/chat-context';
+import { ChatContainer } from '@/components/chat/chat-container';
+import { Toaster } from 'react-hot-toast';
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -31,19 +34,23 @@ export default function RootLayout({
         <LoadingProvider>
           <AuthProvider>
             <FeatureFlagsProvider>
-              <ViewModeProvider>
-                <div className="flex flex-col min-h-screen pb-20 md:pb-0">
-                  <SiteHeader />
-                  <ViewContainer>
-                    {children}
-                  </ViewContainer>
-                  <SiteFooter />
-                  <BottomNav />
-                </div>
-              </ViewModeProvider>
+              <ChatProvider>
+                <ViewModeProvider>
+                  <div className="flex flex-col min-h-screen pb-20 md:pb-0">
+                    <SiteHeader />
+                    <ViewContainer>
+                      {children}
+                    </ViewContainer>
+                    <SiteFooter />
+                    <BottomNav />
+                    <ChatContainer />
+                  </div>
+                </ViewModeProvider>
+              </ChatProvider>
             </FeatureFlagsProvider>
           </AuthProvider>
           <LoadingOverlay />
+          <Toaster position="top-right" />
         </LoadingProvider>
         <Analytics />
       </body>

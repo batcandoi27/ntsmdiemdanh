@@ -9,7 +9,7 @@ import { useAuth } from '@/context/auth-context';
 import { AttendanceStatus } from '@/types/models';
 
 import { SessionType } from '@/types/timetable';
-import { Search, Loader2, Save, X, CheckCircle2, Edit3, Plus } from 'lucide-react';
+import { Search, Loader2, Save, X, CheckCircle2, Edit3, Plus, ChevronDown, ChevronUp, Users, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const triggerHapticFeedback = () => {
@@ -29,6 +29,7 @@ interface StudentSelectorDialogProps {
     date: string;
     session: SessionType;
     onDateChange: (date: string) => void;
+    onSessionChange?: (session: SessionType) => void;
     onSaved: () => void;
 }
 
@@ -57,6 +58,7 @@ export function StudentSelectorDialog({
     date,
     session,
     onDateChange,
+    onSessionChange,
     onSaved
 }: StudentSelectorDialogProps) {
     const [students, setStudents] = useState<StudentAttendanceDetail[]>([]);
@@ -78,8 +80,17 @@ export function StudentSelectorDialog({
     const [localRewardNotesMap, setLocalRewardNotesMap] = useState<Record<string, Record<number, string>>>({});
 
     const [selectedHs, setSelectedHs] = useState<Set<string>>(new Set());
-    const [isMultiMode, setIsMultiMode] = useState(false);
-    const [showBulkSuggestions, setShowBulkSuggestions] = useState(false);
+    const [mode, setMode] = useState<'single' | 'multi'>('single');
+    const [isSelectorOpen, setIsSelectorOpen] = useState(false);
+    
+    // Multi-mode shared states (form trống khi bắt đầu)
+    const [multiMissedPeriods, setMultiMissedPeriods] = useState<number[]>([]);
+    const [multiViolationPeriods, setMultiViolationPeriods] = useState<number[]>([]);
+    const [multiRewardPeriods, setMultiRewardPeriods] = useState<number[]>([]);
+    const [multiNotes, setMultiNotes] = useState<Record<number, string>>({});
+    const [multiViolationNotes, setMultiViolationNotes] = useState<Record<number, string>>({});
+    const [multiRewardNotes, setMultiRewardNotes] = useState<Record<number, string>>({});
+    const [multiLastActiveP, setMultiLastActiveP] = useState<number | null>(null);
 
     const [loading, setLoading] = useState(false);
     const [isSaving, startSaving] = useTransition();
@@ -102,29 +113,212 @@ export function StudentSelectorDialog({
         KH: [
             { group: "Học tập", items: ["Phát biểu tốt", "Bài làm tốt", "Điểm tốt", "Tiến bộ", "Thái độ", "Chăm học", "Tích cực", "Hợp tác tốt", "Gương mẫu"], color: "bg-green-100 text-green-700 border-green-200" },
             { group: "Hoạt động", items: ["Trực nhật tốt", "Giúp bạn", "Hỗ trợ lớp", "Tham gia tốt"], color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-            { group: "Đặc biệt", items: ["Gương tốt", "Xuất sắc", "Tuyên dương"], color: "bg-orange-100 text-orange-700 border-orange-200" }
+            { group: "Đặc biệt", items: ["Gương tốt", "Xuất sắc", "Tuyên đương"], color: "bg-orange-100 text-orange-700 border-orange-200" }
         ]
     };
-    
-    // Thêm danh sách các tiết cho phép Trễ
-    const LATE_PERIODS = ["T1", "T2", "T3", "T4", "T5"];
 
     const STATUS_THEME = {
         P: { bg: "bg-yellow-500", border: "border-yellow-600", text: "text-white", light: "bg-yellow-50/50", accent: "bg-yellow-600", ripple: "shadow-yellow-200" },
         K: { bg: "bg-red-500", border: "border-red-600", text: "text-white", light: "bg-red-50/50", accent: "bg-red-600", ripple: "shadow-red-200" },
         V: { bg: "bg-blue-500", border: "border-blue-600", text: "text-white", light: "bg-blue-50/50", accent: "bg-blue-600", ripple: "shadow-blue-200" },
-        T: { bg: "bg-sky-500", border: "border-sky-600", text: "text-white", light: "bg-sky-50/50", accent: "bg-sky-600", ripple: "shadow-sky-200" },
+        T: { bg: "bg-blue-500", border: "border-blue-600", text: "text-white", light: "bg-blue-50/50", accent: "bg-blue-600", ripple: "shadow-blue-200" },
         VP: { bg: "bg-purple-600", border: "border-purple-700", text: "text-white", light: "bg-purple-50/50", accent: "bg-purple-700", ripple: "shadow-purple-200" },
-        KH: { bg: "bg-orange-500", border: "border-orange-600", text: "text-white", light: "bg-orange-50/50", accent: "bg-orange-600", ripple: "shadow-orange-200" },
+        KH: { bg: "bg-green-600", border: "border-green-700", text: "text-white", light: "bg-green-50/50", accent: "bg-green-700", ripple: "shadow-green-200" },
     };
     const theme = STATUS_THEME[targetStatus as keyof typeof STATUS_THEME] || STATUS_THEME.V;
+
+    // --- RE-USE FORM LOGIC 100% FROM SINGLE-MODE ---
+    const renderAttendanceForm = (
+        periods: number[],
+        vPeriods: number[],
+        rPeriods: number[],
+        notes: Record<number, string>,
+        vNotes: Record<number, string>,
+        rNotes: Record<number, string>,
+        updatePeriods: (p: number[]) => void,
+        updateVPeriods: (p: number[]) => void,
+        updateRPeriods: (p: number[]) => void,
+        updateNotes: (n: Record<number, string> | ((prev: Record<number, string>) => Record<number, string>)) => void,
+        updateVNotes: (n: Record<number, string> | ((prev: Record<number, string>) => Record<number, string>)) => void,
+        updateRNotes: (n: Record<number, string> | ((prev: Record<number, string>) => Record<number, string>)) => void,
+        lastActP: number | null,
+        setLastActP: (p: number | null) => void,
+        isMultiMode: boolean = false
+    ) => {
+        const currentP = targetStatus === 'VP' ? vPeriods : (targetStatus === 'KH' ? rPeriods : periods);
+        const currentN = targetStatus === 'VP' ? vNotes : (targetStatus === 'KH' ? rNotes : notes);
+        const setP = targetStatus === 'VP' ? updateVPeriods : (targetStatus === 'KH' ? updateRPeriods : updatePeriods);
+        const setN = targetStatus === 'VP' ? updateVNotes : (targetStatus === 'KH' ? updateRNotes : updateNotes);
+
+        return (
+            <div className={cn("animate-in slide-in-from-top-1 space-y-3", isMultiMode ? "p-0" : "mt-3 pl-8")}>
+                <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                        <div className="text-[10px] text-gray-400 font-medium capitalize">
+                            {targetStatus === 'VP' ? 'Vi phạm tiết:' : (targetStatus === 'KH' ? 'Khen thưởng tiết:' : 'Tiết vắng/muộn:')}:
+                        </div>
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); setP([1, 2, 3, 4, 5]); }}
+                                className="text-[9px] font-bold text-blue-500 hover:underline"
+                            >
+                                Tất cả
+                            </button>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); setP([]); setLastActP(null); }}
+                                className="text-[9px] font-bold text-red-500 hover:underline"
+                            >
+                                Hủy chọn
+                            </button>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); setP([]); setLastActP(null); }}
+                                className="ml-1 text-[9px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 hover:bg-green-100 flex items-center gap-0.5"
+                            >
+                                <Plus size={10} /> Tiết
+                            </button>
+                        </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                        {[1, 2, 3, 4, 5].map(p => {
+                            const isActive = currentP.includes(p);
+                            const isLast = lastActP === p;
+                            return (
+                                <button
+                                    key={p}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        const next = currentP.includes(p) ? currentP.filter(x => x !== p) : [...currentP, p].sort();
+                                        setP(next);
+                                        if (next.includes(p)) setLastActP(p);
+                                        else if (lastActP === p) setLastActP(next[0] || null);
+                                    }}
+                                    className={cn(
+                                        "text-[10px] min-w-[32px] px-2 py-1 rounded border transition-colors font-bold relative",
+                                        isActive
+                                            ? (targetStatus === 'VP' ? 'bg-purple-100 text-purple-700 border-purple-200' : (targetStatus === 'KH' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-blue-100 text-blue-700 border-blue-200'))
+                                            : 'bg-white text-gray-400 border-gray-100 hover:bg-gray-50 font-normal outline-none',
+                                        isLast && "ring-2 ring-yellow-400 ring-offset-1"
+                                    )}
+                                >
+                                    T{p}
+                                    {isLast && <div className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full border border-white" />}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                <div className="space-y-2">
+                    {(() => {
+                        const entries = Object.entries(currentN || {}).filter(([p, v]) => v && p !== "0");
+                        if (entries.length === 0) return null;
+                        const notePs: Record<string, number[]> = {};
+                        entries.forEach(([p, v]) => {
+                            if (!notePs[v]) notePs[v] = [];
+                            notePs[v].push(Number(p));
+                        });
+                        return (
+                            <div className="space-y-1 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                                {Object.entries(notePs).map(([v, periods]) => {
+                                    const sorted = [...periods].sort((a,b) => a - b);
+                                    const ranges: string[] = [];
+                                    let start = sorted[0], prev = sorted[0];
+                                    for (let i = 1; i <= sorted.length; i++) {
+                                        if (i < sorted.length && sorted[i] === prev + 1) prev = sorted[i];
+                                        else {
+                                            if (start === prev) ranges.push(`${start}`); else ranges.push(`${start}-${prev}`);
+                                            if (i < sorted.length) { start = sorted[i]; prev = sorted[i]; }
+                                        }
+                                    }
+                                    return (
+                                        <div key={v} className="flex items-center gap-2 text-[10px]">
+                                            <span className="bg-gray-200 px-1 rounded font-mono text-gray-600 shrink-0">T{ranges.join(',')}</span>
+                                            <span className="text-gray-700 font-medium truncate">{v}</span>
+                                            <button 
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const updated = { ...currentN };
+                                                    periods.forEach(p => delete updated[p]);
+                                                    setN(updated);
+                                                }}
+                                                className="ml-auto text-red-400 hover:text-red-600"
+                                            >
+                                                <X size={10} />
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })()}
+
+                    <div className="space-y-3">
+                        {NOTE_SUGGESTIONS[targetStatus as keyof typeof NOTE_SUGGESTIONS]?.map(group => (
+                            <div key={group.group} className="flex flex-wrap gap-1.5">
+                                {group.items.map(suggestion => {
+                                    const targetPeriod = lastActP || (currentP.includes(0) ? 0 : (currentP[0] || 0));
+                                    const currentNote = currentN?.[targetPeriod] || '';
+                                    const isSelected = currentNote.split(', ').includes(suggestion);
+                                    return (
+                                        <button
+                                            key={suggestion}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const targetPs = lastActP ? [lastActP] : (currentP.length > 0 ? currentP : [0]);
+                                                setN(prev => {
+                                                    const updated = { ...prev };
+                                                    targetPs.forEach(p => {
+                                                        const cur = updated[p] || '';
+                                                        const parts = cur ? cur.split(', ') : [];
+                                                        if (parts.includes(suggestion)) updated[p] = parts.filter(x => x !== suggestion).join(', ');
+                                                        else updated[p] = parts.length > 0 ? `${cur}, ${suggestion}` : suggestion;
+                                                    });
+                                                    return updated;
+                                                });
+                                                triggerHapticFeedback();
+                                            }}
+                                            className={cn(
+                                                "text-[10px] px-2 py-1 rounded-md border transition-all",
+                                                isSelected ? `${theme.bg} text-white border-transparent` : `${group.color} hover:shadow-sm`
+                                            )}
+                                        >
+                                            {isSelected ? suggestion : `+ ${suggestion}`}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        ))}
+
+                        <div className="relative group/input">
+                            <input
+                                type="text"
+                                placeholder={lastActP ? `Ghi chú cho Tiết ${lastActP}...` : "Nhập ghi chú chung..."}
+                                className="w-full bg-white border border-gray-200 px-3 py-2 rounded-xl text-xs focus:ring-2 focus:ring-blue-100 focus:border-blue-300 outline-none transition-all pr-8"
+                                value={currentN?.[lastActP || 0] || ''}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    const targetPs = lastActP ? [lastActP] : (currentP.length > 0 ? currentP : [0]);
+                                    setN(prev => {
+                                        const updated = { ...prev };
+                                        targetPs.forEach(p => updated[p] = val);
+                                        return updated;
+                                    });
+                                }}
+                            />
+                            <Edit3 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within/input:text-blue-400 transition-colors" size={12} />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     useEffect(() => {
         if (open && classId) {
             setLoading(true);
             getClassAttendanceDetails(classId, date, session)
                 .then(data => {
-                    // Sắp xếp học sinh theo mã (phần số sau dấu gạch dưới)
                     const sortedData = [...data].sort((a, b) => {
                         const codeA = a.student.code || '';
                         const codeB = b.student.code || '';
@@ -135,7 +329,6 @@ export function StudentSelectorDialog({
                     });
 
                     setStudents(sortedData);
-                    // Initialize local maps
                     const statusMap: Record<string, AttendanceStatus> = {};
                     const violationMap: Record<string, boolean> = {};
                     const rewardMap: Record<string, boolean> = {};
@@ -151,25 +344,39 @@ export function StudentSelectorDialog({
                         statusMap[code] = s.status || '';
                         violationMap[code] = !!s.violation;
                         rewardMap[code] = !!s.reward;
-                        
-                        noteMap[code] = s.statusNotes || (s.note ? { 0: s.note } : {});
-                        vNoteMap[code] = s.violationNotes || (s.violationNote ? { 0: s.violationNote } : {});
-                        rNoteMap[code] = s.rewardNotes || (s.rewardNote ? { 0: s.rewardNote } : {});
+                        const parseFormattedNote = (n?: string): Record<number, string> => {
+                            if (!n) return {};
+                            if (!n.includes('T') || !n.includes(':')) return { 0: n };
+                            
+                            const result: Record<number, string> = {};
+                            // Phân rã chuỗi dạng "T1-2,4: Ghi chú A, T3: Ghi chú B"
+                            const sections = n.split(/,\s*(?=T\d)/);
+                            sections.forEach(section => {
+                                const match = section.trim().match(/^T([\d\-,]+):\s*(.*)$/);
+                                if (match) {
+                                    const [, pRange, noteText] = match;
+                                    pRange.split(',').forEach(r => {
+                                        if (r.includes('-')) {
+                                            const [start, end] = r.split('-').map(Number);
+                                            for (let i = start; i <= end; i++) result[i] = noteText;
+                                        } else {
+                                            result[Number(r)] = noteText;
+                                        }
+                                    });
+                                } else if (!section.includes(':')) {
+                                    result[0] = section.trim();
+                                }
+                            });
+                            return result;
+                        };
 
-                        if (s.violation) {
-                            violationPeriodsMap[code] = s.violationPeriods || [1, 2, 3, 4, 5];
-                        }
-                        
-                        if (s.reward) {
-                            // @ts-ignore
-                            rewardPeriodsMap[code] = s.rewardPeriods || [];
-                        }
-                        
-                        if (s.missedPeriods) {
-                            missedPeriodsMap[code] = s.missedPeriods;
-                        } else if (['P', 'K', 'T', 'V'].includes(s.status)) {
-                            missedPeriodsMap[code] = [];
-                        }
+                        noteMap[code] = s.statusNotes || parseFormattedNote(s.note);
+                        vNoteMap[code] = s.violationNotes || parseFormattedNote(s.violationNote);
+                        rNoteMap[code] = s.rewardNotes || parseFormattedNote(s.rewardNote);
+                        if (s.violation) violationPeriodsMap[code] = s.violationPeriods || (s.violationNotes ? Object.keys(s.violationNotes).map(Number).filter(n => n > 0) : [1, 2, 3, 4, 5]);
+                        if (s.reward) rewardPeriodsMap[code] = (s as any).rewardPeriods || [];
+                        if (s.missedPeriods) missedPeriodsMap[code] = s.missedPeriods;
+                        else if (['P', 'K', 'T', 'V'].includes(s.status)) missedPeriodsMap[code] = [];
                     });
                     setLocalStatusMap(statusMap);
                     setLocalViolationMap(violationMap);
@@ -187,43 +394,19 @@ export function StudentSelectorDialog({
 
     const handleToggle = (studentCode: string) => {
         triggerHapticFeedback();
-        
         if (targetStatus === 'VP') {
-            // Toggle Vi phạm độc lập
-            setLocalViolationMap(prev => ({
-                ...prev,
-                [studentCode]: !prev[studentCode]
-            }));
+            setLocalViolationMap(prev => ({ ...prev, [studentCode]: !prev[studentCode] }));
             return;
         }
-
         if (targetStatus === 'KH') {
-            // Toggle Khen thưởng độc lập
-            setLocalRewardMap(prev => {
-                const newVal = !prev[studentCode];
-                if (newVal && !localRewardPeriodsMap[studentCode]) {
-                    setLocalRewardPeriodsMap(p => ({ ...p, [studentCode]: [] }));
-                }
-                return { ...prev, [studentCode]: newVal };
-            });
+            setLocalRewardMap(prev => ({ ...prev, [studentCode]: !prev[studentCode] }));
             return;
         }
-
-        // Toggle Chuyên cần (P, K, T, V)
         setLocalStatusMap(prev => {
-            const currentStatus = prev[studentCode];
-            const isTarget = currentStatus === targetStatus;
+            const isTarget = prev[studentCode] === targetStatus;
             const newStatus = isTarget ? '' as AttendanceStatus : targetStatus;
-            
-            // Mặc định là vắng cả buổi (mảng rỗng)
-            if (newStatus && !localMissedPeriodsMap[studentCode]) {
-                setLocalMissedPeriodsMap(p => ({ ...p, [studentCode]: [] }));
-            }
-            
-            return {
-                ...prev,
-                [studentCode]: newStatus
-            };
+            if (newStatus && !localMissedPeriodsMap[studentCode]) setLocalMissedPeriodsMap(p => ({ ...p, [studentCode]: [] }));
+            return { ...prev, [studentCode]: newStatus };
         });
     };
 
@@ -246,53 +429,21 @@ export function StudentSelectorDialog({
         });
     };
 
-    const handleNoteChange = (studentCode: string, note: string) => {
-        // LUÔN GÁN CHO TẤT CẢ CÁC TIẾT ĐANG BÔI ĐẬM (HIGHLIGHTED)
-        const periods = targetStatus === 'VP' 
-            ? (localViolationPeriodsMap[studentCode] || []) 
-            : (targetStatus === 'KH' ? (localRewardPeriodsMap[studentCode] || []) : (localMissedPeriodsMap[studentCode] || []));
-        
-        const targetPeriods = periods.length > 0 ? periods : [0];
-
-        if (targetStatus === 'VP') {
-            setLocalViolationNotesMap(prev => {
-                const updated = { ...(prev[studentCode] || {}) };
-                targetPeriods.forEach(p => updated[p] = note);
-                return { ...prev, [studentCode]: updated };
-            });
-        } else if (targetStatus === 'KH') {
-            setLocalRewardNotesMap(prev => {
-                const updated = { ...(prev[studentCode] || {}) };
-                targetPeriods.forEach(p => updated[p] = note);
-                return { ...prev, [studentCode]: updated };
-            });
-        } else {
-            setLocalNotesMap(prev => {
-                const updated = { ...(prev[studentCode] || {}) };
-                targetPeriods.forEach(p => updated[p] = note);
-                return { ...prev, [studentCode]: updated };
-            });
-        }
-    };
-
     const handleSave = () => {
-        console.group("🚀 [Quick Attendance] Đang lưu Điểm danh thủ công");
         startSaving(async () => {
             const marks: any[] = [];
-            // Thu thập TẤT CẢ các mã học sinh đã được thay đổi HOẶC có dữ liệu ban đầu
-            // Để gửi lên server. Server sẽ dùng danh sách này để DELETE toàn bộ, rồi INSERT nếu có.
             const allCodes = Array.from(new Set([
                 ...Object.keys(localStatusMap),
                 ...Object.keys(localViolationMap),
                 ...Object.keys(localRewardMap),
-                // Lấy thêm các học sinh có điểm danh ban đầu để đảm bảo nếu bị clear thì vẫn gửi lên
                 ...students.filter(s => s.status || s.violation || s.reward).map(s => s.student.code)
             ]));
 
             allCodes.forEach(code => {
-                const status = localStatusMap[code] || '';
-                const hasViolation = localViolationMap[code];
-                const hasReward = localRewardMap[code];
+                const isMultiTarget = mode === 'multi' && selectedHs.has(code);
+                const status = isMultiTarget ? targetStatus : (localStatusMap[code] || '');
+                const hasViolation = isMultiTarget ? (targetStatus === 'VP' || localViolationMap[code]) : localViolationMap[code];
+                const hasReward = isMultiTarget ? (targetStatus === 'KH' || localRewardMap[code]) : localRewardMap[code];
 
                 let v3Status: AttendanceStatusV3 = 'present';
                 if (status === 'P') v3Status = 'excused';
@@ -300,92 +451,148 @@ export function StudentSelectorDialog({
                 else if (status === 'T') v3Status = 'late';
                 else if (status === 'V') v3Status = 'absent';
 
-                const getCombinedPeriods = (sel: number[], nMap: Record<number, string>) => {
-                    const noteP = Object.keys(nMap).map(Number).filter(p => p > 0);
-                    return Array.from(new Set([...sel, ...noteP])).sort();
-                };
-
-                const missedPeriods = (status) 
-                    ? getCombinedPeriods(localMissedPeriodsMap[code] || [], localNotesMap[code] || {})
-                    : [];
-
-                // Chuyển đổi Record<number, string> sang string gộp cho API backend cũ hỗ trợ đa tầng
-                // Nếu backend đã hỗ trợ mảng record thì tốt, nhưng hiện tại ta gộp để tương thích
-                const formatNotes = (nMap: Record<number, string>) => {
-                    const entries = Object.entries(nMap).filter(([_, v]) => v);
+                const formatNotes = (entriesMap: Record<number, string>) => {
+                    const entries = Object.entries(entriesMap);
                     if (entries.length === 0) return "";
-                    
-                    // Nhóm theo nội dung ghi chú để tìm dải tiết
-                    const noteToPs: Record<string, number[]> = {};
+                    const notePs: Record<string, number[]> = {};
                     entries.forEach(([p, v]) => {
-                        if (!noteToPs[v]) noteToPs[v] = [];
-                        noteToPs[v].push(Number(p));
+                        if (!v) return;
+                        if (!notePs[v]) notePs[v] = [];
+                        notePs[v].push(Number(p));
                     });
-
-                    return Object.entries(noteToPs).map(([noteText, periods]) => {
-                        if (periods.includes(0)) return noteText;
-                        
-                        const sorted = [...periods].sort((a,b) => a - b);
+                    return Object.entries(notePs).map(([noteText, ps]) => {
+                        const sorted = ps.sort((a, b) => a - b);
                         const ranges: string[] = [];
-                        let start = sorted[0];
-                        let prev = sorted[0];
+                        
+                        // Quy tắc 'Cả buổi' (Full Session):
+                        const isFullSession = sorted.length === 0 || (sorted.length >= 5 && sorted.includes(1) && sorted.includes(5));
+                        if (isFullSession) return noteText;
 
-                        for (let i = 1; i <= sorted.length; i++) {
-                            if (i < sorted.length && sorted[i] === prev + 1) {
-                                prev = sorted[i];
-                            } else {
-                                if (start === prev) ranges.push(`${start}`);
-                                else ranges.push(`${start}-${prev}`);
-                                if (i < sorted.length) { start = sorted[i]; prev = sorted[i]; }
+                        if (sorted.length === 1) {
+                            ranges.push(`${sorted[0]}`);
+                        } else {
+                            for (let i = 0, start, prev; i < sorted.length; i++) {
+                                if (i === 0) { start = sorted[i]; prev = sorted[i]; continue; }
+                                if (i < sorted.length && sorted[i] === prev + 1) prev = sorted[i];
+                                else {
+                                    if (start === prev) ranges.push(`${start}`); else ranges.push(`${start}-${prev}`);
+                                    if (i < sorted.length) { start = sorted[i]; prev = sorted[i]; }
+                                }
+                                if (i === sorted.length - 1) {
+                                    if (start === prev) ranges.push(`${start}`); else ranges.push(`${start}-${prev}`);
+                                }
                             }
                         }
                         return `T${ranges.join(',')}: ${noteText}`;
                     }).join(", ");
                 };
 
+                const mergePeriods = (existing: number[], incoming: number[]) => {
+                    const combined = Array.from(new Set([...existing, ...incoming]));
+                    // Nếu là 5 tiết học đầy đủ (1-5), ta để trống danh sách để biểu thị 'Cả buổi' (Full Session)
+                    // Điều này khớp 100% với logic của Single mode.
+                    if (combined.length >= 5 && combined.includes(1) && combined.includes(5)) return [];
+                    return combined;
+                };
+
+                const missedPs = isMultiTarget ? mergePeriods(localMissedPeriodsMap[code] || [], multiMissedPeriods) : (localMissedPeriodsMap[code] || []);
+                const vPs = isMultiTarget ? mergePeriods(localViolationPeriodsMap[code] || [], multiViolationPeriods) : (localViolationPeriodsMap[code] || []);
+                const rPs = isMultiTarget ? mergePeriods(localRewardPeriodsMap[code] || [], multiRewardPeriods) : (localRewardPeriodsMap[code] || []);
+
+                // Logic Deep Merge v2.7: Tự động Tách (Explode) và Gộp (Merge)
+                const mergeNotes = (existing: Record<number, string>, incoming: Record<number, string>) => {
+                    let result = { ...existing };
+                    
+                    // Vệ sinh dữ liệu cũ: Nếu tồn tại chuỗi đã format 'T...' thì loại bỏ để tránh lặp dữ liệu
+                    Object.entries(result).forEach(([p, val]) => {
+                        if (typeof val === 'string' && (val.includes('T') || val.includes(':'))) {
+                            delete result[Number(p)];
+                        }
+                    });
+
+                    const fullKey = result[0] !== undefined ? 0 : ((result as any)["0"] !== undefined ? "0" : null);
+                    const incomingHasPeriods = Object.keys(incoming).some(k => k !== "0" && k !== "null");
+
+                    // Nếu đang vắng 'Cả buổi' (key 0) mà có cập nhật 'Tiết lẻ' (1-5)
+                    // -> 'Phân rã' nội dung Cả buổi sang 5 tiết lẻ để chuẩn bị gộp chuyên sâu.
+                    if (fullKey !== null && incomingHasPeriods) {
+                        const fullNote = result[fullKey as any];
+                        [1, 2, 3, 4, 5].forEach(p => {
+                            if (!result[p]) result[p] = fullNote;
+                        });
+                        delete result[fullKey as any];
+                    }
+
+                    Object.entries(incoming).forEach(([p, val]) => {
+                        const period = Number(p);
+                        if (!val) return;
+                        
+                        // Nếu là 'Cả buổi' mới gộp cho cả 5 tiết nếu chưa có ghi chú riêng
+                        if (period === 0) {
+                             [1, 2, 3, 4, 5].forEach(i => {
+                                 if (!result[i]) result[i] = val;
+                                 else if (!result[i].includes(val)) result[i] = `${result[i]}, ${val}`;
+                             });
+                             return;
+                        }
+
+                        if (result[period] && result[period] !== val) {
+                            if (!result[period].includes(val)) {
+                                result[period] = `${result[period]}, ${val}`;
+                            }
+                        } else {
+                            result[period] = val;
+                        }
+                    });
+                    return result;
+                };
+
+                const notes = isMultiTarget ? mergeNotes(localNotesMap[code] || {}, multiNotes) : (localNotesMap[code] || {});
+                const vNotes = isMultiTarget ? mergeNotes(localViolationNotesMap[code] || {}, multiViolationNotes) : (localViolationNotesMap[code] || {});
+                const rNotes = isMultiTarget ? mergeNotes(localRewardNotesMap[code] || {}, multiRewardNotes) : (localRewardNotesMap[code] || {});
+
                 marks.push({
                     studentId: code,
                     studentName: students.find(s => s.student.code === code)?.student.fullName || code,
                     status: v3Status,
-                    missedPeriods,
-                    note: v3Status !== 'present' ? formatNotes(localNotesMap[code] || {}) : '',
-                    statusNotes: localNotesMap[code],
-                    violation: hasViolation || false,
-                    violationNote: formatNotes(localViolationNotesMap[code] || {}),
-                    violationNotes: localViolationNotesMap[code],
-                    violationPeriods: hasViolation 
-                        ? getCombinedPeriods(localViolationPeriodsMap[code] || [], localViolationNotesMap[code] || {}) 
-                        : undefined,
-                    reward: hasReward || false,
-                    rewardNote: formatNotes(localRewardNotesMap[code] || {}),
-                    rewardNotes: localRewardNotesMap[code],
-                    rewardPeriods: hasReward 
-                        ? getCombinedPeriods(localRewardPeriodsMap[code] || [], localRewardNotesMap[code] || {}) 
-                        : undefined
+                    note: formatNotes(notes),
+                    statusNotes: notes,
+                    violation: hasViolation,
+                    violationNote: formatNotes(vNotes),
+                    violationNotes: vNotes,
+                    violationPeriods: hasViolation ? vPs : [],
+                    reward: hasReward,
+                    rewardNote: formatNotes(rNotes),
+                    rewardNotes: rNotes,
+                    rewardPeriods: hasReward ? rPs : [],
+                    missedPeriods: missedPs
                 });
             });
 
-            if (!appUser) return;
+            console.log('[QuickAttendance] Bắt đầu lưu với dữ liệu:', {
+                appUser: !!appUser,
+                classId,
+                date,
+                session,
+                marksCount: marks.length,
+                sampleMark: marks[0]
+            });
+            console.log('[QuickAttendance] Chi tiết marks:', marks);
 
-            const allStudentIds = students.map(s => s.student.code);
-
+            if (!appUser) {
+                console.error('[QuickAttendance] Không tìm thấy thông tin appUser');
+                alert('Lỗi: Phiên đăng nhập hết hạn. Vui lòng tải lại trang.');
+                return;
+            }
             try {
-                console.log("-> 1. Danh sách học sinh cần cập nhật:", marks);
-                await batchMarkAttendance(appUser, {
-                    classId,
-                    session,
-                    period: null,
-                    marks
-                }, allStudentIds, new Date(date));
-
-                console.log("-> 2. ✅ Lưu thành công!");
+                const startTime = Date.now();
+                await batchMarkAttendance(appUser, { classId, session, period: null, marks }, students.map(s => s.student.code), new Date(date));
+                console.log(`[QuickAttendance] Lưu thành công trong ${Date.now() - startTime}ms`);
                 onSaved();
                 onOpenChange(false);
             } catch (error: any) {
-                console.error("-> ❌ Lỗi khi lưu:", error);
+                console.error('[QuickAttendance] Lỗi nghiêm trọng khi lưu:', error);
                 alert(error.message || 'Lỗi lưu điểm danh');
-            } finally {
-                console.groupEnd();
             }
         });
     };
@@ -395,658 +602,278 @@ export function StudentSelectorDialog({
         s.student.code.toLowerCase().includes(search.toLowerCase())
     );
 
-    const targetLabel = STATUS_LABELS[targetStatus] || targetStatus;
-    const targetColor = STATUS_COLORS[targetStatus] || 'text-gray-800';
-    const showNoteInput = targetStatus === 'VP' || targetStatus === 'T' || targetStatus === 'K' || targetStatus === 'P' || targetStatus === 'KH';
-
     const allInViewSelected = filteredStudents.length > 0 && filteredStudents.every(s => selectedHs.has(s.student.code));
-
-    const handleSelectAll = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (allInViewSelected) {
-            setSelectedHs(new Set());
-        } else {
-            setSelectedHs(new Set(filteredStudents.map(s => s.student.code)));
-        }
-        triggerHapticFeedback();
-    };
 
     return (
         <Modal
             isOpen={open}
             onClose={() => onOpenChange(false)}
-            title={`Điểm danh lớp ${className} - ${targetLabel}`}
+            title={`Điểm danh lớp ${className}`}
         >
             <div className="flex flex-col h-[75vh] sm:h-[70vh]">
-                <div className="flex gap-2 mb-2 shrink-0">
-                    <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                <div className="flex flex-wrap items-center gap-2 mb-4 bg-white/50 p-1.5 rounded-2xl border border-gray-100 shadow-sm shrink-0">
+                    {/* Nút toggle Buổi Sáng / Chiều */}
+                    <div className="flex bg-gray-100/80 rounded-xl p-1">
+                        <button
+                            onClick={() => onSessionChange?.('morning')}
+                            className={cn(
+                                "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                                session === 'morning'
+                                    ? "bg-blue-500 text-white shadow-sm"
+                                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                            )}
+                        >
+                            ☀️ Buổi Sáng
+                        </button>
+                        <button
+                            onClick={() => onSessionChange?.('afternoon')}
+                            className={cn(
+                                "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all",
+                                session === 'afternoon'
+                                    ? "bg-purple-500 text-white shadow-sm"
+                                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                            )}
+                        >
+                            🌙 Buổi Chiều
+                        </button>
+                    </div>
+                    <div className="flex p-1 bg-gray-100/80 rounded-xl">
+                        <button
+                            onClick={() => { setMode('single'); setSelectedHs(new Set()); setIsSelectorOpen(false); }}
+                            className={cn("flex items-center justify-center w-9 h-9 rounded-lg transition-all", mode === 'single' ? "bg-white text-blue-600 shadow-sm" : "text-gray-400 hover:text-gray-600")}
+                            title="Từng em"
+                        >
+                            <User size={18} />
+                        </button>
+                        <button
+                            onClick={() => { setMode('multi'); setIsSelectorOpen(true); }}
+                            className={cn("flex items-center justify-center w-9 h-9 rounded-lg transition-all", mode === 'multi' ? "bg-white text-blue-600 shadow-sm" : "text-gray-400 hover:text-gray-600")}
+                            title="Hàng loạt"
+                        >
+                            <Users size={18} />
+                        </button>
+                    </div>
+
+                    <div className="relative flex-1 min-w-[120px]">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
                         <input
                             type="text"
                             placeholder="Tìm học sinh..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all bg-gray-50/50"
+                            className="w-full pl-9 pr-3 py-2 text-xs border border-transparent rounded-xl focus:bg-white focus:border-blue-200 outline-none transition-all bg-gray-100/50"
                         />
                     </div>
+
                     <input
                         type="date"
                         value={date}
                         onChange={(e) => onDateChange(e.target.value)}
-                        className="bg-gray-50 border border-gray-200 rounded-lg px-2 text-sm font-medium text-gray-600 outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                        className="bg-gray-100/80 border border-transparent rounded-xl px-3 py-1.5 text-xs font-bold text-gray-600 outline-none focus:bg-white focus:border-blue-200 cursor-pointer w-auto"
                     />
                 </div>
 
-                <div className="flex items-center justify-between px-2 mb-4 bg-gray-50 p-2 rounded-xl border border-gray-100 shrink-0">
-                    <div className="flex items-center gap-3">
-                        <button 
-                            onClick={handleSelectAll}
-                            className={cn(
-                                "w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all",
-                                allInViewSelected ? "bg-blue-600 border-blue-600" : "bg-white border-gray-300"
-                            )}
-                        >
-                            {allInViewSelected && <CheckCircle2 className="text-white w-4 h-4" />}
-                        </button>
-                        <div className="flex flex-col">
-                            <span className="text-[11px] font-black text-gray-800 uppercase tracking-tight">Chọn tất cả</span>
-                            <span className="text-[9px] text-gray-400 font-bold italic">({filteredStudents.length} em)</span>
-                        </div>
-                    </div>
-                    
-                    <button
-                        onClick={() => {
-                            const newState = !isMultiMode;
-                            setIsMultiMode(newState);
-                            if (!newState) setSelectedHs(new Set());
-                        }}
-                        className={cn(
-                            "flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-black transition-all",
-                            isMultiMode ? `${theme.bg} text-white shadow-md ${theme.ripple}` : "bg-white text-gray-500 border border-gray-200 shadow-sm"
-                        )}
-                    >
-                        <div className={cn("w-2 h-2 rounded-full", isMultiMode ? "bg-white animate-pulse" : "bg-gray-300")} />
-                        NHIỀU HS
-                    </button>
-                </div>
-
-                {/* Shared Editor for Bulk Mode (Ultra Compact) */}
-                {isMultiMode && selectedHs.size > 0 && (
-                    <div className={cn("mb-2 rounded-xl p-1.5 shadow-lg animate-in slide-in-from-top-2 duration-200 shrink-0", theme.bg, theme.text)}>
-                        <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-1.5 px-2 border-r border-white/20 shrink-0">
-                                <span className="text-[10px] font-black uppercase text-white">{selectedHs.size} HS</span>
-                                <button onClick={() => setSelectedHs(new Set())} className="text-white/70 hover:text-white transition-colors">
-                                    <X size={12} />
-                                </button>
-                            </div>
-
-                            <div className="flex gap-1 shrink-0 items-center">
-                                <div className="flex flex-col gap-0.5 mr-1">
-                                    <button 
-                                        onClick={() => {
-                                            const codes = Array.from(selectedHs);
-                                            const setFn = targetStatus === 'VP' ? setLocalViolationPeriodsMap : (targetStatus === 'KH' ? setLocalRewardPeriodsMap : setLocalMissedPeriodsMap);
-                                            const next: any = {};
-                                            codes.forEach(c => next[c] = [1, 2, 3, 4, 5]);
-                                            setFn(prev => ({ ...prev, ...next }));
-                                        }}
-                                        className="text-[8px] font-black bg-white/20 hover:bg-white/40 text-white px-1 rounded uppercase transition-colors"
-                                    >
-                                        Tất cả
-                                    </button>
-                                    <button 
-                                        onClick={() => {
-                                            const codes = Array.from(selectedHs);
-                                            const setFn = targetStatus === 'VP' ? setLocalViolationPeriodsMap : (targetStatus === 'KH' ? setLocalRewardPeriodsMap : setLocalMissedPeriodsMap);
-                                            const next: any = {};
-                                            codes.forEach(c => next[c] = []);
-                                            setFn(prev => ({ ...prev, ...next }));
-                                        }}
-                                        className="text-[8px] font-black bg-black/20 hover:bg-black/40 text-white/70 px-1 rounded uppercase transition-colors"
-                                    >
-                                        Hủy
-                                    </button>
-                                </div>
-                                {[1, 2, 3, 4, 5].map(p => {
-                                    const firstCode = Array.from(selectedHs)[0];
-                                    const periods = targetStatus === 'VP' ? (localViolationPeriodsMap[firstCode] || []) : (targetStatus === 'KH' ? (localRewardPeriodsMap[firstCode] || []) : (localMissedPeriodsMap[firstCode] || []));
-                                    const isActive = periods.includes(p);
-
-                                    return (
-                                        <button
-                                            key={p}
-                                            onClick={() => {
-                                                const codes = Array.from(selectedHs);
-                                                const setFn = targetStatus === 'VP' ? setLocalViolationPeriodsMap : (targetStatus === 'KH' ? setLocalRewardPeriodsMap : setLocalMissedPeriodsMap);
-                                                
-                                                // TỰ ĐỘNG BẬT TRẠNG THÁI CHÍNH HÀNG LOẠT
-                                                if (targetStatus === 'VP') {
-                                                    setLocalViolationMap(prev => {
-                                                        const next = { ...prev };
-                                                        codes.forEach(c => next[c] = true);
-                                                        return next;
-                                                    });
-                                                } else if (targetStatus === 'KH') {
-                                                    setLocalRewardMap(prev => {
-                                                        const next = { ...prev };
-                                                        codes.forEach(c => next[c] = true);
-                                                        return next;
-                                                    });
-                                                } else {
-                                                    setLocalStatusMap(prev => {
-                                                        const next = { ...prev };
-                                                        codes.forEach(c => next[c] = targetStatus);
-                                                        return next;
-                                                    });
-                                                }
-
-                                                codes.forEach(c => setFn(prev => {
-                                                    const current = prev[c] || [];
-                                                    const next = current.includes(p) ? current.filter(x => x !== p) : [...current, p].sort();
-                                                    return { ...prev, [c]: next };
-                                                }));
-                                            }}
-                                            className={cn(
-                                                "w-7 h-7 rounded-lg text-[10px] font-black border transition-all shadow-sm",
-                                                isActive 
-                                                   ? "bg-white text-gray-800 border-white" 
-                                                   : "bg-black/20 border-white/10 text-white/40 hover:bg-black/30"
-                                            )}
-                                        >
-                                            T{p}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-
-                            <div className="flex-1 relative">
-                                <input
-                                    type="text"
-                                    placeholder="Ghi chú nhóm... (Enter)"
-                                    className="w-full bg-black/10 border border-white/10 text-white placeholder:text-white/40 px-3 py-1.5 rounded-lg text-xs outline-none focus:bg-black/20 focus:border-white transition-all"
-                                    onFocus={() => setShowBulkSuggestions(true)}
-                                    onBlur={() => setTimeout(() => setShowBulkSuggestions(false), 200)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            const val = (e.target as HTMLInputElement).value;
-                                            if (!val) return;
-                                            const codes = Array.from(selectedHs);
-                                            codes.forEach(code => {
-                                                const periods = targetStatus === 'VP' ? (localViolationPeriodsMap[code] || []) : (targetStatus === 'KH' ? (localRewardPeriodsMap[code] || []) : (localMissedPeriodsMap[code] || []));
-                                                const targetPeriods = periods.length > 0 ? periods : [0];
-                                                const setNFn = targetStatus === 'VP' ? setLocalViolationNotesMap : (targetStatus === 'KH' ? setLocalRewardNotesMap : setLocalNotesMap);
-                                                setNFn(prev => {
-                                                    const updated = { ...(prev[code] || {}) };
-                                                    targetPeriods.forEach(p => updated[p] = val);
-                                                    return { ...prev, [code]: updated };
-                                                });
-                                            });
-                                            (e.target as HTMLInputElement).value = '';
-                                            triggerHapticFeedback();
-                                            setShowBulkSuggestions(false);
-                                        }
-                                    }}
-                                />
-
-                                {showBulkSuggestions && (
-                                    <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-xl shadow-xl border border-gray-100 p-2 z-50 animate-in fade-in zoom-in-95 duration-200">
-                                        <div className="space-y-3">
-                                            {NOTE_SUGGESTIONS[targetStatus as keyof typeof NOTE_SUGGESTIONS]?.map(g => (
-                                                <div key={g.group} className="space-y-1">
-                                                    <div className="text-[9px] font-bold text-gray-400 uppercase px-1">{g.group}</div>
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {g.items.map(item => (
-                                                            <button
-                                                                key={item}
-                                                                onClick={() => {
-                                                                    const codes = Array.from(selectedHs);
-                                                                    codes.forEach(code => {
-                                                                        const periods = targetStatus === 'VP' ? (localViolationPeriodsMap[code] || []) : (targetStatus === 'KH' ? (localRewardPeriodsMap[code] || []) : (localMissedPeriodsMap[code] || []));
-                                                                        const targetPeriods = periods.length > 0 ? periods : [0];
-                                                                        const setNFn = targetStatus === 'VP' ? setLocalViolationNotesMap : (targetStatus === 'KH' ? setLocalRewardNotesMap : setLocalNotesMap);
-                                                                        setNFn(prev => {
-                                                                            const updated = { ...(prev[code] || {}) };
-                                                                            const newVal = item; // Ở Bulk Mode, gán đè luôn hoặc cộng dồn tùy Sếp, hiện tại em gán đè cho chắc
-                                                                            targetPeriods.forEach(p => updated[p] = updated[p] ? `${updated[p]}, ${newVal}` : newVal);
-                                                                            return { ...prev, [code]: updated };
-                                                                        });
-                                                                    });
-                                                                    triggerHapticFeedback();
-                                                                }}
-                                                                className={cn("text-[10px] px-2 py-1 rounded-md border transition-all", g.color)}
-                                                            >
-                                                                + {item}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            ))}
+                {mode === 'multi' && (
+                    <div className="flex-1 flex flex-col min-h-0 relative">
+                        <div className="bg-white border-b border-gray-100 shadow-sm shrink-0">
+                            <button
+                                onClick={() => setIsSelectorOpen(!isSelectorOpen)}
+                                className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm transition-all animate-in zoom-in-50 duration-300", selectedHs.size > 0 ? theme.bg + " text-white" : "bg-gray-100 text-gray-400")}>
+                                        {selectedHs.size}
+                                    </div>
+                                    <div className="text-left">
+                                        <div className="text-xs font-black text-gray-800 uppercase tracking-tight mb-0.5">Học sinh đã chọn</div>
+                                        <div className={cn("text-[10px] font-bold italic", selectedHs.size > 0 ? "text-blue-600" : "text-gray-400")}>
+                                            {selectedHs.size === 0 ? "Chưa chọn em nào" : `Đã chọn ${selectedHs.size} em`}
                                         </div>
                                     </div>
-                                )}
+                                </div>
+                                {isSelectorOpen ? <ChevronUp size={20} className="text-blue-600 animate-bounce-subtle" /> : <ChevronDown size={20} className="text-gray-400" />}
+                            </button>
+                        </div>
+
+                        {isSelectorOpen && (
+                            <div className="absolute top-[64px] left-0 right-0 bottom-0 bg-white/80 backdrop-blur-md z-40 animate-in fade-in duration-200">
+                                <div className="bg-white border-b border-gray-200 shadow-2xl max-h-[80%] flex flex-col animate-in slide-in-from-top-2 duration-300">
+                                    <div className="p-3 grid grid-cols-1 gap-1.5 overflow-y-auto">
+                                        {filteredStudents.map(s => (
+                                            <button
+                                                key={s.student.code}
+                                                onClick={() => {
+                                                    setSelectedHs(prev => {
+                                                        const next = new Set(prev);
+                                                        if (next.has(s.student.code)) next.delete(s.student.code);
+                                                        else next.add(s.student.code);
+                                                        return next;
+                                                    });
+                                                }}
+                                                className={cn("flex items-center gap-3 p-2 rounded-xl transition-all text-left", selectedHs.has(s.student.code) ? "bg-gray-50 ring-1 ring-gray-100" : "hover:bg-gray-50/50")}
+                                            >
+                                                <div className={cn("w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all shrink-0", selectedHs.has(s.student.code) ? theme.bg + " " + theme.border + " shadow-sm rotate-0" : "bg-white border-gray-300 rotate-45 group-hover:rotate-0")}>
+                                                    {selectedHs.has(s.student.code) && <CheckCircle2 size={12} className="text-white" />}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className={cn("text-xs font-medium truncate tracking-tight", selectedHs.has(s.student.code) ? theme.bg.replace('bg-', 'text-') : "text-gray-700")}>{s.student.fullName}</div>
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="p-3 bg-gray-50/90 border-t border-gray-100 flex items-center justify-between shadow-inner shrink-0">
+                                        {(() => {
+                                            const allInViewSelected = filteredStudents.length > 0 && filteredStudents.every(s => selectedHs.has(s.student.code));
+
+                                            return (
+                                                <button 
+                                                    onClick={(e) => { 
+                                                        e.stopPropagation(); 
+                                                        if (allInViewSelected) setSelectedHs(new Set()); 
+                                                        else setSelectedHs(new Set(filteredStudents.map(s => s.student.code))); 
+                                                        triggerHapticFeedback(); 
+                                                    }}
+                                                    className="text-[11px] font-black text-blue-600 uppercase tracking-tighter hover:bg-blue-50 px-3 py-2 rounded-xl transition-colors"
+                                                >
+                                                    {allInViewSelected ? "Bỏ chọn tất cả" : `CHỌN TOÀN BỘ ${filteredStudents.length} HS`}
+                                                </button>
+                                            );
+                                        })()}
+                                        <button onClick={() => { setIsSelectorOpen(false); triggerHapticFeedback(); }} className={cn("text-[11px] font-black uppercase px-6 py-2.5 rounded-xl shadow-lg transition-all active:scale-95", theme.bg, "text-white")}>
+                                            XÁC NHẬN ({selectedHs.size})
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="flex-1" onClick={() => setIsSelectorOpen(false)} />
                             </div>
+                        )}
+
+                        <div className={cn("flex-1 overflow-y-auto p-4 transition-all duration-500", isSelectorOpen ? "opacity-20 blur-[4px] pointer-events-none scale-[0.98]" : "opacity-100 blur-0")}>
+                            {selectedHs.size === 0 ? (
+                                <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-3 italic">
+                                    <Users size={48} className="opacity-20" />
+                                    <p className="text-sm">Vui lòng chọn học sinh để bắt đầu</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-6 max-w-md mx-auto animate-in fade-in slide-in-from-bottom-2 duration-500">
+                                    <div className="max-h-[140px] overflow-y-auto pr-1 custom-scrollbar scroll-smooth">
+                                        <div className="flex flex-wrap gap-2 p-1">
+                                            {Array.from(selectedHs).map(code => {
+                                                const s = students.find(x => x.student.code === code);
+                                                return (
+                                                    <div key={code} className={cn("px-2.5 py-1 rounded-full text-[10px] font-bold border shadow-sm flex items-center gap-1.5 transition-all text-white", theme.bg, theme.border)}>
+                                                        {s?.student.fullName}
+                                                        <button onClick={() => setSelectedHs(prev => { const next = new Set(prev); next.delete(code); return next; })} className="hover:scale-110 active:scale-95 transition-transform"><X size={10} className="text-white/80 hover:text-white" /></button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm transition-all overflow-hidden">
+                                        {renderAttendanceForm(multiMissedPeriods, multiViolationPeriods, multiRewardPeriods, multiNotes, multiViolationNotes, multiRewardNotes, setMultiMissedPeriods, setMultiViolationPeriods, setMultiRewardPeriods, setMultiNotes, setMultiViolationNotes, setMultiRewardNotes, multiLastActiveP, setMultiLastActiveP, true)}
+                                    </div>
+                                    <div className="flex items-center gap-3 p-4 bg-blue-50/50 rounded-2xl border border-blue-100 italic">
+                                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0 shadow-inner">
+                                            <Users size={20} className="text-blue-600" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <div className="text-xs font-black text-blue-900 uppercase tracking-tighter">Chế độ hàng loạt</div>
+                                            <div className="text-[10px] text-blue-700/70 font-bold">Dữ liệu trên sẽ áp dụng cho {selectedHs.size} học sinh đang chọn.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
 
-                <div className="flex-1 overflow-y-auto px-1 pb-4">
-                    {loading ? (
-                        <div className="flex justify-center py-8">
-                            <Loader2 className="animate-spin text-blue-600" size={32} />
-                        </div>
-                    ) : (
-                        <div className="space-y-2">
-                            {filteredStudents.map(item => {
-                                const currentStatus = localStatusMap[item.student.code];
-                                const hasViolation = localViolationMap[item.student.code];
-                                const hasReward = localRewardMap[item.student.code];
-                                const isMultiSelected = selectedHs.has(item.student.code);
-                                
-                                let isChecked = false;
-                                if (targetStatus === 'VP') isChecked = hasViolation || false;
-                                else if (targetStatus === 'KH') isChecked = hasReward || false;
-                                else isChecked = currentStatus === targetStatus;
+                {mode === 'single' && (
+                    <div className="flex-1 overflow-y-auto px-1 pb-4">
+                        {loading ? (
+                            <div className="flex justify-center py-8">
+                                <Loader2 className="animate-spin text-blue-600" size={32} />
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {filteredStudents.map(item => {
+                                    const currentStatus = localStatusMap[item.student.code];
+                                    const hasViolation = localViolationMap[item.student.code];
+                                    const hasReward = localRewardMap[item.student.code];
+                                    const isMultiSelected = selectedHs.has(item.student.code);
+                                    let isChecked = targetStatus === 'VP' ? (hasViolation || false) : (targetStatus === 'KH' ? (hasReward || false) : (currentStatus === targetStatus));
+                                    const isOtherStatus = !isChecked && (currentStatus || hasViolation || hasReward);
 
-                                const isOtherStatus = !isChecked && (currentStatus || hasViolation || hasReward);
-
-                                return (
-                                    <div
-                                        key={item.student.code}
-                                        className={cn(
-                                            "p-3 rounded-xl border transition-all",
-                                            isMultiSelected
-                                                ? `${theme.bg} ${theme.border} text-white shadow-md ring-2 ${theme.ripple}`
-                                                : isChecked
-                                                    ? `${theme.light} ${theme.border} shadow-sm`
-                                                    : isOtherStatus
-                                                        ? 'bg-gray-100 border-gray-200 opacity-60'
-                                                        : 'bg-white border-gray-100 hover:border-blue-200'
-                                        )}
-                                    >
-                                        <div
-                                            onClick={() => {
-                                                if (isMultiMode) {
-                                                    setSelectedHs(prev => {
-                                                        const next = new Set(prev);
-                                                        if (next.has(item.student.code)) next.delete(item.student.code);
-                                                        else next.add(item.student.code);
-                                                        return next;
-                                                    });
-                                                } else {
-                                                    handleToggle(item.student.code);
-                                                }
-                                            }}
-                                            className="flex items-center justify-between cursor-pointer"
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <div 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setSelectedHs(prev => {
-                                                            const next = new Set(prev);
-                                                            if (next.has(item.student.code)) next.delete(item.student.code);
-                                                            else next.add(item.student.code);
-                                                            return next;
-                                                        });
-                                                    }}
-                                                    className={cn(
-                                                        "w-5 h-5 rounded border flex items-center justify-center transition-all",
-                                                        isMultiSelected 
-                                                            ? "bg-white border-white" 
-                                                            : isChecked ? `${theme.bg} ${theme.border}` : "bg-white border-gray-300"
-                                                    )}
-                                                >
-                                                    {(isMultiSelected || isChecked) && (
-                                                        <CheckCircle2 className={cn("w-3 h-3", isMultiSelected ? theme.bg.replace('bg-', 'text-') : "text-white")} />
-                                                    )}
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-2">
-                                                        <h4 className={cn(
-                                                            "font-bold text-sm truncate transition-colors",
-                                                            isMultiSelected ? "text-white" : (
-                                                               currentStatus === 'P' ? "text-yellow-600" :
-                                                               currentStatus === 'K' ? "text-red-600" :
-                                                               (currentStatus === 'T' || currentStatus === 'V') ? "text-blue-600" :
-                                                               hasViolation ? "text-purple-600" :
-                                                               hasReward ? "text-green-600" :
-                                                               "text-gray-800"
-                                                            )
-                                                        )}>
-                                                            {item.student.fullName}
-                                                        </h4>
-                                                        <span className={cn("text-xs font-mono shrink-0", isMultiSelected ? "text-white/70" : "text-gray-400")}>
-                                                            {item.student.code}
-                                                        </span>
+                                    return (
+                                        <div key={item.student.code} className={cn("p-3 rounded-xl border transition-all", isMultiSelected ? `${theme.bg} ${theme.border} text-white shadow-md ring-2 ${theme.ripple}` : isChecked ? `${theme.light} ${theme.border} shadow-sm` : isOtherStatus ? 'bg-gray-100 border-gray-200 opacity-60' : 'bg-white border-gray-100 hover:border-blue-200')}>
+                                            <div onClick={() => handleToggle(item.student.code)} className="flex items-center justify-between cursor-pointer">
+                                                <div className="flex items-center gap-3">
+                                                    <div onClick={(e) => { e.stopPropagation(); setSelectedHs(prev => { const next = new Set(prev); if (next.has(item.student.code)) next.delete(item.student.code); else next.add(item.student.code); return next; }); }} className={cn("w-5 h-5 rounded border flex items-center justify-center transition-all", isMultiSelected ? "bg-white border-white" : isChecked ? `${theme.bg} ${theme.border}` : "bg-white border-gray-300")}>
+                                                        {(isMultiSelected || isChecked) && <CheckCircle2 className={cn("w-3 h-3", isMultiSelected ? theme.bg.replace('bg-', 'text-') : "text-white")} />}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2">
+                                                            <h4 className={cn("font-bold text-sm truncate transition-colors", isMultiSelected ? "text-white" : (currentStatus === 'P' ? "text-yellow-600" : currentStatus === 'K' ? "text-red-600" : (currentStatus === 'T' || currentStatus === 'V') ? "text-blue-600" : hasViolation ? "text-purple-600" : hasReward ? "text-green-600" : "text-gray-800"))}>
+                                                                {item.student.fullName}
+                                                            </h4>
+                                                            <span className={cn("text-xs font-mono shrink-0", isMultiSelected ? "text-white/70" : "text-gray-400")}>{item.student.code}</span>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-
-                                            <div className="flex items-center gap-2">
-                                                <div className="flex gap-1">
-                                                    {currentStatus && (
-                                                        <span className={cn(
-                                                            "text-[10px] font-bold px-1.5 py-0.5 rounded",
-                                                            isMultiSelected ? 'bg-white/20 text-white border-white/20' : 'bg-blue-100 text-blue-600 border border-blue-200'
-                                                        )}>
-                                                            {currentStatus}
-                                                        </span>
-                                                    )}
-                                                    {hasViolation && (
-                                                        <span className={cn(
-                                                            "text-[10px] font-bold px-1.5 py-0.5 rounded",
-                                                            isMultiSelected ? 'bg-white/20 text-white border-white/20' : 'bg-purple-100 text-purple-600 border border-purple-200'
-                                                        )}>
-                                                            VP
-                                                        </span>
-                                                    )}
-                                                    {hasReward && (
-                                                        <span className={cn(
-                                                            "text-[10px] font-bold px-1.5 py-0.5 rounded",
-                                                            isMultiSelected ? 'bg-white/20 text-white border-white/20' : 'bg-green-100 text-green-600 border border-green-200'
-                                                        )}>
-                                                            KH
-                                                        </span>
-                                                    )}
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex gap-1">
+                                                        {currentStatus && <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded", isMultiSelected ? 'bg-white/20 text-white border-white/20' : 'bg-blue-100 text-blue-600 border border-blue-200')}>{currentStatus}</span>}
+                                                        {hasViolation && <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded", isMultiSelected ? 'bg-white/20 text-white border-white/20' : 'bg-purple-100 text-purple-600 border border-purple-200')}>VP</span>}
+                                                        {hasReward && <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded", isMultiSelected ? 'bg-white/20 text-white border-white/20' : 'bg-green-100 text-green-600 border border-green-200')}>KH</span>}
+                                                    </div>
+                                                    {(currentStatus || hasViolation || hasReward) && <button onClick={(e) => handleClear(item.student.code, e)} className={cn("p-1 rounded-full transition-colors", isMultiSelected ? "hover:bg-white/20 text-white/60 hover:text-white" : "hover:bg-red-100 text-red-400 hover:text-red-600")} title="Xóa điểm danh"><X size={14} /></button>}
                                                 </div>
-                                                
-                                                {(currentStatus || hasViolation || hasReward) && (
-                                                    <button
-                                                        onClick={(e) => handleClear(item.student.code, e)}
-                                                        className={cn(
-                                                            "p-1 rounded-full transition-colors", 
-                                                            isMultiSelected 
-                                                                ? "hover:bg-white/20 text-white/60 hover:text-white" 
-                                                                : "hover:bg-red-100 text-red-400 hover:text-red-600"
-                                                        )}
-                                                        title="Xóa điểm danh"
-                                                    >
-                                                        <X size={14} />
-                                                    </button>
-                                                )}
                                             </div>
+                                            {isChecked && (targetStatus === 'VP' || targetStatus === 'K' || targetStatus === 'P' || targetStatus === 'T' || targetStatus === 'KH') && renderAttendanceForm(
+                                                localMissedPeriodsMap[item.student.code] || [],
+                                                localViolationPeriodsMap[item.student.code] || [],
+                                                localRewardPeriodsMap[item.student.code] || [],
+                                                localNotesMap[item.student.code] || {},
+                                                localViolationNotesMap[item.student.code] || {},
+                                                localRewardNotesMap[item.student.code] || {},
+                                                (p) => setLocalMissedPeriodsMap(prev => ({ ...prev, [item.student.code]: p })),
+                                                (p) => { setLocalViolationMap(prev => ({ ...prev, [item.student.code]: true })); setLocalViolationPeriodsMap(prev => ({ ...prev, [item.student.code]: p })); },
+                                                (p) => { setLocalRewardMap(prev => ({ ...prev, [item.student.code]: true })); setLocalRewardPeriodsMap(prev => ({ ...prev, [item.student.code]: p })); },
+                                                (n) => setLocalNotesMap(prev => { const current = prev[item.student.code] || {}; const next = typeof n === 'function' ? n(current) : n; return { ...prev, [item.student.code]: next }; }),
+                                                (n) => setLocalViolationNotesMap(prev => { const current = prev[item.student.code] || {}; const next = typeof n === 'function' ? n(current) : n; return { ...prev, [item.student.code]: next }; }),
+                                                (n) => setLocalRewardNotesMap(prev => { const current = prev[item.student.code] || {}; const next = typeof n === 'function' ? n(current) : n; return { ...prev, [item.student.code]: next }; }),
+                                                lastActivePeriod,
+                                                setLastActivePeriod,
+                                                false
+                                            )}
                                         </div>
-
-                                        {/* Period & Note Editor for Individual Student */}
-                                        {isChecked && showNoteInput && !isMultiMode && (
-                                            <div className="mt-3 pl-8 animate-in slide-in-from-top-1 space-y-3">
-                                                <div className="space-y-1.5">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="text-[10px] text-gray-400 font-medium capitalize">
-                                                            {targetStatus === 'VP' ? 'Vi phạm tiết:' : (targetStatus === 'KH' ? 'Khen thưởng tiết:' : 'Tiết vắng/muộn:')}:
-                                                        </div>
-                                                        <div className="flex gap-2">
-                                                            <button 
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    const setFn = targetStatus === 'VP' ? setLocalViolationPeriodsMap : (targetStatus === 'KH' ? setLocalRewardPeriodsMap : setLocalMissedPeriodsMap);
-                                                                    setFn(prev => ({ ...prev, [item.student.code]: [1, 2, 3, 4, 5] }));
-                                                                }}
-                                                                className="text-[9px] font-bold text-blue-500 hover:underline"
-                                                            >
-                                                                Tất cả
-                                                            </button>
-                                                            <button 
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    const setFn = targetStatus === 'VP' ? setLocalViolationPeriodsMap : (targetStatus === 'KH' ? setLocalRewardPeriodsMap : setLocalMissedPeriodsMap);
-                                                                    setFn(prev => ({ ...prev, [item.student.code]: [] }));
-                                                                    setLastActivePeriod(null);
-                                                                }}
-                                                                className="text-[9px] font-bold text-red-500 hover:underline"
-                                                            >
-                                                                Hủy chọn
-                                                            </button>
-                                                            <button 
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    const setFn = targetStatus === 'VP' ? setLocalViolationPeriodsMap : (targetStatus === 'KH' ? setLocalRewardPeriodsMap : setLocalMissedPeriodsMap);
-                                                                    setFn(prev => ({ ...prev, [item.student.code]: [] }));
-                                                                    setLastActivePeriod(null);
-                                                                }}
-                                                                className="ml-1 text-[9px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 hover:bg-green-100 flex items-center gap-0.5"
-                                                            >
-                                                                <Plus size={10} /> Tiết
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex flex-wrap gap-1.5">
-                                                        {[1, 2, 3, 4, 5].map(p => {
-                                                            const periods = targetStatus === 'VP' 
-                                                                ? (localViolationPeriodsMap[item.student.code] || [])
-                                                                : (targetStatus === 'KH' 
-                                                                    ? (localRewardPeriodsMap[item.student.code] || [])
-                                                                    : (localMissedPeriodsMap[item.student.code] || []));
-                                                            
-                                                            const isActive = periods.includes(p);
-                                                            const isLast = lastActivePeriod === p;
-                                                            
-                                                            return (
-                                                                <button
-                                                                    key={p}
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        const setFn = targetStatus === 'VP' ? setLocalViolationPeriodsMap : (targetStatus === 'KH' ? setLocalRewardPeriodsMap : setLocalMissedPeriodsMap);
-                                                                        
-                                                                        // TỰ ĐỘNG BẬT TRẠNG THÁI CHÍNH KHI CHỌN TIẾT LẺ
-                                                                        if (targetStatus === 'VP') {
-                                                                            setLocalViolationMap(prev => ({ ...prev, [item.student.code]: true }));
-                                                                        } else if (targetStatus === 'KH') {
-                                                                            setLocalRewardMap(prev => ({ ...prev, [item.student.code]: true }));
-                                                                        } else {
-                                                                            setLocalStatusMap(prev => ({ ...prev, [item.student.code]: targetStatus }));
-                                                                        }
-
-                                                                        setFn(prev => {
-                                                                            const current = prev[item.student.code] || [];
-                                                                            const next = current.includes(p) ? current.filter(x => x !== p) : [...current, p].sort();
-                                                                            if (next.includes(p)) setLastActivePeriod(p);
-                                                                            else if (lastActivePeriod === p) setLastActivePeriod(next[0] || null);
-
-                                                                            // Nếu sau khi bỏ chọn mà không còn tiết nào -> Có thể giữ status hoặc bỏ tùy Sếp, hiện tại em giữ status để Sếp gán ghi chú nếu cần
-                                                                            return { ...prev, [item.student.code]: next };
-                                                                        });
-                                                                    }}
-                                                                    className={cn(
-                                                                        "text-[10px] min-w-[32px] px-2 py-1 rounded border transition-colors font-bold relative",
-                                                                        isActive
-                                                                            ? (targetStatus === 'VP' ? 'bg-purple-100 text-purple-700 border-purple-200' : (targetStatus === 'KH' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-blue-100 text-blue-700 border-blue-200'))
-                                                                            : 'bg-white text-gray-400 border-gray-100 hover:bg-gray-50 font-normal outline-none',
-                                                                        isLast && "ring-2 ring-yellow-400 ring-offset-1"
-                                                                    )}
-                                                                >
-                                                                    T{p}
-                                                                    {isLast && (
-                                                                        <div className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full border border-white" />
-                                                                    )}
-                                                                </button>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-
-                                                {/* Suggestions & Note Input */}
-                                                <div className="space-y-2">
-                                                    {/* Existing Notes Summary */}
-                                                    {(() => {
-                                                        const currentNotesMap = targetStatus === 'VP' ? localViolationNotesMap[item.student.code] : (targetStatus === 'KH' ? localRewardNotesMap[item.student.code] : localNotesMap[item.student.code]);
-                                                        const entries = Object.entries(currentNotesMap || {}).filter(([p, v]) => v && p !== "0");
-                                                        if (entries.length === 0) return null;
-
-                                                        // Nhóm theo ghi chú để gộp dải tiết
-                                                        const notePs: Record<string, number[]> = {};
-                                                        entries.forEach(([p, v]) => {
-                                                            if (!notePs[v]) notePs[v] = [];
-                                                            notePs[v].push(Number(p));
-                                                        });
-
-                                                        return (
-                                                            <div className="space-y-1 bg-gray-50 p-2 rounded-lg border border-gray-100">
-                                                                {Object.entries(notePs).map(([v, periods]) => {
-                                                                    const sorted = [...periods].sort((a,b) => a - b);
-                                                                    const ranges: string[] = [];
-                                                                    let start = sorted[0], prev = sorted[0];
-                                                                    for (let i = 1; i <= sorted.length; i++) {
-                                                                        if (i < sorted.length && sorted[i] === prev + 1) prev = sorted[i];
-                                                                        else {
-                                                                            if (start === prev) ranges.push(`${start}`);
-                                                                            else ranges.push(`${start}-${prev}`);
-                                                                            if (i < sorted.length) { start = sorted[i]; prev = sorted[i]; }
-                                                                        }
-                                                                    }
-                                                                    const label = `T${ranges.join(',')}:`;
-                                                                    
-                                                                    return (
-                                                                        <div key={v} className="flex items-center justify-between text-[11px]">
-                                                                            <div className="truncate pr-2">
-                                                                                <span className="font-bold text-blue-600">
-                                                                                    {periods.length === 5 ? "Cả buổi:" : label}
-                                                                                </span> {v}
-                                                                            </div>
-                                                                            <button 
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    const setNFn = targetStatus === 'VP' ? setLocalViolationNotesMap : (targetStatus === 'KH' ? setLocalRewardNotesMap : setLocalNotesMap);
-                                                                                    setNFn(prev => {
-                                                                                        const next = { ...(prev[item.student.code] || {}) };
-                                                                                        periods.forEach(p => delete next[p]);
-                                                                                        return { ...prev, [item.student.code]: next };
-                                                                                    });
-                                                                                }}
-                                                                                className="text-red-400 hover:text-red-600"
-                                                                            >
-                                                                                <X size={10} />
-                                                                            </button>
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        );
-                                                    })()}
-
-                                                    <div className="space-y-3">
-                                                        {/* Suggestions Grouped */}
-                                                        {(NOTE_SUGGESTIONS[targetStatus as keyof typeof NOTE_SUGGESTIONS])?.map(group => (
-                                                            <div key={group.group} className="flex flex-wrap gap-1.5">
-                                                                {group.items.map(suggestion => {
-                                                                    const periods = targetStatus === 'VP' ? (localViolationPeriodsMap[item.student.code] || []) : (targetStatus === 'KH' ? (localRewardPeriodsMap[item.student.code] || []) : (localMissedPeriodsMap[item.student.code] || []));
-                                                                    const targetPeriod = lastActivePeriod || (periods.includes(0) ? 0 : (periods[0] || 0));
-                                                                    const currentNote = (targetStatus === 'VP' ? (localViolationNotesMap[item.student.code]?.[targetPeriod]) : (targetStatus === 'KH' ? (localRewardNotesMap[item.student.code]?.[targetPeriod]) : (localNotesMap[item.student.code]?.[targetPeriod]))) || '';
-                                                                    const isSelected = currentNote.split(', ').includes(suggestion);
-
-                                                                    return (
-                                                                        <button
-                                                                            key={suggestion}
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                const periods = targetStatus === 'VP' ? (localViolationPeriodsMap[item.student.code] || []) : (targetStatus === 'KH' ? (localRewardPeriodsMap[item.student.code] || []) : (localMissedPeriodsMap[item.student.code] || []));
-                                                                                const targetPeriods = lastActivePeriod ? [lastActivePeriod] : (periods.length > 0 ? periods : [0]);
-                                                                                
-                                                                                const setNFn = targetStatus === 'VP' ? setLocalViolationNotesMap : (targetStatus === 'KH' ? setLocalRewardNotesMap : setLocalNotesMap);
-                                                                                
-                                                                                setNFn(prev => {
-                                                                                    const updated = { ...(prev[item.student.code] || {}) };
-                                                                                    targetPeriods.forEach(p => {
-                                                                                        const currentNote = updated[p] || '';
-                                                                                        const parts = currentNote.split(', ').filter(Boolean);
-                                                                                        const newVal = parts.includes(suggestion) ? parts.filter(pt => pt !== suggestion).join(', ') : (currentNote ? `${currentNote}, ${suggestion}` : suggestion);
-                                                                                        updated[p] = newVal;
-                                                                                    });
-                                                                                    return { ...prev, [item.student.code]: updated };
-                                                                                });
-                                                                            }}
-                                                                            className={cn(
-                                                                                "text-[10px] px-2 py-1 rounded border transition-colors",
-                                                                                isSelected ? "bg-gray-800 border-gray-800 text-white font-bold" : cn("bg-white", group.color)
-                                                                            )}
-                                                                        >
-                                                                            {suggestion}
-                                                                        </button>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        ))}
-
-                                                        {/* Manual Note Input */}
-                                                        <div className="relative">
-                                                            {lastActivePeriod !== null && (
-                                                                <div className="absolute -top-3 left-2 px-1 bg-white text-[9px] font-bold text-blue-600 z-10">
-                                                                    Đang sửa Tiết {lastActivePeriod}
-                                                                </div>
-                                                            )}
-                                                            <input
-                                                                type="text"
-                                                                placeholder={lastActivePeriod ? `Ghi chú cho Tiết ${lastActivePeriod}...` : "Ghi chú khác..."}
-                                                                value={(() => {
-                                                                    const periods = targetStatus === 'VP' ? (localViolationPeriodsMap[item.student.code] || []) : (targetStatus === 'KH' ? (localRewardPeriodsMap[item.student.code] || []) : (localMissedPeriodsMap[item.student.code] || []));
-                                                                    const targetPeriod = lastActivePeriod || (periods.includes(0) ? 0 : (periods[0] || 0));
-                                                                    return (targetStatus === 'VP' ? (localViolationNotesMap[item.student.code]?.[targetPeriod]) : (targetStatus === 'KH' ? (localRewardNotesMap[item.student.code]?.[targetPeriod]) : (localNotesMap[item.student.code]?.[targetPeriod]))) || '';
-                                                                })()}
-                                                                onChange={(e) => {
-                                                                    const val = e.target.value;
-                                                                    const periods = targetStatus === 'VP' ? (localViolationPeriodsMap[item.student.code] || []) : (targetStatus === 'KH' ? (localRewardPeriodsMap[item.student.code] || []) : (localMissedPeriodsMap[item.student.code] || []));
-                                                                    const targetPeriods = lastActivePeriod ? [lastActivePeriod] : (periods.length > 0 ? periods : [0]);
-                                                                    const setNFn = targetStatus === 'VP' ? setLocalViolationNotesMap : (targetStatus === 'KH' ? setLocalRewardNotesMap : setLocalNotesMap);
-                                                                    
-                                                                    setNFn(prev => {
-                                                                        const updated = { ...(prev[item.student.code] || {}) };
-                                                                        targetPeriods.forEach(p => updated[p] = val);
-                                                                        return { ...prev, [item.student.code]: updated };
-                                                                    });
-                                                                }}
-                                                                onClick={(e) => e.stopPropagation()}
-                                                                className={cn(
-                                                                    "w-full px-3 py-1.5 text-xs border rounded-lg focus:ring-1 focus:ring-blue-500 outline-none",
-                                                                    lastActivePeriod ? "border-blue-400 bg-blue-50/30" : "border-gray-200"
-                                                                )}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 <div className="mt-auto pt-4 border-t border-gray-100 flex items-center justify-between shrink-0">
                     <div className="text-xs font-bold text-gray-500">
                         Đã chọn: <span className="text-blue-600">
-                            {students.filter(item => {
-                                const currentStatus = localStatusMap[item.student.code];
-                                const hasViolation = localViolationMap[item.student.code];
-                                const hasReward = localRewardMap[item.student.code];
-                                if (targetStatus === 'VP') return hasViolation;
-                                if (targetStatus === 'KH') return hasReward;
-                                return currentStatus === targetStatus;
+                            {mode === 'multi' ? selectedHs.size : students.filter(item => {
+                                const status = localStatusMap[item.student.code];
+                                const hasVP = localViolationMap[item.student.code];
+                                const hasKH = localRewardMap[item.student.code];
+                                if (targetStatus === 'VP') return hasVP;
+                                if (targetStatus === 'KH') return hasKH;
+                                return status === targetStatus;
                             }).length}
                         </span> em
                     </div>
                     <div className="flex gap-3 px-2">
-                        <button
-                            onClick={() => onOpenChange(false)}
-                            className="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-colors"
-                        >
-                            Hủy
-                        </button>
+                        <button onClick={() => onOpenChange(false)} className="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-colors">Hủy</button>
                         <button
                             onClick={handleSave}
                             disabled={isSaving}
-                            className={cn(
-                                "px-6 py-2 text-sm font-black rounded-xl shadow-lg transition-all flex items-center gap-2",
-                                isSaving ? "bg-gray-400 cursor-not-allowed" : theme.bg + " text-white hover:scale-105 active:scale-95"
-                            )}
+                            className={cn("px-6 py-2 text-sm font-black rounded-xl shadow-lg transition-all flex items-center gap-2", isSaving ? "bg-gray-400 cursor-not-allowed" : theme.bg + " text-white hover:scale-105 active:scale-95")}
                         >
-                            {isSaving ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                                <Save className="w-4 h-4" />
-                            )}
+                            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                             LƯU THAY ĐỔI
                         </button>
                     </div>

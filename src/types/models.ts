@@ -378,3 +378,23 @@ export interface ColumnVisibilityPreset {
     hiddenColumnIds: string[]; // Các cột bị ẩn
     updatedAt: string;
 }
+// ============================================
+// CHAT SYSTEM v3.0
+// ============================================
+
+export interface ChatThread {
+    id: string;
+    userId: string;
+    subject?: string;
+    status: 'open' | 'closed';
+    createdAt: string;
+}
+
+export interface ChatMessage {
+    id: string;
+    threadId: string;
+    senderId: string;
+    content: string;
+    isRead: boolean;
+    createdAt: string;
+}

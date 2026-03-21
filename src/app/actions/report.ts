@@ -11,6 +11,18 @@ import { revalidatePath } from 'next/cache';
 import { fetchAppSettings } from './settings';
 import { getClassSize } from '@/services/student-status-service';
 
+const compareVietnameseNames = (nameA: string, nameB: string) => {
+    const a = (nameA || '').trim();
+    const b = (nameB || '').trim();
+    const partsA = a.split(' ');
+    const partsB = b.split(' ');
+    const lastNameA = partsA.pop() || '';
+    const lastNameB = partsB.pop() || '';
+    const cmp = lastNameA.localeCompare(lastNameB, 'vi', { sensitivity: 'base' });
+    if (cmp !== 0) return cmp;
+    return a.localeCompare(b, 'vi', { sensitivity: 'base' });
+};
+
 const mockAdminUser: AppUser = {
     uid: 'admin-report',
     displayName: 'Report System',
@@ -69,157 +81,137 @@ const statusOrder = ['K', 'P', 'VP', 'T', 'KH'];
 function resolveDailyStatus(rawItems: any[]) {
     if (!rawItems || rawItems.length === 0) return { labels: [], notes: '', stats: {} };
 
-    const board: Record<string, Record<number, any>> = { 'S': {}, 'C': {} };
-    rawItems.forEach(item => {
-        const sessions = item.session === 'both' ? ['S', 'C'] : [item.session];
-        sessions.forEach(sess => {
-            const periods = item.periods || [1, 2, 3, 4, 5];
-            periods.forEach((p: number) => {
-                const current = board[sess][p];
-                const newPriority = statusOrder.indexOf(item.base);
-                if (newPriority === -1) return;
-                if (!current || newPriority < statusOrder.indexOf(current.base)) {
-                    board[sess][p] = item;
-                }
-            });
-        });
-    });
+    // Grouping by base status for cross-session/period merging
+    const grouped: Record<string, {
+        periods: Set<number>;
+        sessionPeriods: { S: Set<number>, C: Set<number> };
+        notes: Record<number, string>;
+    }> = {};
 
-    const groupByType: Record<string, Record<string, { sessions: Set<string>, periodsBySession: Record<string, Set<number>> }>> = {};
-    
-    ['S', 'C'].forEach(sess => {
-        for (let p = 1; p <= 5; p++) {
-            const item = board[sess][p];
-            if (item) {
-                const type = item.base;
-                const noteText = item.note || ''; 
-                // Xóa tiền tố T cũ nếu có để gộp chính xác
-                const cleanNote = noteText.replace(/^T\d+[0-9,-]*:\s*/, '');
-                
-                if (!groupByType[type]) groupByType[type] = {};
-                if (!groupByType[type][cleanNote]) {
-                    groupByType[type][cleanNote] = { sessions: new Set(), periodsBySession: { 'S': new Set(), 'C': new Set() } };
-                }
-                groupByType[type][cleanNote].sessions.add(sess);
-                groupByType[type][cleanNote].periodsBySession[sess].add(p);
-            }
+    const explodeNotes = (notes?: Record<number, string>, fallback?: string, p?: number | null) => {
+        const res: Record<number, string> = { ...notes };
+        if (res[0]) {
+            const n = res[0];
+            [1,2,3,4,5].forEach(i => { if (!res[i]) res[i] = n; });
+            delete res[0];
         }
+        if (Object.keys(res).length === 0 && fallback) {
+            if (p) res[p] = fallback;
+            else [1,2,3,4,5].forEach(i => { res[i] = fallback; });
+        }
+        return res;
+    };
+
+    rawItems.forEach(item => {
+        const type = item.base;
+        if (!grouped[type]) {
+            grouped[type] = {
+                periods: new Set(),
+                sessionPeriods: { S: new Set(), C: new Set() },
+                notes: {}
+            };
+        }
+        const g = grouped[type];
+        const sess = item.session === 'both' ? ['S', 'C'] : [item.session];
+        const periods = item.periods || [1, 2, 3, 4, 5];
+        
+        periods.forEach((p: number) => {
+            g.periods.add(p);
+            sess.forEach(s => (g.sessionPeriods as any)[s].add(p));
+        });
+
+        // Merge notes
+        const decoded = explodeNotes(item.statusNotes || item.violationNotes, item.note, item.periods?.length === 1 ? item.periods[0] : null);
+        Object.entries(decoded).forEach(([p, v]) => {
+            const pk = Number(p);
+            g.notes[pk] = g.notes[pk] && g.notes[pk] !== v ? `${g.notes[pk]}, ${v}` : v;
+        });
     });
 
     const labels: string[] = [];
     const stats: Record<string, number> = {};
 
-    statusOrder.forEach(type => {
-        const noteGroups = groupByType[type];
-        if (!noteGroups) return;
-
-        stats[type] = 1;
+    // Helper: Build VPc1-5 style short codes
+    const getShortCode = (type: string, g: any) => {
+        const periods = Array.from(g.periods).sort((a: any, b: any) => a - b);
+        const hasS = g.sessionPeriods['S'].size > 0;
+        const hasC = g.sessionPeriods['C'].size > 0;
         
-        // If there's only one group and it has NO note, use the old simple formatting
-        const notes = Object.keys(noteGroups);
-        if (notes.length === 1 && !notes[0]) {
-            const info = noteGroups[notes[0]];
-            let label = type;
-            const hasS = info.periodsBySession['S'].size > 0;
-            const hasC = info.periodsBySession['C'].size > 0;
-            const fullS = info.periodsBySession['S'].size === 5;
-            const fullC = info.periodsBySession['C'].size === 5;
-
-            if (fullS && fullC) {
-                label += '(SC)';
-            } else {
-                let sessionPart = '';
-                if (hasS) {
-                    sessionPart += 's';
-                    if (!fullS) {
-                        const pList = Array.from(info.periodsBySession['S']).sort();
-                        if (pList.length > 1 && pList[pList.length - 1] - pList[0] === pList.length - 1) {
-                            sessionPart += `${pList[0]}-${pList[pList.length - 1]}`;
-                        } else {
-                            sessionPart += pList.join('');
-                        }
-                    }
-                }
-                if (hasC) {
-                    sessionPart += 'c';
-                    if (!fullC) {
-                        const pList = Array.from(info.periodsBySession['C']).sort();
-                        if (pList.length > 1 && pList[pList.length - 1] - pList[0] === pList.length - 1) {
-                            sessionPart += `${pList[0]}-${pList[pList.length - 1]}`;
-                        } else {
-                            sessionPart += pList.join('');
-                        }
-                    }
-                }
-                label += `(${sessionPart})`;
-            }
-            labels.push(label);
-            return;
+        // Check if only one session is involved (legacy compatibility)
+        if (hasS && !hasC) {
+             const sPs = Array.from(g.sessionPeriods['S']).sort() as number[];
+             if (sPs.length === 5) return `${type}s`;
+             return `${type}s${sPs.join('')}`;
+        }
+        if (!hasS && hasC) {
+             const cPs = Array.from(g.sessionPeriods['C']).sort() as number[];
+             if (cPs.length === 5) return `${type}c`;
+             return `${type}c${cPs.join('')}`;
         }
 
-        // Complex formatting: Group by notes
-        // Example: VP(s1,2 [Lỗi A]; c3 [Lỗi B])
-        const segmentStrings: string[] = [];
-        Object.entries(noteGroups).forEach(([note, info]) => {
-            const hasS = info.periodsBySession['S'].size > 0;
-            const hasC = info.periodsBySession['C'].size > 0;
-            const fullS = info.periodsBySession['S'].size === 5;
-            const fullC = info.periodsBySession['C'].size === 5;
-
-            let periodPart = '';
-            if (fullS && fullC) {
-                periodPart = 'SC';
-            } else {
-                if (hasS) {
-                    periodPart += 's';
-                    if (!fullS) {
-                        const pList = Array.from(info.periodsBySession['S']).sort();
-                        if (pList.length > 1 && pList[pList.length - 1] - pList[0] === pList.length - 1) {
-                            periodPart += `${pList[0]}-${pList[pList.length - 1]}`;
-                        } else {
-                            periodPart += pList.join('');
-                        }
-                    }
-                }
-                if (hasC) {
-                    periodPart += 'c';
-                    if (!fullC) {
-                        const pList = Array.from(info.periodsBySession['C']).sort();
-                        if (pList.length > 1 && pList[pList.length - 1] - pList[0] === pList.length - 1) {
-                            periodPart += `${pList[0]}-${pList[pList.length - 1]}`;
-                        } else {
-                            periodPart += pList.join('');
-                        }
-                    }
-                }
+        // Deep merge style (New v2.9)
+        if (periods.length >= 5) {
+            // Check if it's strictly session-based S (1-5) or C (6-10)
+            const hasS = g.sessionPeriods['S'].size > 0;
+            const hasC = g.sessionPeriods['C'].size > 0;
+            if (hasS && !hasC) return `${type}s`;
+            if (!hasS && hasC) return `${type}c`;
+            return `${type}`; // Fallback for mixed or both sessions (All Day)
+        }
+        const ranges: string[] = [];
+        let start = periods[0] as number, prev = periods[0] as number;
+        for (let i = 1; i <= periods.length; i++) {
+            if (i < periods.length && (periods[i] as number) === prev + 1) prev = periods[i] as number;
+            else {
+                if (start === prev) ranges.push(`${start}`); else ranges.push(`${start}-${prev}`);
+                if (i < periods.length) { start = periods[i] as number; prev = periods[i] as number; }
             }
-            
-            if (note) {
-                // Xây dựng tiền tố T gộp (ví dụ: T1-3) cho nhãn ghi chú
-                const sPs = Array.from(info.periodsBySession['S']);
-                const cPs = Array.from(info.periodsBySession['C']);
-                const allPs = Array.from(new Set([...sPs, ...cPs])).sort();
-                let prefix = "";
-                if (allPs.length > 0 && allPs.length < 5) {
-                    const ranges: string[] = [];
-                    let start = allPs[0], prev = allPs[0];
-                    for (let i = 1; i <= allPs.length; i++) {
-                        if (i < allPs.length && allPs[i] === prev + 1) prev = allPs[i];
-                        else {
-                            if (start === prev) ranges.push(`${start}`);
-                            else ranges.push(`${start}-${prev}`);
-                            if (i < allPs.length) { start = allPs[i]; prev = allPs[i]; }
-                        }
-                    }
-                    prefix = `T${ranges.join(',')}: `;
-                }
-                segmentStrings.push(`${periodPart} [${prefix}${note}]`);
+        }
+        return `${type}c${ranges.join(',')}`;
+    };
+
+    // Helper: Build full T1: ... notes for Tooltip
+    const formatFullNotes = (notesMap: Record<number, string>) => {
+        const notePs: Record<string, number[]> = {};
+        Object.entries(notesMap).forEach(([p, v]) => {
+            if (!v) return;
+            if (!notePs[v]) notePs[v] = [];
+            notePs[v].push(Number(p));
+        });
+        const parts: string[] = [];
+        Object.entries(notePs).forEach(([noteText, periods]) => {
+            const sorted = Array.from(new Set(periods)).sort((a,b) => a - b);
+            if (sorted.length >= 5 && sorted.includes(1) && sorted.includes(5)) {
+                 parts.push(noteText);
             } else {
-                segmentStrings.push(periodPart);
+                const ranges: string[] = [];
+                let start = sorted[0], prev = sorted[0];
+                for (let i = 1; i <= sorted.length; i++) {
+                    if (i < sorted.length && sorted[i] === prev + 1) prev = sorted[i];
+                    else {
+                        if (start === prev) ranges.push(`${start}`); else ranges.push(`${start}-${prev}`);
+                        if (i < sorted.length) { start = sorted[i]; prev = sorted[i]; }
+                    }
+                }
+                parts.push(`T${ranges.join(',')}: ${noteText}`);
             }
         });
+        return parts.join(", ");
+    };
 
-        labels.push(`${type}(${segmentStrings.join('; ')})`);
+    statusOrder.forEach(type => {
+        const g = grouped[type];
+        if (!g) return;
+
+        stats[type] = 1;
+        const code = getShortCode(type, g);
+        const detail = formatFullNotes(g.notes);
+        
+        if (detail) {
+            labels.push(`${code} [${detail}]`);
+        } else {
+            labels.push(code);
+        }
     });
 
     return {
@@ -435,18 +427,15 @@ export async function getReports(criteria: ReportCriteria, userRole: string = 't
                     studentCode: code,
                     studentName: info.name,
                     stt: info.stt,
-                    status: resolved.labels.join(' | ') as any,
+                    status: resolved.labels.join('; ') as any,
                     notes: resolved.notes
                 });
             }
         }
     }
 
-    // Sort: STT asc, then Date desc
-    absences.sort((a, b) => {
-        if (a.stt !== b.stt) return a.stt - b.stt;
-        return new Date(b.date).getTime() - new Date(a.date).getTime();
-    });
+    // Sort by Student Name A-Z (Tên -> Họ)
+    absences.sort((a, b) => compareVietnameseNames(a.studentName, b.studentName));
 
     console.log(`[getReports] Processed ${absences.length} merged records. Totals: P=${totalP}, K=${totalK}, T=${totalT}, VP=${totalVP}, KH=${totalKH}`);
     console.timeEnd('getReports_Timer');
@@ -559,14 +548,14 @@ export async function getExcelExportData(
         // Phase 2: Resolve and Map
         const mappedStudents: { code: string; name: string; absences: Record<string, string> }[] = [];
 
-        students.forEach((student) => {
+        students.forEach((student: any) => {
             const absences: Record<string, string> = {};
             let hasPrimaryAbsence = false; // Only P or K count for "isCompact" filter
             const rawByDate = studentRawMap[student.code] || studentRawMap[student.id] || {};
 
             Object.keys(rawByDate).forEach(dateKey => {
                 const resolved = resolveDailyStatus(rawByDate[dateKey]);
-                absences[dateKey] = resolved.labels.join(' | ');
+                absences[dateKey] = resolved.labels.join('; ');
                 
                 if (resolved.stats['P'] || resolved.stats['K']) {
                     hasPrimaryAbsence = true;
@@ -575,8 +564,8 @@ export async function getExcelExportData(
 
             if (!isCompact || (isCompact && hasPrimaryAbsence)) {
                 mappedStudents.push({
-                    code: student.code,
-                    name: student.fullName,
+                    code: student.code || student.student_code || student.id,
+                    name: (student.fullName || student.name || student.full_name || student.studentName || student.code || "Học sinh").trim(),
                     absences
                 });
             }
@@ -590,7 +579,7 @@ export async function getExcelExportData(
                 startDate: startDate,
                 endDate: endDate,
                 totalStudents: getClassSize(cls, appSettings),
-                students: mappedStudents.sort((a, b) => a.name.localeCompare(b.name))
+                students: mappedStudents.sort((a, b) => compareVietnameseNames(a.name, b.name))
             });
         }
     }
@@ -851,7 +840,11 @@ export async function getAdvancedReportData(
 
         reports.push({
             className: cls.name,
-            students: students.map(s => ({ id: s.id, code: s.code, name: s.fullName })),
+            students: students.map((s: any) => ({ 
+                id: s.id, 
+                code: s.code || s.student_code || s.id, 
+                name: (s.fullName || s.name || s.full_name || s.studentName || s.code || "Học sinh").trim() 
+            })),
             columns: reportColumns,
             data,
             timeRange: `${startDate} - ${endDate}`

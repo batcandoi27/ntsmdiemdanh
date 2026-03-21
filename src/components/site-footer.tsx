@@ -2,9 +2,12 @@
 
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
+import { useChat } from '@/context/chat-context';
+import { MessageCircle } from 'lucide-react';
 
 export function SiteFooter() {
     const { appUser, firebaseUser, loading } = useAuth();
+    const { setIsChatOpen, setIsBubbleVisible, unreadCount } = useChat();
 
     let userInfo = 'Đang tải...';
     if (!loading) {
@@ -35,7 +38,21 @@ export function SiteFooter() {
                         <span className="text-slate-200">|</span>
                         <div className="flex gap-4">
                             <Link href="#" className="hover:text-primary transition-colors">Website</Link>
-                            <Link href="#" className="hover:text-primary transition-colors">Hỗ trợ</Link>
+                            <button 
+                                onClick={() => {
+                                    setIsBubbleVisible(true);
+                                    setIsChatOpen(true);
+                                }}
+                                className="flex items-center gap-1.5 hover:text-primary transition-colors relative group"
+                            >
+                                <MessageCircle size={16} className="group-hover:animate-bounce" />
+                                <span>Hỗ trợ</span>
+                                {unreadCount > 0 && (
+                                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[8px] font-bold text-white border border-white">
+                                        {unreadCount > 9 ? '9+' : unreadCount}
+                                    </span>
+                                )}
+                            </button>
                         </div>
                     </div>
                 </div>

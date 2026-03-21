@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { School, BookOpen, BarChart3, Upload, Menu, X, Home, Smartphone, Tablet, Monitor, Settings, Zap, LogOut, User } from 'lucide-react';
+import { School, BookOpen, BarChart3, Upload, Menu, X, Home, Smartphone, Tablet, Monitor, Settings, Zap, LogOut, User, MessageCircle } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { ROLE_DISPLAY, UserRole } from '@/types/models';
 import { useState } from 'react';
 import { useViewMode } from '@/context/view-mode-context';
+import { useChat } from '@/context/chat-context';
 
 const allNavItems = [
     { href: '/', label: 'Trang Chủ', icon: Home, roles: ['admin', 'principal', 'supervisor', 'teacher', 'class_monitor'] as UserRole[] },
@@ -15,6 +16,7 @@ const allNavItems = [
     { href: '/monitor', label: 'Sổ Theo Dõi', icon: BookOpen, roles: ['admin', 'principal', 'supervisor', 'teacher'] as UserRole[] },
     { href: '/classes', label: 'Lớp Học', icon: School, roles: ['admin', 'principal', 'supervisor', 'teacher'] as UserRole[] },
     { href: '/reports', label: 'Báo Cáo', icon: BarChart3, roles: ['admin', 'principal', 'supervisor', 'teacher'] as UserRole[] },
+    { href: '/admin/inbox', label: 'Hộp Thư', icon: MessageCircle, roles: ['admin', 'principal'] as UserRole[] },
     { href: '/settings', label: 'Cài Đặt', icon: Settings, roles: ['admin', 'principal'] as UserRole[] },
 ];
 
@@ -23,6 +25,7 @@ export function SiteHeader() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const { viewDevice, setViewDevice } = useViewMode();
     const { appUser, signOut } = useAuth();
+    const { systemUnreadCount } = useChat();
 
     // Lọc nav theo role
     const navItems = appUser
@@ -70,6 +73,11 @@ export function SiteHeader() {
                                 >
                                     <item.icon size={18} />
                                     {item.label}
+                                    {item.href === '/admin/inbox' && systemUnreadCount > 0 && (
+                                        <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center font-bold">
+                                            {systemUnreadCount}
+                                        </span>
+                                    )}
                                 </Link>
                             );
                         })}
@@ -171,7 +179,12 @@ export function SiteHeader() {
                                     )}
                                 >
                                     <item.icon size={20} />
-                                    {item.label}
+                                    <span className="flex-1">{item.label}</span>
+                                    {item.href === '/admin/inbox' && systemUnreadCount > 0 && (
+                                        <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
+                                            {systemUnreadCount}
+                                        </span>
+                                    )}
                                 </Link>
                             );
                         })}

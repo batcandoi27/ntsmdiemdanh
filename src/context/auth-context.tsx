@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 const profileData = profile as any;
                 console.log('[AuthContext] Mapping profile data:', profile.email);
                 setAppUser({
-                    uid: userId,
+                    uid: profileData.id || userId,
                     email: email || '',
                     displayName: profileData.full_name || 'Người dùng mới',
                     role: profileData.role || 'teacher',

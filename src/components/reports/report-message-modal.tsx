@@ -25,6 +25,7 @@ interface ReportMessageModalProps {
   dateRange: { start: string, end: string };
   absences: AbsenceDetail[];
   totalStudents?: number;
+  visibleColumns?: string[];
 }
 
 export function ReportMessageModal({ 
@@ -33,7 +34,8 @@ export function ReportMessageModal({
   className, 
   dateRange, 
   absences,
-  totalStudents = 0
+  totalStudents = 0,
+  visibleColumns = ['P', 'K', 'T', 'VP', 'KH']
 }: ReportMessageModalProps) {
   const [activeTab, setActiveTab] = useState<'text' | 'image'>('text');
   const [copied, setCopied] = useState(false);
@@ -57,23 +59,26 @@ export function ReportMessageModal({
     absences.forEach(record => {
       const dateStr = record.date;
       const status = record.status || '';
-      const statuses = status.split(' | ').filter(Boolean);
+      const statuses = status.split('; ').filter(Boolean);
       
       statuses.forEach(statusStr => {
         if (!statusStr) return;
         
-        // Trích xuất mã gốc (P, K, T, VP, KH) từ chuỗi P(S), K(C)...
-        const code = statusStr.split('(')[0].trim().toUpperCase();
-        const note = statusStr.includes('(') ? statusStr.substring(statusStr.indexOf('(') + 1, statusStr.lastIndexOf(')')) : '';
+        // Trích xuất mã gốc (P, K, T, VP, KH) theo chuẩn v2.9
+        const code = statusStr.split(/[\(\[sc]/)[0].trim().toUpperCase();
+        const hasNote = statusStr.includes('[');
+        const note = hasNote ? statusStr.match(/\[(.*?)\]/)?.[1] || '' : '';
         const entry = note ? `${record.studentName} (${note})` : record.studentName;
 
         if (code === 'P') {
           if (!list_P[dateStr]) list_P[dateStr] = [];
-          if (!list_P[dateStr].includes(record.studentName)) list_P[dateStr].push(record.studentName);
+          const studentEntry = note ? `${record.studentName} (${note})` : record.studentName;
+          if (!list_P[dateStr].includes(studentEntry)) list_P[dateStr].push(studentEntry);
           count_P++;
         } else if (code === 'K') {
           if (!list_K[dateStr]) list_K[dateStr] = [];
-          if (!list_K[dateStr].includes(record.studentName)) list_K[dateStr].push(record.studentName);
+          const studentEntry = note ? `${record.studentName} (${note})` : record.studentName;
+          if (!list_K[dateStr].includes(studentEntry)) list_K[dateStr].push(studentEntry);
           count_K++;
         } else if (code === 'T') {
           if (!list_T[dateStr]) list_T[dateStr] = [];
@@ -94,8 +99,11 @@ export function ReportMessageModal({
     const formatListText = (dict: Record<string, string[]>) => {
       return Object.entries(dict)
         .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
-        .map(([date, names]) => `${format(parseISO(date), 'dd/MM')}: ${names.join(', ')}`)
-        .join('\n');
+        .map(([date, names]) => {
+          const formattedDate = format(parseISO(date), 'dd/MM');
+          return `${formattedDate}:\n- ${names.join('\n- ')}`;
+        })
+        .join('\n\n');
     };
 
     const lists = { K: list_K, P: list_P, T: list_T, VP: list_VP, KH: list_KH };
@@ -119,7 +127,12 @@ export function ReportMessageModal({
       template += `\n📌 KHEN THƯỞNG (KH):\n${formatListText(list_KH)}\n`;
     }
 
-    template += `\n📊 TỔNG KẾT:\n- Sĩ số: ${totalStudents || '?'}\n- Vắng: ${count_K}K | ${count_P}P\n- Trễ: ${count_T}\n- Vi phạm: ${count_VP} | Khen thưởng: ${count_KH}\n\n⚠️ Đề nghị Quý Phụ huynh phối hợp nhắc nhở các em đi học đầy đủ và đúng quy định.\n\nTrân trọng, GVCN lớp ${className}`;
+    template += `\n📊 TỔNG KẾT:\n- Sĩ số: ${totalStudents || '?'}\n- Vắng: ${count_K}K | ${count_P}P`;
+    if (count_T > 0 && visibleColumns.includes('T')) template += `\n- Trễ: ${count_T}`;
+    if (count_VP > 0 && visibleColumns.includes('VP')) template += `\n- Vi phạm: ${count_VP}`;
+    if (count_KH > 0 && visibleColumns.includes('KH')) template += `\n- Khen thưởng: ${count_KH}`;
+    
+    template += `\n\n⚠️ Đề nghị Quý Phụ huynh phối hợp nhắc nhở các em đi học đầy đủ và đúng quy định.\n\nTrân trọng, GVCN lớp ${className}`;
 
     return {
       messageTemplate: template,
@@ -242,18 +255,88 @@ export function ReportMessageModal({
             <div className="flex flex-col h-full gap-4">
               <div className="flex-1 bg-white border border-gray-200 rounded-2xl p-5 font-mono text-sm leading-relaxed shadow-inner whitespace-pre-wrap select-text overflow-auto min-h-[300px] text-slate-800">
                 <div className="space-y-1">
-                  {messageTemplate.split('\n').map((line, i) => {
-                    if (line.startsWith('📢') || line.startsWith('📊')) return <div key={i} className="text-teal-700 font-black mb-2">{line}</div>;
-                    if (line.startsWith('📌')) return <div key={i} className="text-blue-700 font-bold mt-4 mb-1">{line}</div>;
-                    if (line.startsWith('⚠️')) return <div key={i} className="text-orange-700 font-bold mt-4">{line}</div>;
-                    if (line.includes(':')) {
-                        const [label, rest] = line.split(':');
-                        if (label.match(/\d{2}\/\d{2}/)) {
-                            return <div key={i}><span className="text-teal-600 font-bold">{label}:</span>{rest}</div>
-                        }
-                    }
-                    return <div key={i}>{line}</div>;
-                  })}
+                  {(() => {
+                    let currentColorClass = "text-slate-700";
+                    return messageTemplate.split('\n').map((line, i) => {
+                      if (line.startsWith('📢')) {
+                        currentColorClass = "text-slate-700";
+                        return <div key={i} className="text-slate-800 font-black mb-4 border-b pb-2">{line}</div>;
+                      }
+                      if (line.startsWith('📊')) {
+                        currentColorClass = "text-slate-700";
+                        return <div key={i} className="text-slate-800 font-black mt-6 border-t pt-4 mb-2">{line}</div>;
+                      }
+                      if (line.startsWith('- Sĩ số:')) {
+                        return (
+                          <div key={i} className="flex flex-col gap-1 text-[13px] mt-2 bg-white p-3 rounded-2xl border-2 border-slate-100 shadow-sm">
+                            <div className="flex justify-between border-b border-slate-50 pb-2 mb-1">
+                              <span className="text-slate-500 font-bold">Sĩ số lớp:</span>
+                              <span className="font-black text-slate-900 text-base">{line.split(': ')[1]}</span>
+                            </div>
+                            {(() => {
+                              const lines = messageTemplate.split('\n');
+                              // Tìm tất cả các dòng thống kê bắt đầu bằng "- " sau dòng "📊 TỔNG KẾT"
+                              const statsStartIndex = lines.findIndex(l => l.startsWith('📊 TỔNG KẾT'));
+                              if (statsStartIndex === -1) return null;
+                              
+                              const statsLines = lines.slice(statsStartIndex + 1).filter(l => l.trim().startsWith('- '));
+                              // Dòng Sĩ số đã hiện ở trên, nên bỏ qua
+                              const targetLines = statsLines.filter(l => !l.includes('Sĩ số:'));
+
+                              return targetLines.map((l, li) => {
+                                let label = "", val = "", colorClass = "text-slate-700", bgClass="bg-transparent";
+                                if (l.includes('Vắng:')) { 
+                                    label = "Vắng (K|P)"; val = l.split(': ')[1]; colorClass = "text-red-600"; bgClass="bg-red-50/30";
+                                } else if (l.includes('Trễ:')) { 
+                                    label = "Đi trễ (T)"; val = l.split(': ')[1]; colorClass = "text-blue-600"; bgClass="bg-blue-50/30";
+                                } else if (l.includes('Vi phạm:')) { 
+                                    label = "Vi phạm nền nếp"; val = l.split(': ')[1]; colorClass = "text-purple-600"; bgClass="bg-purple-50/30";
+                                } else if (l.includes('Khen thưởng:')) { 
+                                    label = "Khen thưởng"; val = l.split(': ')[1]; colorClass = "text-amber-600"; bgClass="bg-amber-50/30";
+                                }
+                                
+                                if (!label) return null;
+                                return (
+                                  <div key={li} className={cn("flex justify-between items-center px-2 py-2 rounded-lg border-b border-slate-50 last:border-0", bgClass)}>
+                                    <span className="text-slate-500 font-bold text-xs uppercase tracking-tight">{label}:</span>
+                                    <span className={cn("font-black text-sm", colorClass)}>{val}</span>
+                                  </div>
+                                );
+                              });
+                            })()}
+                          </div>
+                        );
+                      }
+                      if (line.includes('Vắng:') || line.includes('Trễ:') || line.includes('Vi phạm:') || line.includes('Khen thưởng:')) return null;
+                      if (line.startsWith('📌')) {
+                        if (line.includes('(K)')) currentColorClass = "text-red-700";
+                        else if (line.includes('(P)')) currentColorClass = "text-yellow-700";
+                        else if (line.includes('(T)')) currentColorClass = "text-blue-700";
+                        else if (line.includes('(VP)')) currentColorClass = "text-purple-700";
+                        else if (line.includes('(KH)')) currentColorClass = "text-orange-700";
+                        else currentColorClass = "text-slate-700";
+                        return <div key={i} className={cn(currentColorClass, "font-black mt-6 mb-1 text-base")}>{line}</div>;
+                      }
+                      if (line.startsWith('⚠️')) {
+                        currentColorClass = "text-orange-800";
+                        return <div key={i} className="text-orange-800 font-bold mt-6 bg-orange-50 p-2 rounded-lg border border-orange-100">{line}</div>;
+                      }
+                      
+                      // Student lines or content
+                      const isStudentLine = line.trim().startsWith('- ');
+                      const isDateLine = line.trim().match(/^\d{2}\/\d{2}:$/);
+                      
+                      if (isDateLine) {
+                         return <div key={i} className={cn(currentColorClass, "font-bold mt-2 opacity-80 underline decoration-dotted")}>{line}</div>;
+                      }
+                      
+                      return (
+                        <div key={i} className={cn(currentColorClass, isStudentLine ? "pl-2 py-0.5" : "")}>
+                          {line}
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
               <div className="flex gap-3">
@@ -325,14 +408,34 @@ export function ReportMessageModal({
                               <h3 className="text-[10px] font-black uppercase tracking-wider">{section.label}</h3>
                             </div>
                             <div className={cn("border rounded-xl p-3 space-y-2", `bg-${section.color}-50/50 border-${section.color}-100`)}>
-                              {Object.entries(section.data)
-                                .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
-                                .map(([date, names]) => (
-                                  <div key={date} className="flex gap-2 text-[11px] leading-tight text-slate-700">
-                                    <span className={cn("font-black shrink-0 w-[35px]", `text-${section.color}-600`)}>{format(parseISO(date), 'dd/MM')}:</span>
-                                    <span className="font-bold">{names.join(', ')}</span>
-                                  </div>
-                              ))}
+                                {Object.entries(section.data)
+                                  .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
+                                  .map(([date, names]) => (
+                                    <div key={date} className="space-y-1.5 pt-1">
+                                      {/* Date Header for group */}
+                                      <div className={cn("text-[11px] font-black pb-0.5 border-b border-dashed", `text-${section.color}-600`, `border-${section.color}-200`)}>
+                                        Ngày {format(parseISO(date), 'dd/MM')}:
+                                      </div>
+                                      {/* Students List - Each on separate line */}
+                                      {names.map((entry, nIdx) => (
+                                        <div key={nIdx} className="flex gap-1.5 text-[11px] leading-snug pl-1.5 ">
+                                          <span className={cn("shrink-0", `text-${section.color}-500`)}>•</span>
+                                          <span className="font-medium">
+                                            {(() => {
+                                              const namePart = entry.split(' (')[0];
+                                              const notePart = entry.includes(' (') ? ` (${entry.split(' (')[1]}` : '';
+                                              return (
+                                                <>
+                                                  <span className={cn("font-black", `text-${section.color}-700`)}>{namePart}</span>
+                                                  <span className={cn("text-[10px] font-medium italic leading-tight", `text-${section.color}-700`)}>{notePart}</span>
+                                                </>
+                                              );
+                                            })()}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ))}
                             </div>
                           </div>
                         );
@@ -342,17 +445,29 @@ export function ReportMessageModal({
                     {/* Summary */}
                     <div className="mt-8 pt-6 border-t border-dashed border-gray-200">
                       <div className="grid grid-cols-3 gap-2">
-                        <div className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
-                          <div className="text-[10px] uppercase font-black text-gray-400 mb-1">Sĩ số</div>
-                          <div className="text-xl font-black text-gray-800">{totalStudents}</div>
+                        <div className="bg-gray-50 rounded-xl p-2 text-center border border-gray-100 flex flex-col justify-center min-h-[50px]">
+                          <div className="text-[9px] uppercase font-black text-gray-400 mb-0.5">Sĩ số</div>
+                          <div className="text-base font-black text-gray-800">{totalStudents}</div>
                         </div>
-                        <div className="bg-red-50 rounded-xl p-3 text-center border border-red-100">
-                          <div className="text-[10px] uppercase font-black text-red-400 mb-1">Vắng KP</div>
-                          <div className="text-xl font-black text-red-700">{stats.K}</div>
+                        <div className="bg-red-50 rounded-xl p-2 text-center border border-red-100 min-h-[50px]">
+                          <div className="text-[9px] uppercase font-black text-red-500 mb-0.5">Vắng KP</div>
+                          <div className="text-base font-black text-red-700">{stats.K}</div>
                         </div>
-                        <div className="bg-yellow-50 rounded-xl p-3 text-center border border-yellow-100">
-                          <div className="text-[10px] uppercase font-black text-yellow-600 mb-1">Vắng phép</div>
-                          <div className="text-xl font-black text-yellow-700">{stats.P}</div>
+                        <div className="bg-yellow-50 rounded-xl p-2 text-center border border-yellow-100 min-h-[50px]">
+                          <div className="text-[9px] uppercase font-black text-yellow-600 mb-0.5">Có Phép</div>
+                          <div className="text-base font-black text-yellow-700">{stats.P}</div>
+                        </div>
+                        <div className="bg-blue-50 rounded-xl p-2 text-center border border-blue-100 min-h-[50px]">
+                          <div className="text-[9px] uppercase font-black text-blue-500 mb-0.5">Đi trễ</div>
+                          <div className="text-base font-black text-blue-700">{stats.T}</div>
+                        </div>
+                        <div className="bg-purple-50 rounded-xl p-2 text-center border border-purple-100 min-h-[50px]">
+                          <div className="text-[9px] uppercase font-black text-purple-600 mb-0.5">Vi phạm</div>
+                          <div className="text-base font-black text-purple-700">{stats.VP}</div>
+                        </div>
+                        <div className="bg-orange-50 rounded-xl p-2 text-center border border-orange-100 min-h-[50px]">
+                          <div className="text-[9px] uppercase font-black text-orange-600 mb-0.5">Khen thưởng</div>
+                          <div className="text-base font-black text-orange-700">{stats.KH}</div>
                         </div>
                       </div>
                     </div>

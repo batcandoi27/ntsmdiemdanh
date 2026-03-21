@@ -308,7 +308,7 @@ export async function batchMarkAttendance(
                 const sId = codeToIdMap.get(m.studentId);
                 if (!sId) return;
 
-                const createLine = (p: number | null, stId: string, typeId: string, n?: string) => ({
+                const createLine = (p: number | null, stId: string, typeId: string, n?: string, extra?: any) => ({
                     student_id: sId,
                     class_id: input.classId,
                     type_id: typeId,
@@ -317,7 +317,8 @@ export async function batchMarkAttendance(
                     period: p,
                     session: input.session || 'morning',
                     note: n || '',
-                    marked_by: user.uid || (user as any).id || 'system'
+                    marked_by: user.uid || (user as any).id || 'system',
+                    ...extra
                 });
 
                 const getNoteForPeriod = (p: number | null, mainNote?: string, notesMap?: Record<number, string>) => {
@@ -346,7 +347,11 @@ export async function batchMarkAttendance(
                     if (stData) {
                         const periods = (m.missedPeriods && m.missedPeriods.length > 0) ? m.missedPeriods : [null as any];
                         periods.forEach(p => {
-                            inserts.push(createLine(p, stData.id, stData.type_id, getNoteForPeriod(p, m.note, m.statusNotes)));
+                            inserts.push(createLine(
+                                p, stData.id, stData.type_id, 
+                                getNoteForPeriod(p, m.note, m.statusNotes),
+                                { status_notes: m.statusNotes, missed_periods: m.missedPeriods }
+                            ));
                         });
                     }
                 }
@@ -357,7 +362,11 @@ export async function batchMarkAttendance(
                     const vpData = statusCodeMap.get('VP');
                     if (vpData) {
                         const vpPeriods = (m.violationPeriods && m.violationPeriods.length > 0) ? m.violationPeriods : [null as any];
-                        vpPeriods.forEach(p => inserts.push(createLine(p, vpData.id, vpData.type_id, getNoteForPeriod(p, m.violationNote, m.violationNotes))));
+                        vpPeriods.forEach(p => inserts.push(createLine(
+                            p, vpData.id, vpData.type_id, 
+                            getNoteForPeriod(p, m.violationNote, m.violationNotes),
+                            { violation_notes: m.violationNotes, violation_periods: m.violationPeriods }
+                        )));
                     }
                 } else {
                     studentsToResetViolation.push(sId);
@@ -369,7 +378,11 @@ export async function batchMarkAttendance(
                     const khData = statusCodeMap.get('KH');
                     if (khData) {
                         const khPeriods = (m.rewardPeriods && m.rewardPeriods.length > 0) ? m.rewardPeriods : [null as any];
-                        khPeriods.forEach(p => inserts.push(createLine(p, khData.id, khData.type_id, getNoteForPeriod(p, m.rewardNote, m.rewardNotes))));
+                        khPeriods.forEach(p => inserts.push(createLine(
+                            p, khData.id, khData.type_id, 
+                            getNoteForPeriod(p, m.rewardNote, m.rewardNotes),
+                            { reward_notes: m.rewardNotes, reward_periods: m.rewardPeriods }
+                        )));
                     }
                 } else {
                     studentsToResetReward.push(sId);
@@ -491,6 +504,16 @@ export async function getClassAttendance(
                     period: r.period,
                     session: r.session,
                     note: r.note,
+                    statusNotes: r.status_notes,
+                    violation: r.violation,
+                    violationNote: r.violation_note,
+                    violationNotes: r.violation_notes,
+                    reward: r.reward,
+                    rewardNote: r.reward_note,
+                    rewardNotes: r.reward_notes,
+                    missedPeriods: r.missed_periods,
+                    violationPeriods: r.violation_periods,
+                    rewardPeriods: r.reward_periods,
                     timestamp: r.created_at
                 });
             });
@@ -549,6 +572,16 @@ export async function getAttendanceByClasses(
                     period: r.period,
                     session: r.session,
                     note: r.note,
+                    statusNotes: r.status_notes,
+                    violation: r.violation,
+                    violationNote: r.violation_note,
+                    violationNotes: r.violation_notes,
+                    reward: r.reward,
+                    rewardNote: r.reward_note,
+                    rewardNotes: r.reward_notes,
+                    missedPeriods: r.missed_periods,
+                    violationPeriods: r.violation_periods,
+                    rewardPeriods: r.reward_periods,
                     timestamp: r.created_at
                 });
             });

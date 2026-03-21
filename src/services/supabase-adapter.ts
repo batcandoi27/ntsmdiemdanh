@@ -378,17 +378,31 @@ export class SupabaseAdapter implements DbAdapter {
         const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
         const endDate = `${year}-${month.toString().padStart(2, '0')}-31`;
 
-        const { data, error } = await this.client
-            .from('attendance')
-            .select('*, students(student_code), attendance_statuses(code)')
-            .eq('class_id', classId)
-            .gte('date', startDate)
-            .lte('date', endDate);
+        // Pagination: Supabase mặc định giới hạn 1000 rows
+        const PAGE_SIZE = 1000;
+        let allData: any[] = [];
+        let from = 0;
 
-        if (error) return [];
+        while (true) {
+            const { data, error } = await this.client
+                .from('attendance')
+                .select('*, students(student_code), attendance_statuses(code)')
+                .eq('class_id', classId)
+                .gte('date', startDate)
+                .lte('date', endDate)
+                .range(from, from + PAGE_SIZE - 1);
+
+            if (error || !data || data.length === 0) break;
+            allData = allData.concat(data);
+            if (data.length < PAGE_SIZE) break;
+            from += PAGE_SIZE;
+        }
+
+        if (allData.length === 0) return [];
+        console.log(`[getMonthlyAttendance] Total rows fetched: ${allData.length} (pages: ${Math.ceil(allData.length / PAGE_SIZE)})`);
 
         const dateGroups = new Map<string, Record<string, AttendanceStatus>>();
-        data.forEach(r => {
+        allData.forEach(r => {
             if (!dateGroups.has(r.date)) dateGroups.set(r.date, {});
             if (r.students?.student_code && r.attendance_statuses?.code) {
                 dateGroups.get(r.date)![r.students.student_code] = r.attendance_statuses.code as AttendanceStatus;
@@ -407,33 +421,46 @@ export class SupabaseAdapter implements DbAdapter {
     }
 
     async getReportData(startDate: string, endDate: string, classIds?: string[]): Promise<AttendanceRecord[]> {
-        // bypass Join (Students/Statuses) if relationship is broken
-        let query = this.client
-            .from('attendance')
-            .select('*')
-            .gte('date', startDate)
-            .lte('date', endDate);
-
-        if (classIds && classIds.length > 0) query = query.in('class_id', classIds);
+        // Pagination: Supabase mặc định giới hạn 1000 rows
+        // Với trường 2500 HS, báo cáo tháng có thể >1000 ngoại lệ
+        const PAGE_SIZE = 1000;
+        let allData: any[] = [];
+        let from = 0;
 
         this.emitLoadingStart('Đang truy vấn dữ liệu báo cáo...');
         try {
-            const { data, error } = await query;
-            if (error) {
-                console.error('Supabase getReportData Error:', error);
-                return [];
+            while (true) {
+                let query = this.client
+                    .from('attendance')
+                    .select('*')
+                    .gte('date', startDate)
+                    .lte('date', endDate)
+                    .range(from, from + PAGE_SIZE - 1);
+
+                if (classIds && classIds.length > 0) query = query.in('class_id', classIds);
+
+                const { data, error } = await query;
+                if (error) {
+                    console.error('Supabase getReportData Error:', error);
+                    break;
+                }
+                if (!data || data.length === 0) break;
+                allData = allData.concat(data);
+                if (data.length < PAGE_SIZE) break; // Hết dữ liệu
+                from += PAGE_SIZE;
             }
 
-            if (!data || data.length === 0) return [];
+            if (allData.length === 0) return [];
+            console.log(`[getReportData] Total rows fetched: ${allData.length} (pages: ${Math.ceil(allData.length / PAGE_SIZE)})`);
 
-            // Fetch extra info manually to map
+            // Fetch extra info manually to map (chỉ 1 lần duy nhất)
             const { data: students } = await this.client.from('students').select('id, student_code, full_name');
             const { data: statuses } = await this.client.from('attendance_statuses').select('id, code');
 
             const stuMap = new Map(students?.map(s => [s.id, s]));
             const stMap = new Map(statuses?.map(s => [s.id, s.code]));
 
-            return data.map(r => {
+            return allData.map(r => {
                 const stu = stuMap.get(r.student_id);
                 const statusCode = stMap.get(r.status_id);
                 
