@@ -25,10 +25,18 @@ export function StudentList({ classInfo, initialStudents }: StudentListProps) {
     const [editingStudent, setEditingStudent] = useState<Student | null>(null);
 
     // Filter logic
-    const filteredStudents = initialStudents.filter(s =>
-        s.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.code.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredStudents = initialStudents
+        .filter(s =>
+            s.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            s.code.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+        .sort((a, b) => {
+            const aInactive = a.status === 'Nghỉ học' || a.status === 'Chuyển trường' || a.is_deleted;
+            const bInactive = b.status === 'Nghỉ học' || b.status === 'Chuyển trường' || b.is_deleted;
+            if (aInactive && !bInactive) return 1;
+            if (!aInactive && bInactive) return -1;
+            return (a.order || 0) - (b.order || 0);
+        });
 
     const handleCreate = async (data: Student) => {
         const res = await createStudent(data);
@@ -136,7 +144,9 @@ export function StudentList({ classInfo, initialStudents }: StudentListProps) {
                             <div key={s.code} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                                 <div className="flex justify-between items-start mb-2">
                                     <div>
-                                        <h3 className="font-bold text-gray-800 text-lg">{s.fullName}</h3>
+                                        <h3 className={`font-bold text-lg ${s.status === 'Nghỉ học' || s.status === 'Chuyển trường' || s.is_deleted ? 'line-through text-red-500' : 'text-gray-800'}`}>
+                                            {s.fullName}
+                                        </h3>
                                         <div className="text-blue-600 font-mono text-sm font-medium">{s.code}</div>
                                     </div>
                                     <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${s.gender === 'Nam' ? 'bg-blue-50 text-blue-600' : 'bg-pink-50 text-pink-600'}`}>
@@ -201,7 +211,9 @@ export function StudentList({ classInfo, initialStudents }: StudentListProps) {
                                         <tr key={s.code} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-6 py-4 font-medium text-gray-500">{s.order}</td>
                                             <td className="px-6 py-4 text-blue-600 font-mono text-xs">{s.code}</td>
-                                            <td className="px-6 py-4 font-semibold text-gray-800">{s.fullName}</td>
+                                            <td className={`px-6 py-4 font-semibold ${s.status === 'Nghỉ học' || s.status === 'Chuyển trường' || s.is_deleted ? 'line-through text-red-500' : 'text-gray-800'}`}>
+                                                {s.fullName}
+                                            </td>
                                             <td className="px-6 py-4 text-gray-600">{s.birthday}</td>
                                             <td className="px-6 py-4">
                                                 <span className={`px-2 py-1 rounded text-xs font-bold ${s.gender === 'Nam' ? 'bg-blue-50 text-blue-600' : 'bg-pink-50 text-pink-600'}`}>

@@ -11,7 +11,7 @@ export interface DbAdapter {
     deleteClass(id: string): Promise<void>;
 
     // Học sinh
-    getStudentsByClass(classId: string): Promise<Student[]>;
+    getStudentsByClass(classId: string, options?: { onlyActive?: boolean; startDate?: string; endDate?: string }): Promise<Student[]>;
     createStudents(students: Student[]): Promise<void>;
     createStudent(student: Student): Promise<void>;
     updateStudent(student: Student): Promise<void>;

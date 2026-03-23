@@ -9,6 +9,7 @@ import { markAttendance, markPresent } from '@/services/attendance-v3-service';
 import { normalizeAttendanceRecord } from '@/services/attendance-v3-utils';
 import { revalidatePath } from 'next/cache';
 import { fetchAppSettings } from './settings';
+import { getActiveStudents, getReportStudents } from '@/services/student-service';
 import { getClassSize } from '@/services/student-status-service';
 
 const compareVietnameseNames = (nameA: string, nameB: string) => {
@@ -232,28 +233,7 @@ export interface ReportResult {
     classSizes?: Record<string, number>;
 }
 
-function filterActiveStudentsForReport(students: any[], reportStartDate: string) {
-    const reportStart = new Date(reportStartDate);
-    reportStart.setHours(0, 0, 0, 0);
-
-    return students.filter(s => {
-        // Hỗ trợ status từ Supabase ('dropped_out') và các status cũ của Firebase
-        const isDroppedOut = s.status === 'Nghỉ học' || 
-                           s.status === 'Chuyển trường' || 
-                           s.status === 'dropped_out' || 
-                           s.statusV3 === 'dropped_out';
-        
-        if (!isDroppedOut) return true;
-
-        if (s.statusDate) {
-            const dropDate = new Date(s.statusDate);
-            dropDate.setHours(0, 0, 0, 0);
-            // Học sinh nghỉ học vẫn phải hiện trong báo cáo nếu ngày nghỉ >= ngày bắt đầu báo cáo
-            return dropDate >= reportStart;
-        }
-        return false; // exclude legacy dropped out students without a date
-    });
-}
+// filterActiveStudentsForReport removed - logic moved to DB RPC getReportStudents
 
 export async function getReports(criteria: ReportCriteria, userRole: string = 'teacher'): Promise<ReportResult> {
     console.log('=== GET REPORT CALLED ===', criteria, { userRole });
@@ -309,8 +289,7 @@ export async function getReports(criteria: ReportCriteria, userRole: string = 't
     const classSizes: Record<string, number> = {};
 
     for (const [classId, classRecords] of Object.entries(recordsByClass)) {
-        let students = await db.getStudentsByClass(classId);
-        students = filterActiveStudentsForReport(students, criteria.startDate);
+        const students = await getReportStudents(classId, criteria.startDate, criteria.endDate);
         const classObj = classes.find(c => c.id === classId);
         classSizes[classId] = classObj ? getClassSize(classObj, appSettings) : students.length;
 
@@ -497,8 +476,7 @@ export async function getExcelExportData(
     });
 
     for (const cls of targetClasses) {
-        let students = await db.getStudentsByClass(cls.id);
-        students = filterActiveStudentsForReport(students, startDate);
+        const students = await getReportStudents(cls.id, startDate, endDate);
         console.log(`[Excel] Class ${cls.name}: Students count: ${students.length}`);
 
         const classRecords = recordsByClass[cls.id] || [];
@@ -600,11 +578,10 @@ export async function getMonthlyReportData(classId: string, month: number, year:
     if (!cls) throw new Error('Class not found');
 
     // 2. Get Students
-    // Sorting by Name (or default DB order which is usually STT)
-    let students = await db.getStudentsByClass(classId);
-    // Start of the given month
     const reportStartDate = new Date(year, month - 1, 1).toISOString();
-    students = filterActiveStudentsForReport(students, reportStartDate);
+    // End of month
+    const reportEndDate = new Date(year, month, 0).toISOString();
+    const students = await getReportStudents(classId, reportStartDate, reportEndDate);
 
     // 3. Get Attendance Records for Month
     const records = await db.getMonthlyAttendance(classId, month, year);
@@ -714,8 +691,7 @@ export async function getAdvancedReportData(
 
     for (const cls of targetClasses) {
         // 2. Get Students
-        let students = await db.getStudentsByClass(cls.id);
-        students = filterActiveStudentsForReport(students, startDate);
+        const students = await getReportStudents(cls.id, startDate, endDate);
 
         // 3. Get Custom Columns (Filtered by userId)
         const columns = await getCustomColumns(cls.id, userId);

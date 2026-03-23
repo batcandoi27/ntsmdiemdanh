@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getColumn } from '@/services/column-service';
-import { getStudents } from '@/services/student-service';
+import { getStudents, getActiveStudents } from '@/services/student-service';
 import { getAllRecordsForColumn, savePeriodRecord, getOneTimeRecords, saveOneTimeRecord } from '@/services/record-service';
 import { Column, Student, PeriodRecord, OneTimeRecord } from '@/types/models';
 import { ArrowLeft, Loader2, Save, CheckCircle2, Circle, X } from 'lucide-react';
@@ -35,7 +35,7 @@ export default function MonitorDetailPage() {
         try {
             const [col, studList] = await Promise.all([
                 getColumn(columnId),
-                getStudents(classId)
+                getActiveStudents(classId)
             ]);
 
             if (!col) {

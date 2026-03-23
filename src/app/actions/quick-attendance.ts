@@ -5,6 +5,7 @@ import { Class, AttendanceStatus, Student, Column, DailyRecord } from '@/types/m
 import { SessionType } from '@/types/timetable';
 import { getEffectiveStatus, getClassSize } from '@/services/student-status-service';
 import { fetchAppSettings } from './settings';
+import { getActiveStudents } from '@/services/student-service';
 import { 
     getClassAttendance, 
     getAttendanceByClasses, 
@@ -104,10 +105,9 @@ export async function getGradeAttendanceSummary(grade: number, dateStr: string, 
                 KH: [] as { name: string; stt: string; note?: string }[]
             };
 
-            const students = await db.getStudentsByClass(cls.id);
-            const activeStudents = students.filter(s => getEffectiveStatus(s) !== 'dropped_out');
+            const students = await getActiveStudents(cls.id);
             const studentMap = new Map<string, Student>();
-            activeStudents.forEach(s => {
+            students.forEach(s => {
                 if (s.code) studentMap.set(s.code, s);
                 if (s.id) studentMap.set(s.id, s);
             });
@@ -293,11 +293,7 @@ export async function getGradeAttendanceSummary(grade: number, dateStr: string, 
 
 export async function getClassAttendanceDetails(classId: string, dateStr: string, session: SessionType = 'morning'): Promise<StudentAttendanceDetail[]> {
     try {
-        const allStudents = await db.getStudentsByClass(classId);
-        const students = allStudents.filter(s => {
-            const status = getEffectiveStatus(s);
-            return status !== 'dropped_out' && status !== 'suspended';
-        });
+        const students = await getActiveStudents(classId);
 
         const records = (await getClassAttendance(classId, dateStr, session)).map(r => normalizeAttendanceRecord(r));
         const recordMap = new Map<string, any>();
@@ -489,7 +485,7 @@ export async function getClassesAttendanceSummary(classIds: string[], dateStr: s
                 T: [] as any[], VP: [] as any[], KH: [] as any[]
             };
 
-            const students = await db.getStudentsByClass(cls.id);
+            const students = await getActiveStudents(cls.id);
             const studentMap = new Map(students.map(s => [s.code, s]));
             const studentUuidMap = new Map(students.map(s => [s.id, s]));
             

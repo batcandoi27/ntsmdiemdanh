@@ -222,6 +222,7 @@ export interface Student {
     statusDate?: string;               // ISO – ngày bắt đầu status hiện tại
     statusExpectedReturn?: string;     // ISO – dự kiến quay lại (temp_leave)
     statusHistory?: StatusChange[];    // Lịch sử thay đổi
+    is_deleted?: boolean;             // [v3] Đánh dấu đã xóa mềm
 }
 
 // Status codes: 

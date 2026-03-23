@@ -28,6 +28,9 @@ const COUNTED_STATUSES: StudentStatus[] = ['active', 'temporary_leave'];
 
 /** Get effective status (v3 if available, fallback to legacy mapping) */
 export function getEffectiveStatus(student: Student): StudentStatus {
+    // Nếu HS đã bị xóa mềm, coi như dropped_out
+    if (student.is_deleted) return 'dropped_out';
+
     // Ưu tiên status từ Supabase (nếu có)
     if (student.status && ['active', 'temporary_leave', 'dropped_out', 'suspended', 'graduated'].includes(student.status as any)) {
         return student.status as StudentStatus;

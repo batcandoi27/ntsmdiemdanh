@@ -5,6 +5,7 @@ import { getCached, setCache, invalidateCachePrefix } from './cache-service';
 import { DbAdapter } from './db-adapter';
 import { normalizeAttendanceRecord } from './attendance-v3-utils';
 import { StudentStatus } from '@/types/models';
+import { transformDbToStudent, transformStudentToDb } from '@/utils/transformers';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -221,32 +222,41 @@ export class SupabaseAdapter implements DbAdapter {
     }
 
     // --- Students ---
-    async getStudentsByClass(classId: string): Promise<Student[]> {
-        const CACHE_KEY = `supabase_students_${classId}`;
+    async getStudentsByClass(classId: string, options?: { onlyActive?: boolean; startDate?: string; endDate?: string }): Promise<Student[]> {
+        const CACHE_KEY = `supabase_students_${classId}_${JSON.stringify(options)}`;
         const cached = getCached<Student[]>(CACHE_KEY);
         if (cached) return cached;
 
-        const { data, error } = await this.client
-            .from('student_classes')
-            .select(`students (*)`)
-            .eq('class_id', classId);
+        let data, error;
+        if (options?.startDate && options?.endDate) {
+            // Chế độ báo cáo: Lấy cả HS đã nghỉ nếu có dữ liệu điểm danh trong kỳ
+            const res = await this.client.rpc('rpc_get_students_for_report', {
+                p_class_id: classId,
+                p_start_date: options.startDate,
+                p_end_date: options.endDate
+            });
+            data = res.data;
+            error = res.error;
+        } else {
+            let query = this.client.from('v_student_list' as any).select(`*`).eq('class_id', classId);
+            
+            if (options?.onlyActive) {
+                // Chỉ lấy học sinh đang hoạt động (cho điểm danh)
+                query = query.eq('is_deleted', false).eq('status', 'active');
+            }
+            
+            const res = await query;
+            data = res.data;
+            error = res.error;
+        }
 
         if (error) {
             console.error('getStudentsByClass Error:', error);
             return [];
         }
 
-        const list: Student[] = data.map((d: any) => {
-            const s = d.students;
-            return {
-                id: s.id,
-                code: s.student_code,
-                classId: classId,
-                fullName: s.full_name,
-                statusV3: s.status,
-                order: s.order || 0
-            } as any;
-        }).sort((a, b) => a.order - b.order);
+        const list: Student[] = (data || []).map(d => transformDbToStudent(d))
+            .sort((a, b) => (a.order || 0) - (b.order || 0));
 
         setCache(CACHE_KEY, list, 300000);
         return list;
@@ -258,35 +268,66 @@ export class SupabaseAdapter implements DbAdapter {
 
     async createStudent(student: Student): Promise<void> {
         const client = this.adminClient || this.client;
-        const { data: sData, error: sError } = await client.from('students').upsert({
-            student_code: student.code,
-            full_name: student.fullName,
-            status: student.statusV3 || 'active'
-        }, { onConflict: 'student_code' }).select().single();
+        const studentId = student.id || (typeof crypto !== 'undefined' ? crypto.randomUUID() : undefined);
+        
+        if (!studentId) throw new Error("Could not generate student ID");
 
-        if (sError) throw sError;
-        if (student.classId) {
-            await client.from('student_classes').upsert({
-                student_id: sData.id,
-                class_id: student.classId,
-                is_active: true
-            }, { onConflict: 'student_id, class_id' });
+        const { error } = await client.rpc('rpc_upsert_student', {
+            p_student_id: studentId,
+            p_class_id: student.classId,
+            p_payload: transformStudentToDb(student)
+        });
+
+        if (error) {
+            console.error('createStudent Error:', error);
+            throw error;
         }
+        
         invalidateCachePrefix(`supabase_students_${student.classId}`);
     }
 
     async updateStudent(student: Student): Promise<void> {
         const client = this.adminClient || this.client;
-        await client.from('students').update({
-            full_name: student.fullName,
-            status: student.statusV3
-        }).eq('student_code', student.code);
+        if (!student.id) throw new Error("Student ID is required for update");
+
+        const { error } = await client.rpc('rpc_upsert_student', {
+            p_student_id: student.id,
+            p_class_id: student.classId,
+            p_payload: transformStudentToDb(student)
+        });
+
+        if (error) {
+            console.error('updateStudent Error:', error);
+            throw error;
+        }
         invalidateCachePrefix(`supabase_students`);
     }
 
     async deleteStudent(id: string): Promise<void> {
+        // Ghi chú: ID ở đây ứng với student_code truyền từ UI cũ, 
+        // nhưng adapter mới nên dùng UUID nếu có thể. 
+        // Tuy nhiên để tránh sửa UI nhiều, ta fetch UUID từ code trước hoặc sửa RPC để nhận code.
+        // Tốt nhất: Tìm ID từ code trong cache hoặc DB.
+        
         const client = this.adminClient || this.client;
-        await client.from('students').delete().eq('student_code', id);
+        
+        // Fetch ID first if 'id' is actually code (backward compatibility)
+        const { data: student } = await client
+            .from('students')
+            .select('id')
+            .eq('student_code', id)
+            .maybeSingle();
+
+        if (student?.id) {
+            const { error } = await client.rpc('rpc_soft_delete_student', { 
+                p_student_id: student.id 
+            });
+            if (error) throw error;
+        } else {
+            // Fallback: Try delete by code if ID not found (thoạt nhìn id truyền vào là code)
+            await client.from('students').update({ is_deleted: true }).eq('student_code', id);
+        }
+
         invalidateCachePrefix('supabase_students');
     }
 
