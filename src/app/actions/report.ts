@@ -122,10 +122,16 @@ function resolveDailyStatus(rawItems: any[]) {
         });
 
         // Merge notes
-        const decoded = explodeNotes(item.statusNotes || item.violationNotes, item.note, item.periods?.length === 1 ? item.periods[0] : null);
+        const decoded = explodeNotes(item.statusNotes || item.violationNotes || item.rewardNotes, item.note, item.periods?.length === 1 ? item.periods[0] : null);
         Object.entries(decoded).forEach(([p, v]) => {
             const pk = Number(p);
             g.notes[pk] = g.notes[pk] && g.notes[pk] !== v ? `${g.notes[pk]}, ${v}` : v;
+            // ĐỒNG BỘ: Nếu notes chứa tiết mà periods chưa có → bổ sung vào periods
+            // Xử lý dữ liệu cũ (1 row DB chứa notes nhiều tiết nhưng period chỉ có 1 giá trị)
+            if (pk >= 1 && pk <= 10 && v) {
+                g.periods.add(pk);
+                sess.forEach(s => (g.sessionPeriods as any)[s].add(pk));
+            }
         });
     });
 
@@ -135,55 +141,57 @@ function resolveDailyStatus(rawItems: any[]) {
     // Helper: Build VPc1-5 style short codes
     const getShortCode = (type: string, g: any) => {
         const periods = Array.from(g.periods).sort((a: any, b: any) => a - b);
-        const hasS = g.sessionPeriods['S'].size > 0;
-        const hasC = g.sessionPeriods['C'].size > 0;
+        const sPs = Array.from(g.sessionPeriods['S']).sort() as number[];
+        const cPs = Array.from(g.sessionPeriods['C']).sort() as number[];
         
-        // Check if only one session is involved (legacy compatibility)
-        if (hasS && !hasC) {
-             const sPs = Array.from(g.sessionPeriods['S']).sort() as number[];
-             if (sPs.length === 5) return `${type}s`;
-             return `${type}s${sPs.join('')}`;
+        let result = type;
+        
+        if (sPs.length > 0) {
+            result += 's';
+            if (sPs.length < 5) result += sPs.join('');
         }
-        if (!hasS && hasC) {
-             const cPs = Array.from(g.sessionPeriods['C']).sort() as number[];
-             if (cPs.length === 5) return `${type}c`;
-             return `${type}c${cPs.join('')}`;
-        }
-
-        // Deep merge style (New v2.9)
-        if (periods.length >= 5) {
-            // Check if it's strictly session-based S (1-5) or C (6-10)
-            const hasS = g.sessionPeriods['S'].size > 0;
-            const hasC = g.sessionPeriods['C'].size > 0;
-            if (hasS && !hasC) return `${type}s`;
-            if (!hasS && hasC) return `${type}c`;
-            return `${type}`; // Fallback for mixed or both sessions (All Day)
-        }
-        const ranges: string[] = [];
-        let start = periods[0] as number, prev = periods[0] as number;
-        for (let i = 1; i <= periods.length; i++) {
-            if (i < periods.length && (periods[i] as number) === prev + 1) prev = periods[i] as number;
-            else {
-                if (start === prev) ranges.push(`${start}`); else ranges.push(`${start}-${prev}`);
-                if (i < periods.length) { start = periods[i] as number; prev = periods[i] as number; }
+        
+        if (cPs.length > 0) {
+            result += 'c';
+            if (cPs.length < 5) {
+                // Tiết chiều thường tính từ 1-5 hoặc 6-10 tùy logic, 
+                // ở đây đang dùng join các số thực tế có trong Set
+                result += cPs.join('');
             }
         }
-        return `${type}c${ranges.join(',')}`;
+
+        // Nếu vắng cả ngày (10 tiết) thì chỉ hiện Mã (ví dụ "P", "K")
+        if (periods.length >= 10) return type;
+
+        return result;
     };
 
-    // Helper: Build full T1: ... notes for Tooltip
-    const formatFullNotes = (notesMap: Record<number, string>) => {
+    // Helper: Build full Sáng T1: ... notes for Tooltip & Message
+    const formatFullNotes = (notesMap: Record<number, string>, sessionPeriods: { S: Set<number>, C: Set<number> }) => {
         const notePs: Record<string, number[]> = {};
         Object.entries(notesMap).forEach(([p, v]) => {
             if (!v) return;
             if (!notePs[v]) notePs[v] = [];
             notePs[v].push(Number(p));
         });
+        
+        // Xác định buổi cho mỗi period
+        const getSessionLabel = (period: number): string => {
+            const inS = sessionPeriods.S.has(period);
+            const inC = sessionPeriods.C.has(period);
+            if (inS && !inC) return 'Sáng ';
+            if (inC && !inS) return 'Chiều ';
+            if (inS && inC) return ''; // Cả 2 buổi → bỏ prefix
+            return '';
+        };
+        
         const parts: string[] = [];
         Object.entries(notePs).forEach(([noteText, periods]) => {
             const sorted = Array.from(new Set(periods)).sort((a,b) => a - b);
             if (sorted.length >= 5 && sorted.includes(1) && sorted.includes(5)) {
-                 parts.push(noteText);
+                // Vắng cả buổi → chỉ ghi note, thêm prefix buổi nếu rõ
+                const sessionLabel = getSessionLabel(sorted[0]);
+                parts.push(sessionLabel ? `${sessionLabel.trim()}: ${noteText}` : noteText);
             } else {
                 const ranges: string[] = [];
                 let start = sorted[0], prev = sorted[0];
@@ -194,7 +202,8 @@ function resolveDailyStatus(rawItems: any[]) {
                         if (i < sorted.length) { start = sorted[i]; prev = sorted[i]; }
                     }
                 }
-                parts.push(`T${ranges.join(',')}: ${noteText}`);
+                const sessionLabel = getSessionLabel(sorted[0]);
+                parts.push(`${sessionLabel}T${ranges.join(',')}: ${noteText}`);
             }
         });
         return parts.join(", ");
@@ -206,14 +215,13 @@ function resolveDailyStatus(rawItems: any[]) {
 
         stats[type] = 1;
         const code = getShortCode(type, g);
-        const detail = formatFullNotes(g.notes);
-        
-        if (detail) {
-            labels.push(`${code} [${detail}]`);
-        } else {
-            labels.push(code);
-        }
+        const detail = formatFullNotes(g.notes, g.sessionPeriods);
+        const label = detail ? `${code} [${detail}]` : code;
+        labels.push(label);
     });
+
+    // DEBUG: Log kết quả gộp cho từng học sinh
+    console.log(`[resolveDailyStatus] Result for student:`, { labels, stats });
 
     return {
         labels,
@@ -261,9 +269,8 @@ export async function getReports(criteria: ReportCriteria, userRole: string = 't
     const appSettings = settingsRes.success ? settingsRes.settings : null;
 
     // 1. Get raw attendance records
-    // Optimization: Chúng ta sẽ truyền thêm tín hiệu 'onlyExceptions' nếu cần (V3 mặc định chỉ có exceptions)
     const records = await db.getReportData(criteria.startDate, criteria.endDate, criteria.classIds);
-    console.log('Records returned from DB:', records.length);
+    console.log('[DEBUG_RECORDS] Raw records from DB:', JSON.stringify(records, null, 2));
     if (records.length > 0) {
         console.log('Sample record:', records[0]);
     }
@@ -276,112 +283,117 @@ export async function getReports(criteria: ReportCriteria, userRole: string = 't
     // 3. Process Data
     const absences: AbsenceDetail[] = [];
     let totalP = 0, totalK = 0, totalV = 0, totalT = 0, totalVP = 0, totalKH = 0;
+    const classSizes: Record<string, number> = {};
 
     // Map: classId -> studentCode -> date -> { items: [] }
     const mergedMap: Record<string, Record<string, Record<string, { items: any[] }>>> = {};
 
-    const recordsByClass: Record<string, any[]> = {};
-    records.forEach(r => {
-        if (!recordsByClass[r.classId]) recordsByClass[r.classId] = [];
-        recordsByClass[r.classId].push(r);
-    });
+    // Phase 1: Group all raw status items by class -> student -> date
+    // 1.1: Xây dựng Universal Mapping (ID -> Code) cho từng lớp
+    const universalMap: Record<string, Record<string, string>> = {}; // classId -> { id -> code, name -> code }
+    const studentInfoMap: Record<string, any> = {}; // code -> { name, stt }
 
-    const classSizes: Record<string, number> = {};
-
-    for (const [classId, classRecords] of Object.entries(recordsByClass)) {
-        const students = await getReportStudents(classId, criteria.startDate, criteria.endDate);
-        const classObj = classes.find(c => c.id === classId);
-        classSizes[classId] = classObj ? getClassSize(classObj, appSettings) : students.length;
-
-        const studentInfoMap = new Map();
-        students.forEach((s, index) => {
-            const info = { name: s.fullName, stt: index + 1 };
-            studentInfoMap.set(s.code, info);
-            if (s.id) studentInfoMap.set(s.id, info);
-        });
-
-        // Phase 1: Group all raw status items by class -> student -> date
-        if (!mergedMap[classId]) mergedMap[classId] = {};
-
-        classRecords.forEach((record: any) => {
-            const dateKey = record.date || (record.timestamp ? record.timestamp.split('T')[0] : '');
-            
-            if (record.absences) {
-                // V1
-                Object.entries(record.absences).forEach(([code, status]) => {
-                    if (status && status !== 'C' && status !== '') {
-                        if (!mergedMap[classId][code]) mergedMap[classId][code] = {};
-                        if (!mergedMap[classId][code][dateKey]) mergedMap[classId][code][dateKey] = { items: [] };
-                        
-                        mergedMap[classId][code][dateKey].items.push({
-                            base: (status as string).trim().toUpperCase(),
-                            session: 'both',
-                            periods: [1, 2, 3, 4, 5],
-                            note: record.notes?.[code] || ''
-                        });
-                    }
-                });
-            } else if (record.studentId && record.status) {
-                // V3
-                const normRecord = normalizeAttendanceRecord(record);
-                const code = normRecord.studentId;
-                if (!mergedMap[classId][code]) mergedMap[classId][code] = {};
-                if (!mergedMap[classId][code][dateKey]) mergedMap[classId][code][dateKey] = { items: [] };
-
-                let s = normRecord.status as any;
-                if (s === 'absent') s = 'K';
-                else if (s === 'excused') s = 'P';
-                else if (s === 'late') s = 'T';
-
-                const session = normRecord.session === 'morning' ? 'S' : 'C';
-                const periods = normRecord.missedPeriods && normRecord.missedPeriods.length > 0 
-                    ? normRecord.missedPeriods 
-                    : [1, 2, 3, 4, 5];
-
-                if (s !== 'present' && s !== 'C' && s && s !== 'violation' && s !== 'reward') {
-                    mergedMap[classId][code][dateKey].items.push({
-                        base: s,
-                        session,
-                        periods,
-                        note: normRecord.note || ''
-                    });
-                }
-
-                if (normRecord.violation) {
-                    mergedMap[classId][code][dateKey].items.push({
-                        base: 'VP',
-                        session,
-                        periods: normRecord.violationPeriods || periods,
-                        note: normRecord.violationNote || normRecord.note || ''
-                    });
-                }
-                if (normRecord.reward) {
-                    mergedMap[classId][code][dateKey].items.push({
-                        base: 'KH',
-                        session,
-                        periods: normRecord.rewardPeriods || periods,
-                        note: normRecord.rewardNote || normRecord.note || ''
-                    });
-                }
+    for (const classId of criteria.classIds || []) {
+        if (!universalMap[classId]) universalMap[classId] = {};
+        const studentsInClass = await db.getStudentsByClass(classId);
+        studentsInClass.forEach((s, idx) => {
+            if (s.code) {
+                if (s.id) universalMap[classId][s.id] = s.code;
+                universalMap[classId][s.code] = s.code; // code -> code
+                studentInfoMap[s.code] = { name: s.fullName, stt: idx + 1 };
             }
         });
     }
+    console.log('[DEBUG_MAPPING] Universal Map:', JSON.stringify(universalMap, null, 2));
 
-    // Phase 2: Process each student/day to apply priority and generate Ps13c2 labels
-    for (const [classId, studentDates] of Object.entries(mergedMap)) {
-        const classObj = classes.find(c => c.id === classId);
-        const className = classObj?.name || classId;
+    for (const rawRecord of records) {
+        const record = rawRecord as any;
+        const normRecord = normalizeAttendanceRecord(record);
+        const classId = normRecord.classId || record.classId;
+        const dateKey = normRecord.date || record.date || (record.timestamp ? record.timestamp.split('T')[0] : '');
         
-        let students = await db.getStudentsByClass(classId);
-        const studentInfoMap = new Map();
-        students.forEach((s, index) => {
-            const info = { name: s.fullName, stt: index + 1 };
-            studentInfoMap.set(s.code, info);
-            if (s.id) studentInfoMap.set(s.id, info);
-        });
+        let rawSKey = normRecord.studentId || record.studentId || record.code;
+        
+        // BƯỚC QUAN TRỌNG: Dịch UUID/ID bất kỳ sang StudentCode (8A13_X)
+        let studentKey = rawSKey;
+        if (classId && rawSKey && universalMap[classId]?.[rawSKey]) {
+            studentKey = universalMap[classId][rawSKey];
+        }
+
+        if (!classId || !dateKey || !studentKey) continue;
+
+        if (!mergedMap[classId]) mergedMap[classId] = {};
+        if (!mergedMap[classId][studentKey]) mergedMap[classId][studentKey] = {};
+        if (!mergedMap[classId][studentKey][dateKey]) mergedMap[classId][studentKey][dateKey] = { items: [] };
+
+        const targetItems = mergedMap[classId][studentKey][dateKey].items;
+
+        if (record.absences) {
+            // V1 logic
+            Object.entries(record.absences).forEach(([code, status]) => {
+                if (status && (status as any) !== 'C') {
+                    targetItems.push({
+                        base: (status as string).trim().toUpperCase(),
+                        session: 'both',
+                        periods: [1, 2, 3, 4, 5],
+                        note: record.notes?.[code] || ''
+                    });
+                }
+            });
+        } else if (record.status || normRecord.status) {
+            // V3 logic
+            let s = normRecord.status as any;
+            if (s === 'absent') s = 'K';
+            else if (s === 'excused') s = 'P';
+            else if (s === 'late') s = 'T';
+
+            const session = normRecord.session === 'morning' ? 'S' : 'C';
+            const periods = normRecord.missedPeriods && normRecord.missedPeriods.length > 0 
+                ? normRecord.missedPeriods 
+                : [1, 2, 3, 4, 5];
+
+            if (s !== 'present' && s !== 'C' && s && s !== 'violation' && s !== 'reward') {
+                targetItems.push({
+                    base: s,
+                    session,
+                    periods,
+                    note: normRecord.note || '',
+                    statusNotes: normRecord.statusNotes || undefined,
+                });
+            }
+
+            if (normRecord.violation) {
+                targetItems.push({
+                    base: 'VP',
+                    session,
+                    periods: normRecord.violationPeriods || periods,
+                    note: normRecord.violationNote || normRecord.note || '',
+                    violationNotes: normRecord.violationNotes || undefined,
+                });
+            }
+            if (normRecord.reward) {
+                targetItems.push({
+                    base: 'KH',
+                    session,
+                    periods: normRecord.rewardPeriods || periods,
+                    note: normRecord.rewardNote || normRecord.note || '',
+                    rewardNotes: normRecord.rewardNotes || undefined,
+                });
+            }
+        }
+    }
+
+    // Phase 2: Process each student/day to generate final AbsenceDetail
+    for (const [classId, studentDates] of Object.entries(mergedMap)) {
+        const className = classMap.get(classId) || classId;
+        const classObj = classes.find(c => c.id === classId);
+        
+        // Cập nhật sỹ số
+        classSizes[classId] = classObj ? getClassSize(classObj, appSettings) : 0;
 
         for (const [code, dates] of Object.entries(studentDates)) {
-            const info = studentInfoMap.get(code) || { name: code, stt: 0 };
+            // Lấy thông tin từ studentInfoMap đã gộp ở Phase 1
+            const info = studentInfoMap[code] || { name: code, stt: 0 };
             
             for (const [date, data] of Object.entries(dates)) {
                 const rawItems = data.items;
@@ -512,13 +524,13 @@ export async function getExcelExportData(
                 else if (s === 'late') s = 'T';
 
                 if (s !== 'present' && s !== 'C' && s && s !== 'violation' && s !== 'reward' && s !== 'VP' && s !== 'KH') {
-                    processRecord(code, { base: s, session, periods, note: normRecord.note || '' });
+                    processRecord(code, { base: s, session, periods, note: normRecord.note || '', statusNotes: normRecord.statusNotes || undefined });
                 }
                 if (normRecord.violation) {
-                    processRecord(code, { base: 'VP', session, periods: normRecord.violationPeriods || periods, note: normRecord.violationNote || normRecord.note || '' });
+                    processRecord(code, { base: 'VP', session, periods: normRecord.violationPeriods || periods, note: normRecord.violationNote || normRecord.note || '', violationNotes: normRecord.violationNotes || undefined });
                 }
                 if (normRecord.reward) {
-                    processRecord(code, { base: 'KH', session, periods: normRecord.rewardPeriods || periods, note: normRecord.rewardNote || normRecord.note || '' });
+                    processRecord(code, { base: 'KH', session, periods: normRecord.rewardPeriods || periods, note: normRecord.rewardNote || normRecord.note || '', rewardNotes: normRecord.rewardNotes || undefined });
                 }
             }
         });
@@ -621,13 +633,13 @@ export async function getMonthlyReportData(classId: string, month: number, year:
             else if (s === 'late') s = 'T';
 
             if (s !== 'present' && s !== 'C' && s && s !== 'violation' && s !== 'reward' && s !== 'VP' && s !== 'KH') {
-                processRecord(code, { base: s, session, periods, note: normRecord.note || '' });
+                processRecord(code, { base: s, session, periods, note: normRecord.note || '', statusNotes: normRecord.statusNotes || undefined });
             }
             if (normRecord.violation) {
-                processRecord(code, { base: 'VP', session, periods: normRecord.violationPeriods || periods, note: normRecord.violationNote || normRecord.note || '' });
+                processRecord(code, { base: 'VP', session, periods: normRecord.violationPeriods || periods, note: normRecord.violationNote || normRecord.note || '', violationNotes: normRecord.violationNotes || undefined });
             }
             if (normRecord.reward) {
-                processRecord(code, { base: 'KH', session, periods: normRecord.rewardPeriods || periods, note: normRecord.rewardNote || normRecord.note || '' });
+                processRecord(code, { base: 'KH', session, periods: normRecord.rewardPeriods || periods, note: normRecord.rewardNote || normRecord.note || '', rewardNotes: normRecord.rewardNotes || undefined });
             }
         }
     });
@@ -741,13 +753,13 @@ export async function getAdvancedReportData(
                 else if (s === 'late') s = 'T';
 
                 if (s !== 'present' && s !== 'C' && s && s !== 'violation' && s !== 'reward' && s !== 'VP' && s !== 'KH') {
-                    processRecord(code, { base: s, session, periods, note: normRecord.note || '' });
+                    processRecord(code, { base: s, session, periods, note: normRecord.note || '', statusNotes: normRecord.statusNotes || undefined });
                 }
                 if (normRecord.violation) {
-                    processRecord(code, { base: 'VP', session, periods: normRecord.violationPeriods || periods, note: normRecord.violationNote || normRecord.note || '' });
+                    processRecord(code, { base: 'VP', session, periods: normRecord.violationPeriods || periods, note: normRecord.violationNote || normRecord.note || '', violationNotes: normRecord.violationNotes || undefined });
                 }
                 if (normRecord.reward) {
-                    processRecord(code, { base: 'KH', session, periods: normRecord.rewardPeriods || periods, note: normRecord.rewardNote || normRecord.note || '' });
+                    processRecord(code, { base: 'KH', session, periods: normRecord.rewardPeriods || periods, note: normRecord.rewardNote || normRecord.note || '', rewardNotes: normRecord.rewardNotes || undefined });
                 }
             }
         });

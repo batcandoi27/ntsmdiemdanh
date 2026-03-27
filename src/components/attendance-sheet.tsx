@@ -599,8 +599,10 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                                 missedPeriods: pList.length > 0 ? pList : undefined,
                                 violation,
                                 violationNote: violation ? noteText : undefined,
+                                violationPeriods: violation && pList.length > 0 ? pList : undefined,
                                 reward,
-                                rewardNote: reward ? noteText : undefined
+                                rewardNote: reward ? noteText : undefined,
+                                rewardPeriods: reward && pList.length > 0 ? pList : undefined
                             });
                         });
                     }

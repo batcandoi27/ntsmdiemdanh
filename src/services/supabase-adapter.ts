@@ -495,10 +495,22 @@ export class SupabaseAdapter implements DbAdapter {
             console.log(`[getReportData] Total rows fetched: ${allData.length} (pages: ${Math.ceil(allData.length / PAGE_SIZE)})`);
 
             // Fetch extra info manually to map (chỉ 1 lần duy nhất)
-            const { data: students } = await this.client.from('students').select('id, student_code, full_name');
+            let studentsData: any[] = [];
+            let stFrom = 0;
+            while (true) {
+                let stQuery = this.client.from('students').select('id, student_code, full_name').range(stFrom, stFrom + PAGE_SIZE - 1);
+                if (classIds && classIds.length > 0) stQuery = stQuery.in('class_id', classIds);
+                
+                const { data } = await stQuery;
+                if (!data || data.length === 0) break;
+                studentsData = studentsData.concat(data);
+                if (data.length < PAGE_SIZE) break;
+                stFrom += PAGE_SIZE;
+            }
+            
             const { data: statuses } = await this.client.from('attendance_statuses').select('id, code');
 
-            const stuMap = new Map(students?.map(s => [s.id, s]));
+            const stuMap = new Map(studentsData.map(s => [s.id, s]));
             const stMap = new Map(statuses?.map(s => [s.id, s.code]));
 
             return allData.map(r => {
@@ -516,7 +528,15 @@ export class SupabaseAdapter implements DbAdapter {
                     session: r.session,
                     note: r.note,
                     markedBy: r.marked_by,
-                    timestamp: r.created_at
+                    timestamp: r.created_at,
+                    // === CÁC TRƯỜNG MỞ RỘNG TỪ DB ===
+                    // batchMarkAttendance lưu các trường này, PHẢI truyền lên report.ts
+                    statusNotes: r.status_notes || undefined,
+                    missedPeriods: r.missed_periods || undefined,
+                    violationNotes: r.violation_notes || undefined,
+                    violationPeriods: r.violation_periods || undefined,
+                    rewardNotes: r.reward_notes || undefined,
+                    rewardPeriods: r.reward_periods || undefined,
                 } as any);
             }) as any;
         } finally {

@@ -56,51 +56,90 @@ export function ReportMessageModal({
     let count_VP = 0;
     let count_KH = 0;
 
+    // DEBUG: Kiểm tra absences đầu vào
+    console.log("[ReportMessageModal] Absences input:", absences);
+
     absences.forEach(record => {
       const dateStr = record.date;
       const status = record.status || '';
+      // Một record status của PresenceDetail có thể chứa nhiều lượt vi phạm đã được server gộp bằng "; "
       const statuses = status.split('; ').filter(Boolean);
       
-      statuses.forEach(statusStr => {
-        if (!statusStr) return;
-        
-        // Trích xuất mã gốc (P, K, T, VP, KH) theo chuẩn v2.9
-        const code = statusStr.split(/[\(\[sc]/)[0].trim().toUpperCase();
-        const hasNote = statusStr.includes('[');
-        const note = hasNote ? statusStr.match(/\[(.*?)\]/)?.[1] || '' : '';
-        const entry = note ? `${record.studentName} (${note})` : record.studentName;
+      // Tập hợp các chi tiết của học sinh này trong ngày này
+      const currentDetails: string[] = [];
+      const codesInRecord = new Set<string>();
 
-        if (code === 'P') {
-          if (!list_P[dateStr]) list_P[dateStr] = [];
-          const studentEntry = note ? `${record.studentName} (${note})` : record.studentName;
-          if (!list_P[dateStr].includes(studentEntry)) list_P[dateStr].push(studentEntry);
-          count_P++;
-        } else if (code === 'K') {
-          if (!list_K[dateStr]) list_K[dateStr] = [];
-          const studentEntry = note ? `${record.studentName} (${note})` : record.studentName;
-          if (!list_K[dateStr].includes(studentEntry)) list_K[dateStr].push(studentEntry);
-          count_K++;
-        } else if (code === 'T') {
-          if (!list_T[dateStr]) list_T[dateStr] = [];
-          if (!list_T[dateStr].includes(entry)) list_T[dateStr].push(entry);
-          count_T++;
-        } else if (code === 'VP') {
-          if (!list_VP[dateStr]) list_VP[dateStr] = [];
-          if (!list_VP[dateStr].includes(entry)) list_VP[dateStr].push(entry);
-          count_VP++;
-        } else if (code === 'KH') {
-          if (!list_KH[dateStr]) list_KH[dateStr] = [];
-          if (!list_KH[dateStr].includes(entry)) list_KH[dateStr].push(entry);
-          count_KH++;
+      statuses.forEach(statusStr => {
+        const s = statusStr.trim();
+        if (!s) return;
+        
+        const codeMatch = s.match(/^([A-Z]+)/);
+        if (!codeMatch) return;
+        const code = codeMatch[1].toUpperCase();
+        codesInRecord.add(code);
+        
+        const bracketMatch = s.match(/\[(.*?)\]/);
+        if (bracketMatch) {
+          currentDetails.push(bracketMatch[1].trim());
+        } else {
+          let d = s.substring(code.length).trim();
+          d = d.replace(/^\[(.*)\]$/, '$1').replace(/^\((.*)\)$$/, '$1').trim();
+          if (d) currentDetails.push(d);
         }
       });
+
+      // Với mỗi mã trạng thái xuất hiện trong record này (thường chỉ 1 loại như VP hoặc T)
+      codesInRecord.forEach(code => {
+        const processList = (list: Record<string, string[]>, currentCode: string) => {
+          if (code !== currentCode) return;
+          if (!list[dateStr]) list[dateStr] = [];
+          
+          const existingIdx = list[dateStr].findIndex(item => item.startsWith(record.studentName));
+          const detailStr = currentDetails.join(', ');
+
+          if (existingIdx > -1) {
+            if (detailStr) {
+                const currentItem = list[dateStr][existingIdx];
+                if (currentItem.includes('(')) {
+                    // Nếu đã có chú thích, nối thêm các chi tiết mới nếu chưa có
+                    const existingNote = currentItem.match(/\((.*?)\)/)?.[1] || '';
+                    const newNotes = currentDetails.filter(d => !existingNote.toLowerCase().includes(d.toLowerCase()));
+                    if (newNotes.length > 0) {
+                        list[dateStr][existingIdx] = currentItem.replace(/\)$/, `, ${newNotes.join(', ')})`);
+                    }
+                } else {
+                    list[dateStr][existingIdx] = `${record.studentName} (${detailStr})`;
+                }
+            }
+          } else {
+            const entry = detailStr ? `${record.studentName} (${detailStr})` : record.studentName;
+            list[dateStr].push(entry);
+          }
+
+          if (currentCode === 'P') count_P++;
+          else if (currentCode === 'K') count_K++;
+          else if (currentCode === 'T') count_T++;
+          else if (currentCode === 'VP') count_VP++;
+          else if (currentCode === 'KH') count_KH++;
+        };
+
+        processList(list_P, 'P');
+        processList(list_K, 'K');
+        processList(list_T, 'T');
+        processList(list_VP, 'VP');
+        processList(list_KH, 'KH');
+      });
     });
+
+    // DEBUG: Kiểm tra danh sách sau khi gộp
+    console.log("[ReportMessageModal] Final Lists:", { list_VP, list_T, list_K, list_P });
 
     const formatListText = (dict: Record<string, string[]>) => {
       return Object.entries(dict)
         .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
         .map(([date, names]) => {
           const formattedDate = format(parseISO(date), 'dd/MM');
+          // Gộp các học sinh cùng ngày, mỗi người một dòng có dấu gạch đầu dòng
           return `${formattedDate}:\n- ${names.join('\n- ')}`;
         })
         .join('\n\n');
@@ -421,16 +460,16 @@ export function ReportMessageModal({
                                         <div key={nIdx} className="flex gap-1.5 text-[11px] leading-snug pl-1.5 ">
                                           <span className={cn("shrink-0", `text-${section.color}-500`)}>•</span>
                                           <span className="font-medium">
-                                            {(() => {
-                                              const namePart = entry.split(' (')[0];
-                                              const notePart = entry.includes(' (') ? ` (${entry.split(' (')[1]}` : '';
-                                              return (
-                                                <>
-                                                  <span className={cn("font-black", `text-${section.color}-700`)}>{namePart}</span>
-                                                  <span className={cn("text-[10px] font-medium italic leading-tight", `text-${section.color}-700`)}>{notePart}</span>
-                                                </>
-                                              );
-                                            })()}
+                                              {(() => {
+                                                const namePart = entry.split(' (')[0];
+                                                const notePart = entry.includes(' (') ? ` (${entry.split(' (')[1]}` : '';
+                                                return (
+                                                  <>
+                                                    <span className={cn("font-black", `text-${section.color}-700`)}>{namePart}</span>
+                                                    <span className={cn("text-[10px] font-medium italic leading-tight", `text-${section.color}-700`)}>{notePart}</span>
+                                                  </>
+                                                );
+                                              })()}
                                           </span>
                                         </div>
                                       ))}
