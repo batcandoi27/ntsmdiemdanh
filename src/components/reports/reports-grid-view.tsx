@@ -74,7 +74,7 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
             
             // Filter by visible columns: Check if any status (VPc1, P, etc) belongs to visible columns
             const isVisible = statuses.some(st => {
-                const base = st.split(/[\(\[sc]/)[0].trim().toUpperCase();
+                const base = st.split(/[\(\[\s]/)[0].trim().toUpperCase();
                 return visibleColumns.includes(base);
             });
             if (!isVisible) return;
@@ -119,7 +119,7 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
             if (selectedClasses.length > 0 && !selectedClasses.includes(record.classId)) return;
             const status = record.status || '';
             const subTotal = status.split('; ').filter(st => {
-                const base = st.split(/[\(\[sc]/)[0].trim().toUpperCase();
+                const base = st.split(/[\(\[\s]/)[0].trim().toUpperCase();
                 return base === 'P' || base === 'K';
             }).length;
             if (subTotal > 0) {
@@ -309,8 +309,8 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                                                             if (st) {
                                                                 const parts = st.split(' | ').map(p => p.trim().toUpperCase()).filter(Boolean);
                                                                 // TH1: Có cả (S) và (C) trong cùng ngày
-                                                                const morningAbs = parts.some(p => (p.startsWith('P') || p.startsWith('K')) && p.includes('(S)'));
-                                                                const afternoonAbs = parts.some(p => (p.startsWith('P') || p.startsWith('K')) && p.includes('(C)'));
+                                                                const morningAbs = parts.some(p => (p.startsWith('P') || p.startsWith('K')) && p.includes('Sáng'));
+                                                                const afternoonAbs = parts.some(p => (p.startsWith('P') || p.startsWith('K')) && p.includes('Chiều'));
                                                                 if (morningAbs && afternoonAbs) hasFullDayAbsence = true;
                                                                 
                                                                 // TH2: Fallback cho dữ liệu cũ V1 (không có (S)/(C)) hoặc nếu có 2 bản ghi P, K
@@ -339,7 +339,7 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                                                     const statuses = status ? status.split(' | ').map(s => s.trim()).filter(Boolean) : [];
                                                     
                                                     statuses.forEach(st => {
-                                                        const base = st.split(/[(\[sc]/i)[0].trim().toUpperCase();
+                                                        const base = st.split(/[(\[\s]/i)[0].trim().toUpperCase();
                                                         if (base.startsWith('P')) rowStats.P++;
                                                         else if (base.startsWith('K')) rowStats.K++;
                                                         else if (base.startsWith('T')) rowStats.T++;
@@ -388,7 +388,7 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                                             students.forEach(s => {
                                                 const status = s.absences[dateStr];
                                                 if (status) {
-                                                    const bases = status.split(' | ').map(st => st.split(/[(\[sc]/i)[0].trim().toUpperCase());
+                                                    const bases = status.split(' | ').map(st => st.split(/[(\[\s]/i)[0].trim().toUpperCase());
                                                     if (bases.some(b => ['P', 'K', 'T', 'VP'].includes(b))) {
                                                         count++;
                                                     }
@@ -402,27 +402,27 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                                         })}
                                         {visibleColumns.includes('P') && (
                                             <td className="p-1 border border-gray-500 text-center text-base bg-yellow-100 text-yellow-800 font-black">
-                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(' | ').filter(x => x.split(/[(\[sc]/i)[0].trim().toUpperCase() === 'P').length : 0), 0), 0) || ''}
+                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(' | ').filter(x => x.split(/[(\[\s]/i)[0].trim().toUpperCase() === 'P').length : 0), 0), 0) || ''}
                                             </td>
                                         )}
                                         {visibleColumns.includes('K') && (
                                             <td className="p-1 border border-gray-500 text-center text-base bg-red-100 text-red-700 font-black">
-                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(' | ').filter(x => x.split(/[(\[sc]/i)[0].trim().toUpperCase() === 'K').length : 0), 0), 0) || ''}
+                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(' | ').filter(x => x.split(/[(\[\s]/i)[0].trim().toUpperCase() === 'K').length : 0), 0), 0) || ''}
                                             </td>
                                         )}
                                         {visibleColumns.includes('T') && (
                                             <td className="p-1 border border-gray-500 text-center text-base bg-blue-100 text-blue-800 font-black">
-                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(' | ').filter(x => x.split(/[(\[sc]/i)[0].trim().toUpperCase() === 'T').length : 0), 0), 0) || ''}
+                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(' | ').filter(x => x.split(/[(\[\s]/i)[0].trim().toUpperCase() === 'T').length : 0), 0), 0) || ''}
                                             </td>
                                         )}
                                         {visibleColumns.includes('VP') && (
                                             <td className="p-1 border border-gray-500 text-center text-base bg-purple-100 text-purple-800 font-black">
-                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(' | ').filter(x => x.split(/[(\[sc]/i)[0].trim().toUpperCase() === 'VP').length : 0), 0), 0) || ''}
+                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(' | ').filter(x => x.split(/[(\[\s]/i)[0].trim().toUpperCase() === 'VP').length : 0), 0), 0) || ''}
                                             </td>
                                         )}
                                         {visibleColumns.includes('KH') && (
                                             <td className="p-1 border border-gray-500 text-center text-base bg-orange-100 text-orange-800 font-black">
-                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(' | ').filter(x => x.split(/[(\[sc]/i)[0].trim().toUpperCase() === 'KH').length : 0), 0), 0) || ''}
+                                                {students.reduce((sum, s) => sum + (Object.values(s.absences || {}) as string[]).reduce((c: number, st: string) => c + (st ? st.split(' | ').filter(x => x.split(/[(\[\s]/i)[0].trim().toUpperCase() === 'KH').length : 0), 0), 0) || ''}
                                             </td>
                                         )}
                                     </tr>
@@ -570,8 +570,8 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px]">
                     <div className="flex flex-wrap items-center gap-3 justify-center md:justify-start">
                         <span className="font-black text-gray-400 uppercase tracking-widest text-[10px]">Ký hiệu tiết:</span>
-                        <span className="text-gray-600"><b>s</b>: Sáng</span>
-                        <span className="text-gray-600"><b>c</b>: Chiều</span>
+                        <span className="text-gray-600"><b>Sáng</b>: Buổi sáng</span>
+                        <span className="text-gray-600"><b>Chiều</b>: Buổi chiều</span>
                         <span className="text-gray-600"><b>1, 2, 3...</b>: Số tiết vắng</span>
                     </div>
                     <div className="flex flex-wrap items-center gap-3 justify-center md:justify-end border-t md:border-t-0 pt-2 md:pt-0">
@@ -730,7 +730,7 @@ function GridCell({ status, visibleColumns }: { status: string, visibleColumns: 
         <div className="flex flex-wrap gap-0.5 justify-center">
             {displayStatuses.map((st, i) => {
                 const label = st.split(' [')[0].trim();
-                const baseCode = label.split(/[(\[sc]/i)[0].trim().toUpperCase();
+                const baseCode = label.split(/[(\[\s]/i)[0].trim().toUpperCase();
                 const hasNote = st.includes('[');
                 const note = hasNote ? st.match(/\[(.*?)\]/)?.[1] || '' : '';
                 const style = map[baseCode as keyof typeof map] || "bg-gray-400 text-white border-gray-600";

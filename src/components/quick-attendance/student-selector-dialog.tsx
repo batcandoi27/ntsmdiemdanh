@@ -11,6 +11,8 @@ import { AttendanceStatus } from '@/types/models';
 import { SessionType } from '@/types/timetable';
 import { Search, Loader2, Save, X, CheckCircle2, Edit3, Plus, ChevronDown, ChevronUp, Users, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 const triggerHapticFeedback = () => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -102,9 +104,7 @@ export function StudentSelectorDialog({
             { group: "Sức khỏe & Gia đình", items: ["Có tang", "Bệnh", "Bệnh nằm viện", "Tai nạn", "Y tế"], color: "bg-yellow-50 text-yellow-700 border-yellow-200" },
             { group: "Hoạt động trường", items: ["Thi HS giỏi", "Thi năng khiếu", "Hoạt động trường", "Hoạt động Đội", "Thi đấu thể thao"], color: "bg-blue-50 text-blue-700 border-blue-200" }
         ],
-        K: [
-            { group: "Bổ sung", items: ["Có bổ sung Phép"], color: "bg-red-50 text-red-700 border-red-200" }
-        ],
+        K: [],
         VP: [
             { group: "Tác phong", items: ["Sai đồng phục", "Không phù hiệu", "Áo ngoài quần", "Đem điện thoại", "Đeo Ba lô", "Ko Khăn quàng", "Đi dép", "Tóc sai QĐ"], color: "bg-purple-100 text-purple-700 border-purple-200" },
             { group: "Trong giờ học", items: ["Nói chuyện", "Mất trật tự", "Không làm bài", "Không mang sách", "Không mang vở", "Không học bài", "Không trực nhật", "Không nộp bài", "Quên dụng cụ"], color: "bg-pink-100 text-pink-700 border-pink-200" },
@@ -143,7 +143,8 @@ export function StudentSelectorDialog({
         updateRNotes: (n: Record<number, string> | ((prev: Record<number, string>) => Record<number, string>)) => void,
         lastActP: number | null,
         setLastActP: (p: number | null) => void,
-        isMultiMode: boolean = false
+        isMultiMode: boolean = false,
+        studentCode: string = ''
     ) => {
         const currentP = targetStatus === 'VP' ? vPeriods : (targetStatus === 'KH' ? rPeriods : periods);
         const currentN = targetStatus === 'VP' ? vNotes : (targetStatus === 'KH' ? rNotes : notes);
@@ -152,6 +153,48 @@ export function StudentSelectorDialog({
 
         return (
             <div className={cn("animate-in slide-in-from-top-1 space-y-3", isMultiMode ? "p-0" : "mt-3 pl-8")}>
+                {targetStatus === 'K' && (
+                    <div className="flex items-center justify-between p-2.5 bg-orange-50 border border-orange-100 rounded-xl mb-2 shadow-sm">
+                        <div className="flex flex-col">
+                            <Label htmlFor="bo-sung-p-desktop" className="text-orange-900 font-black text-[11px] uppercase">Bổ sung phép sau</Label>
+                            <span className="text-[9px] text-orange-700 font-medium italic">Chuyển sang cột Phép (P) để theo dõi</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                             <span className={cn("text-[10px] font-black transition-colors", !Object.values(notes).some(v => v && v.includes('Có bổ sung Phép')) ? "text-red-500" : "text-gray-300")}>K</span>
+                             <Switch 
+                                id="bo-sung-p-desktop"
+                                className="data-[state=checked]:bg-blue-500 data-[state=unchecked]:bg-red-500"
+                                checked={Object.values(notes).some(v => v && v.includes('Có bổ sung Phép'))}
+                                onCheckedChange={(checked) => {
+                                    if (isMultiMode) {
+                                        updateNotes(prev => {
+                                            const next = { ...prev };
+                                            if (checked) {
+                                               [0, 1, 2, 3, 4, 5].forEach(p => { if (next[p] !== undefined || p === 0) next[p] = 'Có bổ sung Phép'; });
+                                            } else {
+                                               Object.keys(next).forEach(p => { if (next[Number(p)] === 'Có bổ sung Phép') delete next[Number(p)]; });
+                                            }
+                                            return next;
+                                        });
+                                    } else if (studentCode) {
+                                        if (checked) {
+                                            setLocalStatusMap(prev => ({ ...prev, [studentCode]: 'P' }));
+                                            updateNotes(prev => ({ ...prev, [0]: 'Có bổ sung Phép' }));
+                                        } else {
+                                            setLocalStatusMap(prev => ({ ...prev, [studentCode]: 'K' }));
+                                            updateNotes(prev => {
+                                                const next = { ...prev };
+                                                Object.keys(next).forEach(p => { if (next[Number(p)] === 'Có bổ sung Phép') delete next[Number(p)]; });
+                                                return next;
+                                            });
+                                        }
+                                    }
+                                }}
+                            />
+                            <span className={cn("text-[10px] font-black transition-colors", Object.values(notes).some(v => v && v.includes('Có bổ sung Phép')) ? "text-blue-600" : "text-gray-300")}>P</span>
+                        </div>
+                    </div>
+                )}
                 <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                         <div className="text-[10px] text-gray-400 font-medium capitalize">
@@ -232,8 +275,8 @@ export function StudentSelectorDialog({
                                     }
                                     return (
                                         <div key={v} className="flex items-center gap-2 text-[10px]">
-                                            <span className="bg-gray-200 px-1 rounded font-mono text-gray-600 shrink-0">T{ranges.join(',')}</span>
-                                            <span className="text-gray-700 font-medium truncate">{v}</span>
+                                            <span className="bg-blue-100 px-1 rounded font-mono text-blue-700 shrink-0 font-bold border border-blue-200">T{ranges.join(',')}</span>
+                                            <span className="text-blue-800 font-black truncate">{v}</span>
                                             <button 
                                                 onClick={(e) => {
                                                     e.stopPropagation();
@@ -293,7 +336,7 @@ export function StudentSelectorDialog({
                             <input
                                 type="text"
                                 placeholder={lastActP ? `Ghi chú cho Tiết ${lastActP}...` : "Nhập ghi chú chung..."}
-                                className="w-full bg-white border border-gray-200 px-3 py-2 rounded-xl text-xs focus:ring-2 focus:ring-blue-100 focus:border-blue-300 outline-none transition-all pr-8"
+                                className="w-full bg-white border border-gray-200 px-3 py-2 rounded-xl text-xs focus:ring-2 focus:ring-blue-100 focus:border-blue-300 outline-none transition-all pr-8 font-bold text-blue-700 placeholder:font-normal placeholder:text-gray-400"
                                 value={currentN?.[lastActP || 0] || ''}
                                 onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => {
@@ -341,7 +384,17 @@ export function StudentSelectorDialog({
 
                     sortedData.forEach(s => {
                         const code = s.student.code;
-                        statusMap[code] = s.status || '';
+                        let currentStatus = s.status || '';
+                        
+                        // AUTO-MAP: Dữ liệu cũ (K + bổ sung phép) -> P để hiển thị đúng
+                        const hasBổSungPhép = (s.note && s.note.includes('Có bổ sung Phép')) || 
+                                              (s.statusNotes && Object.values(s.statusNotes).some(v => v && v.includes('Có bổ sung Phép')));
+
+                        if (currentStatus === 'K' && hasBổSungPhép) {
+                            currentStatus = 'P';
+                        }
+
+                        statusMap[code] = currentStatus as AttendanceStatus;
                         violationMap[code] = !!s.violation;
                         rewardMap[code] = !!s.reward;
                         const parseFormattedNote = (n?: string): Record<number, string> => {
@@ -376,7 +429,7 @@ export function StudentSelectorDialog({
                         if (s.violation) violationPeriodsMap[code] = s.violationPeriods || (s.violationNotes ? Object.keys(s.violationNotes).map(Number).filter(n => n > 0) : [1, 2, 3, 4, 5]);
                         if (s.reward) rewardPeriodsMap[code] = (s as any).rewardPeriods || [];
                         if (s.missedPeriods) missedPeriodsMap[code] = s.missedPeriods;
-                        else if (['P', 'K', 'T', 'V'].includes(s.status)) missedPeriodsMap[code] = [];
+                        else if (['P', 'K', 'T', 'V'].includes(currentStatus)) missedPeriodsMap[code] = [];
                     });
                     setLocalStatusMap(statusMap);
                     setLocalViolationMap(violationMap);
@@ -439,6 +492,73 @@ export function StudentSelectorDialog({
                 ...students.filter(s => s.status || s.violation || s.reward).map(s => s.student.code)
             ]));
 
+            const formatNotes = (entriesMap: Record<number, string>) => {
+                const entries = Object.entries(entriesMap);
+                if (entries.length === 0) return "";
+                const notePs: Record<string, number[]> = {};
+                entries.forEach(([p, v]) => {
+                    if (!v) return;
+                    if (!notePs[v]) notePs[v] = [];
+                    notePs[v].push(Number(p));
+                });
+                return Object.entries(notePs).map(([noteText, ps]) => {
+                    const sorted = ps.sort((a, b) => a - b);
+                    const ranges: string[] = [];
+                    const isFullSession = sorted.length === 0 || (sorted.length >= 5 && sorted.includes(1) && sorted.includes(5));
+                    if (isFullSession) return noteText;
+                    if (sorted.length === 1) ranges.push(`${sorted[0]}`);
+                    else {
+                        for (let i = 0, start, prev; i < sorted.length; i++) {
+                            if (i === 0) { start = sorted[i]; prev = sorted[i]; continue; }
+                            if (i < sorted.length && sorted[i] === prev + 1) prev = sorted[i];
+                            else {
+                                if (start === prev) ranges.push(`${start}`); else ranges.push(`${start}-${prev}`);
+                                if (i < sorted.length) { start = sorted[i]; prev = sorted[i]; }
+                            }
+                            if (i === sorted.length - 1) {
+                                if (start === prev) ranges.push(`${start}`); else ranges.push(`${start}-${prev}`);
+                            }
+                        }
+                    }
+                    return `T${ranges.join(',')}: ${noteText}`;
+                }).join(", ");
+            };
+
+            const mergePeriods = (existing: number[], incoming: number[]) => {
+                const combined = Array.from(new Set([...existing, ...incoming]));
+                if (combined.length >= 5 && combined.includes(1) && combined.includes(5)) return [];
+                return combined;
+            };
+
+            const mergeNotes = (existing: Record<number, string>, incoming: Record<number, string>) => {
+                let result = { ...existing };
+                Object.entries(result).forEach(([p, val]) => {
+                    if (typeof val === 'string' && (val.includes('T') || val.includes(':'))) delete result[Number(p)];
+                });
+                const fullKey = result[0] !== undefined ? 0 : ((result as any)["0"] !== undefined ? "0" : null);
+                const incomingHasPeriods = Object.keys(incoming).some(k => k !== "0" && k !== "null");
+                if (fullKey !== null && incomingHasPeriods) {
+                    const fullNote = result[fullKey as any];
+                    [1, 2, 3, 4, 5].forEach(p => { if (!result[p]) result[p] = fullNote; });
+                    delete result[fullKey as any];
+                }
+                Object.entries(incoming).forEach(([p, val]) => {
+                    const period = Number(p);
+                    if (!val) return;
+                    if (period === 0) {
+                         [1, 2, 3, 4, 5].forEach(i => {
+                             if (!result[i]) result[i] = val;
+                             else if (!result[i].includes(val)) result[i] = `${result[i]}, ${val}`;
+                         });
+                         return;
+                    }
+                    if (result[period] && result[period] !== val) {
+                        if (!result[period].includes(val)) result[period] = `${result[period]}, ${val}`;
+                    } else result[period] = val;
+                });
+                return result;
+            };
+
             allCodes.forEach(code => {
                 const isMultiTarget = mode === 'multi' && selectedHs.has(code);
                 const status = isMultiTarget ? targetStatus : (localStatusMap[code] || '');
@@ -446,110 +566,33 @@ export function StudentSelectorDialog({
                 const hasReward = isMultiTarget ? (targetStatus === 'KH' || localRewardMap[code]) : localRewardMap[code];
 
                 let v3Status: AttendanceStatusV3 = 'present';
-                if (status === 'P') v3Status = 'excused';
-                else if (status === 'K') v3Status = 'absent';
-                else if (status === 'T') v3Status = 'late';
-                else if (status === 'V') v3Status = 'absent';
+                let notes = isMultiTarget ? mergeNotes(localNotesMap[code] || {}, multiNotes) : (localNotesMap[code] || {});
 
-                const formatNotes = (entriesMap: Record<number, string>) => {
-                    const entries = Object.entries(entriesMap);
-                    if (entries.length === 0) return "";
-                    const notePs: Record<string, number[]> = {};
-                    entries.forEach(([p, v]) => {
-                        if (!v) return;
-                        if (!notePs[v]) notePs[v] = [];
-                        notePs[v].push(Number(p));
-                    });
-                    return Object.entries(notePs).map(([noteText, ps]) => {
-                        const sorted = ps.sort((a, b) => a - b);
-                        const ranges: string[] = [];
-                        
-                        // Quy tắc 'Cả buổi' (Full Session):
-                        const isFullSession = sorted.length === 0 || (sorted.length >= 5 && sorted.includes(1) && sorted.includes(5));
-                        if (isFullSession) return noteText;
-
-                        if (sorted.length === 1) {
-                            ranges.push(`${sorted[0]}`);
-                        } else {
-                            for (let i = 0, start, prev; i < sorted.length; i++) {
-                                if (i === 0) { start = sorted[i]; prev = sorted[i]; continue; }
-                                if (i < sorted.length && sorted[i] === prev + 1) prev = sorted[i];
-                                else {
-                                    if (start === prev) ranges.push(`${start}`); else ranges.push(`${start}-${prev}`);
-                                    if (i < sorted.length) { start = sorted[i]; prev = sorted[i]; }
-                                }
-                                if (i === sorted.length - 1) {
-                                    if (start === prev) ranges.push(`${start}`); else ranges.push(`${start}-${prev}`);
-                                }
-                            }
+                // AUTO-CONVERT: K + bổ sung phép -> P và chuẩn hóa note
+                const hasBổSungPhép = Object.values(notes).some(v => v && v.includes('Có bổ sung Phép'));
+                let currentStatus = status;
+                if (status === 'K' && hasBổSungPhép) {
+                    currentStatus = 'P';
+                    const updatedNotes = { ...notes };
+                    Object.keys(updatedNotes).forEach(p => {
+                        if (updatedNotes[Number(p)]?.includes('Có bổ sung Phép')) {
+                            updatedNotes[Number(p)] = '(có bổ sung phép)';
                         }
-                        return `T${ranges.join(',')}: ${noteText}`;
-                    }).join(", ");
-                };
+                    });
+                    notes = updatedNotes;
+                }
 
-                const mergePeriods = (existing: number[], incoming: number[]) => {
-                    const combined = Array.from(new Set([...existing, ...incoming]));
-                    // Nếu là 5 tiết học đầy đủ (1-5), ta để trống danh sách để biểu thị 'Cả buổi' (Full Session)
-                    // Điều này khớp 100% với logic của Single mode.
-                    if (combined.length >= 5 && combined.includes(1) && combined.includes(5)) return [];
-                    return combined;
-                };
+                if (currentStatus === 'P') v3Status = 'excused';
+                else if (currentStatus === 'K') v3Status = 'absent';
+                else if (currentStatus === 'T') v3Status = 'late';
+                else if (currentStatus === 'V') v3Status = 'absent';
+
+                const vNotes = isMultiTarget ? mergeNotes(localViolationNotesMap[code] || {}, multiViolationNotes) : (localViolationNotesMap[code] || {});
+                const rNotes = isMultiTarget ? mergeNotes(localRewardNotesMap[code] || {}, multiRewardNotes) : (localRewardNotesMap[code] || {});
 
                 const missedPs = isMultiTarget ? mergePeriods(localMissedPeriodsMap[code] || [], multiMissedPeriods) : (localMissedPeriodsMap[code] || []);
                 const vPs = isMultiTarget ? mergePeriods(localViolationPeriodsMap[code] || [], multiViolationPeriods) : (localViolationPeriodsMap[code] || []);
                 const rPs = isMultiTarget ? mergePeriods(localRewardPeriodsMap[code] || [], multiRewardPeriods) : (localRewardPeriodsMap[code] || []);
-
-                // Logic Deep Merge v2.7: Tự động Tách (Explode) và Gộp (Merge)
-                const mergeNotes = (existing: Record<number, string>, incoming: Record<number, string>) => {
-                    let result = { ...existing };
-                    
-                    // Vệ sinh dữ liệu cũ: Nếu tồn tại chuỗi đã format 'T...' thì loại bỏ để tránh lặp dữ liệu
-                    Object.entries(result).forEach(([p, val]) => {
-                        if (typeof val === 'string' && (val.includes('T') || val.includes(':'))) {
-                            delete result[Number(p)];
-                        }
-                    });
-
-                    const fullKey = result[0] !== undefined ? 0 : ((result as any)["0"] !== undefined ? "0" : null);
-                    const incomingHasPeriods = Object.keys(incoming).some(k => k !== "0" && k !== "null");
-
-                    // Nếu đang vắng 'Cả buổi' (key 0) mà có cập nhật 'Tiết lẻ' (1-5)
-                    // -> 'Phân rã' nội dung Cả buổi sang 5 tiết lẻ để chuẩn bị gộp chuyên sâu.
-                    if (fullKey !== null && incomingHasPeriods) {
-                        const fullNote = result[fullKey as any];
-                        [1, 2, 3, 4, 5].forEach(p => {
-                            if (!result[p]) result[p] = fullNote;
-                        });
-                        delete result[fullKey as any];
-                    }
-
-                    Object.entries(incoming).forEach(([p, val]) => {
-                        const period = Number(p);
-                        if (!val) return;
-                        
-                        // Nếu là 'Cả buổi' mới gộp cho cả 5 tiết nếu chưa có ghi chú riêng
-                        if (period === 0) {
-                             [1, 2, 3, 4, 5].forEach(i => {
-                                 if (!result[i]) result[i] = val;
-                                 else if (!result[i].includes(val)) result[i] = `${result[i]}, ${val}`;
-                             });
-                             return;
-                        }
-
-                        if (result[period] && result[period] !== val) {
-                            if (!result[period].includes(val)) {
-                                result[period] = `${result[period]}, ${val}`;
-                            }
-                        } else {
-                            result[period] = val;
-                        }
-                    });
-                    return result;
-                };
-
-                const notes = isMultiTarget ? mergeNotes(localNotesMap[code] || {}, multiNotes) : (localNotesMap[code] || {});
-                const vNotes = isMultiTarget ? mergeNotes(localViolationNotesMap[code] || {}, multiViolationNotes) : (localViolationNotesMap[code] || {});
-                const rNotes = isMultiTarget ? mergeNotes(localRewardNotesMap[code] || {}, multiRewardNotes) : (localRewardNotesMap[code] || {});
 
                 marks.push({
                     studentId: code,
@@ -569,25 +612,13 @@ export function StudentSelectorDialog({
                 });
             });
 
-            console.log('[QuickAttendance] Bắt đầu lưu với dữ liệu:', {
-                appUser: !!appUser,
-                classId,
-                date,
-                session,
-                marksCount: marks.length,
-                sampleMark: marks[0]
-            });
-            console.log('[QuickAttendance] Chi tiết marks:', marks);
-
             if (!appUser) {
                 console.error('[QuickAttendance] Không tìm thấy thông tin appUser');
                 alert('Lỗi: Phiên đăng nhập hết hạn. Vui lòng tải lại trang.');
                 return;
             }
             try {
-                const startTime = Date.now();
                 await batchMarkAttendance(appUser, { classId, session, period: null, marks }, students.map(s => s.student.code), new Date(date));
-                console.log(`[QuickAttendance] Lưu thành công trong ${Date.now() - startTime}ms`);
                 onSaved();
                 onOpenChange(false);
             } catch (error: any) {
@@ -770,7 +801,7 @@ export function StudentSelectorDialog({
                                         </div>
                                     </div>
                                     <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm transition-all overflow-hidden">
-                                        {renderAttendanceForm(multiMissedPeriods, multiViolationPeriods, multiRewardPeriods, multiNotes, multiViolationNotes, multiRewardNotes, setMultiMissedPeriods, setMultiViolationPeriods, setMultiRewardPeriods, setMultiNotes, setMultiViolationNotes, setMultiRewardNotes, multiLastActiveP, setMultiLastActiveP, true)}
+                                        {renderAttendanceForm(multiMissedPeriods, multiViolationPeriods, multiRewardPeriods, multiNotes, multiViolationNotes, multiRewardNotes, setMultiMissedPeriods, setMultiViolationPeriods, setMultiRewardPeriods, setMultiNotes, setMultiViolationNotes, setMultiRewardNotes, multiLastActiveP, setMultiLastActiveP, true, '')}
                                     </div>
                                     <div className="flex items-center gap-3 p-4 bg-blue-50/50 rounded-2xl border border-blue-100 italic">
                                         <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0 shadow-inner">
@@ -800,7 +831,10 @@ export function StudentSelectorDialog({
                                     const hasViolation = localViolationMap[item.student.code];
                                     const hasReward = localRewardMap[item.student.code];
                                     const isMultiSelected = selectedHs.has(item.student.code);
-                                    let isChecked = targetStatus === 'VP' ? (hasViolation || false) : (targetStatus === 'KH' ? (hasReward || false) : (currentStatus === targetStatus));
+                                    const isBổSungPhép = localNotesMap[item.student.code] && Object.values(localNotesMap[item.student.code]).some(v => v && v.includes('Có bổ sung Phép'));
+                                    let isChecked = targetStatus === 'VP' ? (hasViolation || false) : 
+                                                    (targetStatus === 'KH' ? (hasReward || false) : 
+                                                    (currentStatus === targetStatus || (targetStatus === 'K' && currentStatus === 'P' && isBổSungPhép)));
                                     const isOtherStatus = !isChecked && (currentStatus || hasViolation || hasReward);
 
                                     return (
@@ -843,7 +877,8 @@ export function StudentSelectorDialog({
                                                 (n) => setLocalRewardNotesMap(prev => { const current = prev[item.student.code] || {}; const next = typeof n === 'function' ? n(current) : n; return { ...prev, [item.student.code]: next }; }),
                                                 lastActivePeriod,
                                                 setLastActivePeriod,
-                                                false
+                                                false,
+                                                item.student.code
                                             )}
                                         </div>
                                     );

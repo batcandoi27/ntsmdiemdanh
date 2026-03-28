@@ -108,7 +108,7 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
     data.forEach(item => {
         const statuses = (item.status || '').split('; ').filter(Boolean);
         const isVisible = statuses.some(st => {
-            const base = st.split(/[\(\[sc]/)[0].trim().toUpperCase();
+            const base = st.split(/[\(\[\s]/)[0].trim().toUpperCase();
             const res = visibleColumns.includes(base);
             return res;
         });
@@ -172,7 +172,7 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                         const vCount = data.reduce((acc, a) => {
                                             if (a.className !== key) return acc;
                                             const subTotal = (a.status || '').split('; ').filter(st => {
-                                                const base = st.split(/[\(\[sc]/)[0].trim().toUpperCase();
+                                                const base = st.split(/[\(\[\s]/)[0].trim().toUpperCase();
                                                 return base === 'P' || base === 'K';
                                             }).length;
                                             return acc + subTotal;
@@ -265,7 +265,7 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                             const seenBases = new Set<string>();
                                             rawStatuses.forEach(st => {
                                                 const label = st.split(' [')[0].trim();
-                                                const base = label.split(/[\(\[sc]/)[0].trim().toUpperCase();
+                                                const base = label.split(/[\(\[\s]/)[0].trim().toUpperCase();
                                                 if (!seenBases.has(base)) {
                                                     if (base.startsWith('P')) pCount++;
                                                     else if (base.startsWith('K')) kCount++;
@@ -274,13 +274,13 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                                 displayStatuses.add(st);
                                             });
                                             
-                                            const hasMorning = rawStatuses.some(st => (st.toUpperCase().startsWith('P') || st.toUpperCase().startsWith('K')) && st.includes('s'));
-                                            const hasAfternoon = rawStatuses.some(st => (st.toUpperCase().startsWith('P') || st.toUpperCase().startsWith('K')) && st.includes('c'));
+                                            const hasMorning = rawStatuses.some(st => (st.toUpperCase().startsWith('P') || st.toUpperCase().startsWith('K')) && st.includes('Sáng'));
+                                            const hasAfternoon = rawStatuses.some(st => (st.toUpperCase().startsWith('P') || st.toUpperCase().startsWith('K')) && st.includes('Chiều'));
                                             const isSC = (hasMorning && hasAfternoon) || (pCount + kCount >= 2);
 
                                             const filteredStatuses = Array.from(displayStatuses).filter(st => {
                                                 const label = st.split(' [')[0].trim();
-                                                const baseCode = label.split(/[\(\[sc]/)[0].trim().toUpperCase();
+                                                const baseCode = label.split(/[\(\[\s]/)[0].trim().toUpperCase();
                                                 return visibleColumns.includes(baseCode);
                                             });
 
@@ -320,7 +320,7 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                                                     const rawStatuses = (a.status || '').split('; ').map(s => s.trim()).filter(Boolean);
                                                                     let count = 0;
                                                                     rawStatuses.forEach(st => {
-                                                                        const base = st.split(/[\(\[sc]/)[0].trim().toUpperCase();
+                                                                        const base = st.split(/[\(\[\s]/)[0].trim().toUpperCase();
                                                                         if (base.startsWith('P') || base.startsWith('K')) count++;
                                                                     });
                                                                     return acc + count;
@@ -351,7 +351,7 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                                                         const rawStatuses = (a.status || '').split('; ').map(s => s.trim()).filter(Boolean);
                                                                         let count = 0;
                                                                         rawStatuses.forEach(st => {
-                                                                            const base = st.split(/[\(\[sc]/)[0].trim().toUpperCase();
+                                                                            const base = st.split(/[\(\[\s]/)[0].trim().toUpperCase();
                                                                             if (base.startsWith('P') || base.startsWith('K')) count++;
                                                                         });
                                                                         return acc + count;
@@ -401,11 +401,11 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                                             </span>
                                                             <span className={cn(
                                                                 "font-medium truncate max-w-[150px]",
-                                                                statuses[0]?.split(/[(\[sc]/)[0].toUpperCase().startsWith('P') ? "text-yellow-600" :
-                                                                statuses[0]?.split(/[(\[sc]/)[0].toUpperCase().startsWith('K') ? "text-red-600" :
-                                                                statuses[0]?.split(/[(\[sc]/)[0].toUpperCase().startsWith('VP') ? "text-purple-600" :
-                                                                statuses[0]?.split(/[(\[sc]/)[0].toUpperCase().startsWith('T') ? "text-blue-600" :
-                                                                statuses[0]?.split(/[(\[sc]/)[0].toUpperCase().startsWith('KH') ? "text-orange-600" :
+                                                                statuses[0]?.split(/[(\[\s]/)[0].toUpperCase().startsWith('P') ? "text-yellow-600" :
+                                                                statuses[0]?.split(/[(\[\s]/)[0].toUpperCase().startsWith('K') ? "text-red-600" :
+                                                                statuses[0]?.split(/[(\[\s]/)[0].toUpperCase().startsWith('VP') ? "text-purple-600" :
+                                                                statuses[0]?.split(/[(\[\s]/)[0].toUpperCase().startsWith('T') ? "text-blue-600" :
+                                                                statuses[0]?.split(/[(\[\s]/)[0].toUpperCase().startsWith('KH') ? "text-orange-600" :
                                                                 "text-slate-700"
                                                             )}>
                                                                 {student.name}
@@ -462,8 +462,8 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px]">
                     <div className="flex flex-wrap items-center gap-3 justify-center md:justify-start">
                         <span className="font-black text-gray-400 uppercase tracking-widest text-[10px]">Ký hiệu buổi:</span>
-                        <span className="text-gray-600"><b>s</b>: Sáng</span>
-                        <span className="text-gray-600"><b>c</b>: Chiều</span>
+                         <span className="text-gray-600"><b>Sáng</b>: Buổi sáng</span>
+                         <span className="text-gray-600"><b>Chiều</b>: Buổi chiều</span>
                         <span className="text-gray-600"><b>1, 2, 3...</b>: Số tiết vắng</span>
                     </div>
                     <div className="flex flex-wrap items-center gap-3 justify-center md:justify-end border-t md:border-t-0 pt-2 md:pt-0">
@@ -671,7 +671,7 @@ function AddAttendanceModal({ className, defaultDate, onClose, onRefresh }: { cl
 
 function CompactStatusBadge({ status }: { status: string }) {
     const label = (status || '').split(' [')[0].trim();
-    const baseCode = label.split(/[\(\[sc]/)[0].trim().toUpperCase();
+    const baseCode = label.split(/[\(\[\s]/)[0].trim().toUpperCase();
     const hasDetail = (status || '').includes('[');
     const detail = hasDetail ? status.match(/\[(.*?)\]/)?.[1] || '' : '';
 
@@ -703,7 +703,7 @@ function CompactStatusBadge({ status }: { status: string }) {
 
 function StatusBadge({ status }: { status: string }) {
     const label = (status || '').split(' [')[0].trim();
-    const baseCode = label.split(/[\(\[sc]/)[0].trim().toUpperCase();
+    const baseCode = label.split(/[\(\[\s]/)[0].trim().toUpperCase();
     const hasNote = (status || '').includes('[');
     const note = hasNote ? status.match(/\[(.*?)\]/)?.[1] || '' : '';
 

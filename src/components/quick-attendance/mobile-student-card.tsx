@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils";
 import { CheckCircle2, Clock, FileText, Ban, AlertTriangle, User, MoreVertical, X, ChevronLeft, Save, Star } from "lucide-react";
 import { Drawer } from "vaul"; // Using Vaul for bottom sheet
 import { useState, useEffect } from "react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 interface MobileStudentCardProps {
     student: {
@@ -41,9 +43,7 @@ const NOTE_SUGGESTIONS = {
         { group: "Sức khỏe & Gia đình", items: ["Có tang", "Bệnh", "Bệnh nằm viện", "Tai nạn", "Y tế"], color: "bg-yellow-50 text-yellow-700 border-yellow-200" },
         { group: "Hoạt động trường", items: ["Thi HS giỏi", "Thi năng khiếu", "Hoạt động trường", "Hoạt động Đội", "Thi đấu thể thao"], color: "bg-blue-50 text-blue-700 border-blue-200" }
     ],
-    K: [
-        { group: "Bổ sung", items: ["Có bổ sung Phép"], color: "bg-red-50 text-red-700 border-red-200" }
-    ],
+    K: [],
     VP: [
         { group: "Tác phong", items: ["Sai đồng phục", "Không phù hiệu", "Áo ngoài quần", "Đem điện thoại", "Đeo Ba lô", "Ko Khăn quàng", "Đi dép", "Tóc sai QĐ"], color: "bg-purple-100 text-purple-700 border-purple-200" },
         { group: "Trong giờ học", items: ["Nói chuyện", "Mất trật tự", "Không làm bài", "Không mang sách", "Không mang vở", "Không học bài", "Không trực nhật", "Không nộp bài", "Quên dụng cụ"], color: "bg-pink-100 text-pink-700 border-pink-200" },
@@ -123,9 +123,18 @@ export function MobileStudentCard({
     const isException = status !== '' || violation || reward;
 
     const handleSave = () => {
+        let finalStatus = localStatus;
+        let finalNote = localNote;
+
+        // Auto-convert K with "Có bổ sung Phép" to P
+        if (localStatus === 'K' && localNote.includes('Có bổ sung Phép')) {
+            finalStatus = 'P';
+            finalNote = '(có bổ sung phép)';
+        }
+
         onUpdateAll({
-            status: localStatus,
-            note: localNote,
+            status: finalStatus,
+            note: finalNote,
             missedPeriods: localMissedPeriods,
             violation: localViolation,
             violationNote: localVNote,
@@ -313,6 +322,37 @@ export function MobileStudentCard({
                                 {/* 1. Attendance Details (P, K, T) */}
                                 {(['P', 'K', 'T'].includes(localStatus)) && (
                                     <div className="animate-in fade-in slide-in-from-right-4">
+                                        {localStatus === 'K' && (
+                                            <div className="flex items-center justify-between p-4 bg-orange-50 border border-orange-100 rounded-2xl mb-6 shadow-sm">
+                                                <div className="flex flex-col">
+                                                    <Label htmlFor="bo-sung-p" className="text-orange-900 font-black text-sm uppercase">Bổ sung phép sau</Label>
+                                                    <span className="text-[10px] text-orange-700 font-medium italic">Chuyển sang cột Phép (P) để theo dõi</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={cn("text-xs font-black transition-colors", !localNote.includes('Có bổ sung Phép') ? "text-red-500" : "text-gray-300")}>K</span>
+                                                    <Switch 
+                                                        id="bo-sung-p"
+                                                        className="data-[state=checked]:bg-blue-500 data-[state=unchecked]:bg-red-500"
+                                                        checked={localNote.includes('Có bổ sung Phép')}
+                                                        onCheckedChange={(checked) => {
+                                                            if (checked) {
+                                                                setLocalStatus('P');
+                                                                setLocalNote('Có bổ sung Phép');
+                                                            } else {
+                                                                if (localNote === 'Có bổ sung Phép') {
+                                                                    setLocalStatus('K');
+                                                                    setLocalNote('');
+                                                                } else {
+                                                                    setLocalNote(prev => prev.replace('Có bổ sung Phép', '').trim());
+                                                                }
+                                                            }
+                                                        }}
+                                                    />
+                                                    <span className={cn("text-xs font-black transition-colors", localNote.includes('Có bổ sung Phép') ? "text-blue-600" : "text-gray-300")}>P</span>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         <h3 className="text-sm font-bold text-gray-500 uppercase mb-4 flex items-center gap-2">
                                             Chi tiết {getStatusLabel(localStatus)}
                                         </h3>
@@ -328,7 +368,7 @@ export function MobileStudentCard({
                                                             "py-3 rounded-xl font-bold border-2 transition-all",
                                                             localMissedPeriods.includes(p)
                                                                 ? "bg-blue-50 border-blue-500 text-blue-700"
-                                                                : "bg-white border-gray-100 text-gray-400"
+                                                                 : "bg-white border-gray-100 text-gray-400"
                                                         )}
                                                     >
                                                         T{p}
@@ -362,7 +402,7 @@ export function MobileStudentCard({
                                             value={localNote}
                                             onChange={(e) => setLocalNote(e.target.value)}
                                             placeholder="Ghi chú thêm..."
-                                            className="w-full p-4 border-2 border-gray-100 rounded-2xl focus:border-blue-400 outline-none min-h-[100px] text-lg bg-gray-50/50"
+                                            className="w-full p-4 border-2 border-blue-100 rounded-2xl focus:border-blue-400 outline-none min-h-[100px] text-lg bg-blue-50/30 text-blue-700 font-bold placeholder:font-normal placeholder:text-gray-400"
                                         />
                                     </div>
                                 )}

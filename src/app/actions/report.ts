@@ -104,7 +104,16 @@ function resolveDailyStatus(rawItems: any[]) {
     };
 
     rawItems.forEach(item => {
-        const type = item.base;
+        let type = item.base as AttendanceStatus;
+        
+        // AUTO-MAP: Dữ liệu cũ (K + bổ sung phép) -> P để hiển thị đúng trong báo cáo
+        const hasBổSungPhép = (item.note && item.note.includes('Có bổ sung Phép')) || 
+                              (item.statusNotes && Object.values(item.statusNotes).some((v: any) => v && v.includes('Có bổ sung Phép')));
+
+        if (type === 'K' && hasBổSungPhép) {
+            type = 'P';
+        }
+
         if (!grouped[type]) {
             grouped[type] = {
                 periods: new Set(),
@@ -147,17 +156,14 @@ function resolveDailyStatus(rawItems: any[]) {
         let result = type;
         
         if (sPs.length > 0) {
-            result += 's';
+            result += ' Sáng';
             if (sPs.length < 5) result += sPs.join('');
         }
         
         if (cPs.length > 0) {
-            result += 'c';
-            if (cPs.length < 5) {
-                // Tiết chiều thường tính từ 1-5 hoặc 6-10 tùy logic, 
-                // ở đây đang dùng join các số thực tế có trong Set
-                result += cPs.join('');
-            }
+            if (sPs.length > 0) result += ', Chiều';
+            else result += ' Chiều';
+            if (cPs.length < 5) result += cPs.join('');
         }
 
         // Nếu vắng cả ngày (10 tiết) thì chỉ hiện Mã (ví dụ "P", "K")
