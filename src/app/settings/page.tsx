@@ -15,11 +15,12 @@ import { ExportTab } from '@/components/settings/export-tab';
 import { ApiTab } from '@/components/settings/api-tab';
 import { FeatureFlagsTab } from '@/components/settings/feature-flags-tab';
 import { ClassSizeTab } from '@/components/settings/class-size-tab';
+import { SubjectsTab } from '@/components/settings/subjects-tab';
 import { useAuth } from '@/context/auth-context';
 import { db } from '@/services/db';
 import { Class } from '@/types/models';
 
-type TabType = 'data' | 'fixed-columns' | 'custom-columns' | 'my-classes' | 'users' | 'timetable' | 'year' | 'export' | 'api' | 'feature-flags' | 'class-size';
+type TabType = 'data' | 'subjects' | 'fixed-columns' | 'custom-columns' | 'my-classes' | 'users' | 'timetable' | 'year' | 'export' | 'api' | 'feature-flags' | 'class-size';
 
 export default function SettingsPage() {
     const [isPending, startTransition] = useTransition();
@@ -159,6 +160,7 @@ export default function SettingsPage() {
         tabs.push({ id: 'export' as TabType, label: 'Xuất báo cáo', icon: Download });
         tabs.push({ id: 'class-size' as TabType, label: 'Sĩ số lớp', icon: Users });
         tabs.push({ id: 'feature-flags' as TabType, label: 'Tính năng', icon: ToggleRight });
+        tabs.push({ id: 'subjects' as TabType, label: 'Môn học', icon: BookOpen });
     }
 
     tabs.push(
@@ -315,6 +317,10 @@ export default function SettingsPage() {
 
                     {activeTab === 'my-classes' && (
                         <MyClassesTab />
+                    )}
+
+                    {activeTab === 'subjects' && (
+                        <SubjectsTab />
                     )}
 
                     {activeTab === 'users' && (

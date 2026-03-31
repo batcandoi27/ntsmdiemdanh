@@ -139,6 +139,11 @@ export interface AppSettings {
     schoolCode?: string;            // 'THCS_NT'
     periodsPerSession: number;      // 5
     classSizeMethod?: 'real' | 'manual'; // [v3] Phương thức tính sĩ số
+    subjectConfig?: {
+        primary: string;
+        secondary: string;
+        high: string;
+    };
     createdAt: string;
     updatedAt: string;
 }

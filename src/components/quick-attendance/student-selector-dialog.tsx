@@ -97,7 +97,36 @@ export function StudentSelectorDialog({
     const [loading, setLoading] = useState(false);
     const [isSaving, startSaving] = useTransition();
     const [search, setSearch] = useState('');
+    const [selectedSubject, setSelectedSubject] = useState('Không');
+    const [subjectOptions, setSubjectOptions] = useState<string[]>(['Không']);
     const { appUser } = useAuth();
+
+    // Load subjects from localStorage (synced from DB via Settings)
+    useEffect(() => {
+        const stored = localStorage.getItem('app_subjects_config');
+        if (stored) {
+            try {
+                const config = JSON.parse(stored);
+                // Determine grade level (6-9 is secondary)
+                const gradeMatch = classId?.match(/\d+/);
+                const grade = gradeMatch ? parseInt(gradeMatch[0]) : 0;
+                
+                let subjectCsv = "";
+                if (grade >= 1 && grade <= 5) subjectCsv = config.primary;
+                else if (grade >= 6 && grade <= 9) subjectCsv = config.secondary;
+                else if (grade >= 10 && grade <= 12) subjectCsv = config.high;
+                else subjectCsv = config.secondary || config.primary || config.high || "";
+
+                if (subjectCsv) {
+                    const parsed = subjectCsv.split(', ').map(s => s.trim()).filter(Boolean);
+                    setSubjectOptions(['Không', ...parsed]);
+                    setSelectedSubject('Không');
+                }
+            } catch (e) {
+                console.error("Failed to parse subjects config", e);
+            }
+        }
+    }, [classId, open]);
 
     const NOTE_SUGGESTIONS = {
         P: [
@@ -153,6 +182,22 @@ export function StudentSelectorDialog({
 
         return (
             <div className={cn("animate-in slide-in-from-top-1 space-y-3", isMultiMode ? "p-0" : "mt-3 pl-8")}>
+                {/* Subject Selection Dropdown */}
+                <div className="flex items-center gap-3 p-2 bg-blue-50/30 border border-blue-100 rounded-xl mb-1 shadow-sm">
+                    <div className="flex flex-col shrink-0">
+                        <Label className="text-blue-900 font-black text-[10px] uppercase">Môn học</Label>
+                        <span className="text-[8px] text-blue-600 font-medium italic">Chọn để thêm vào note</span>
+                    </div>
+                    <select 
+                        value={selectedSubject}
+                        onChange={(e) => setSelectedSubject(e.target.value)}
+                        className="flex-1 bg-white border border-blue-100 rounded-lg px-2 py-1.5 text-xs font-bold text-blue-800 outline-none focus:ring-2 focus:ring-blue-100"
+                    >
+                        {subjectOptions.map(opt => (
+                            <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                    </select>
+                </div>
                 {targetStatus === 'K' && (
                     <div className="flex items-center justify-between p-2.5 bg-orange-50 border border-orange-100 rounded-xl mb-2 shadow-sm">
                         <div className="flex flex-col">
@@ -273,10 +318,26 @@ export function StudentSelectorDialog({
                                             if (i < sorted.length) { start = sorted[i]; prev = sorted[i]; }
                                         }
                                     }
+                                    
+                                    // Parse subject from internal format: "Subject|Note"
+                                    let displayNote = v;
+                                    let subjectPart = "";
+                                    if (v.includes('|')) {
+                                        const parts = v.split('|');
+                                        const sub = parts[0];
+                                        displayNote = parts.slice(1).join('|');
+                                        if (sub && sub !== 'Không') subjectPart = `: [${sub}] - `;
+                                        else subjectPart = ": ";
+                                    } else {
+                                        const globalSub = (selectedSubject && selectedSubject !== 'Không') ? `: [${selectedSubject}] - ` : ": ";
+                                        subjectPart = globalSub;
+                                    }
+
                                     return (
                                         <div key={v} className="flex items-center gap-2 text-[10px]">
-                                            <span className="bg-blue-100 px-1 rounded font-mono text-blue-700 shrink-0 font-bold border border-blue-200">T{ranges.join(',')}</span>
-                                            <span className="text-blue-800 font-black truncate">{v}</span>
+                                            <span className="text-blue-800 font-black truncate">
+                                                T{ranges.join(',')}{subjectPart}{displayNote}
+                                            </span>
                                             <button 
                                                 onClick={(e) => {
                                                     e.stopPropagation();
@@ -308,13 +369,21 @@ export function StudentSelectorDialog({
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 const targetPs = lastActP ? [lastActP] : (currentP.length > 0 ? currentP : [0]);
+                                                const subjectPrefix = selectedSubject !== 'Không' ? `${selectedSubject}|` : '';
+                                                
                                                 setN(prev => {
                                                     const updated = { ...prev };
                                                     targetPs.forEach(p => {
-                                                        const cur = updated[p] || '';
-                                                        const parts = cur ? cur.split(', ') : [];
-                                                        if (parts.includes(suggestion)) updated[p] = parts.filter(x => x !== suggestion).join(', ');
-                                                        else updated[p] = parts.length > 0 ? `${cur}, ${suggestion}` : suggestion;
+                                                        const curRaw = updated[p] || '';
+                                                        let curNote = curRaw;
+                                                        if (curRaw.includes('|')) curNote = curRaw.split('|').slice(1).join('|');
+                                                        
+                                                        const parts = curNote ? curNote.split(', ') : [];
+                                                        let newNote = "";
+                                                        if (parts.includes(suggestion)) newNote = parts.filter(x => x !== suggestion).join(', ');
+                                                        else newNote = parts.length > 0 ? `${curNote}, ${suggestion}` : suggestion;
+                                                        
+                                                        updated[p] = newNote ? `${subjectPrefix}${newNote}` : '';
                                                     });
                                                     return updated;
                                                 });
@@ -337,14 +406,18 @@ export function StudentSelectorDialog({
                                 type="text"
                                 placeholder={lastActP ? `Ghi chú cho Tiết ${lastActP}...` : "Nhập ghi chú chung..."}
                                 className="w-full bg-white border border-gray-200 px-3 py-2 rounded-xl text-xs focus:ring-2 focus:ring-blue-100 focus:border-blue-300 outline-none transition-all pr-8 font-bold text-blue-700 placeholder:font-normal placeholder:text-gray-400"
-                                value={currentN?.[lastActP || 0] || ''}
+                                value={(() => {
+                                    const raw = (currentN && (currentN as any)[lastActP || 0]) || '';
+                                    return raw.includes('|') ? raw.split('|').slice(1).join('|') : raw;
+                                })()}
                                 onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => {
                                     const val = e.target.value;
                                     const targetPs = lastActP ? [lastActP] : (currentP.length > 0 ? currentP : [0]);
+                                    const subjectPrefix = selectedSubject !== 'Không' ? `${selectedSubject}|` : '';
                                     setN(prev => {
                                         const updated = { ...prev };
-                                        targetPs.forEach(p => updated[p] = val);
+                                        targetPs.forEach(p => updated[p] = val ? `${subjectPrefix}${val}` : '');
                                         return updated;
                                     });
                                 }}
@@ -501,26 +574,31 @@ export function StudentSelectorDialog({
                     if (!notePs[v]) notePs[v] = [];
                     notePs[v].push(Number(p));
                 });
-                return Object.entries(notePs).map(([noteText, ps]) => {
-                    const sorted = ps.sort((a, b) => a - b);
-                    const ranges: string[] = [];
+                return Object.entries(notePs).map(([noteRaw, ps]) => {
+                    const sorted = ps.sort((a,b) => a - b);
                     const isFullSession = sorted.length === 0 || (sorted.length >= 5 && sorted.includes(1) && sorted.includes(5));
-                    if (isFullSession) return noteText;
-                    if (sorted.length === 1) ranges.push(`${sorted[0]}`);
-                    else {
-                        for (let i = 0, start, prev; i < sorted.length; i++) {
-                            if (i === 0) { start = sorted[i]; prev = sorted[i]; continue; }
-                            if (i < sorted.length && sorted[i] === prev + 1) prev = sorted[i];
-                            else {
-                                if (start === prev) ranges.push(`${start}`); else ranges.push(`${start}-${prev}`);
-                                if (i < sorted.length) { start = sorted[i]; prev = sorted[i]; }
-                            }
-                            if (i === sorted.length - 1) {
-                                if (start === prev) ranges.push(`${start}`); else ranges.push(`${start}-${prev}`);
-                            }
+                    
+                    let noteText = noteRaw;
+                    let sub = "";
+                    if (noteRaw.includes('|')) {
+                        const parts = noteRaw.split('|');
+                        sub = parts[0];
+                        noteText = parts.slice(1).join('|');
+                    }
+
+                    const ranges: string[] = [];
+                    let start = sorted[0], prev = sorted[0];
+                    for (let i = 1; i <= sorted.length; i++) {
+                        if (i < sorted.length && sorted[i] === prev + 1) prev = sorted[i];
+                        else {
+                            if (start === prev) ranges.push(`${start}`); else ranges.push(`${start}-${prev}`);
+                            if (i < sorted.length) { start = sorted[i]; prev = sorted[i]; }
                         }
                     }
-                    return `T${ranges.join(',')}: ${noteText}`;
+                    const prefix = isFullSession ? "" : `T${ranges.join(',')}`;
+                    const subjectPart = sub ? `: [${sub}] - ` : (prefix ? ": " : "");
+
+                    return `${prefix}${subjectPart}${noteText}`;
                 }).join(", ");
             };
 

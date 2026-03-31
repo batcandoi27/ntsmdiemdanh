@@ -484,20 +484,20 @@ export default function QuickAttendancePage() {
             {/* Block Attendance Table (Desktop Only) */}
             {
                 mode === 'BLOCK' && viewDevice === 'desktop' && Array.isArray(blockData) && blockData.length > 0 && (
-                    <div className="animate-in slide-in-from-bottom-8 fade-in duration-500 bg-white rounded-2xl shadow-sm border border-gray-100 p-6 overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="text-sm text-gray-500 border-b border-gray-100">
-                                        <th className="py-3 px-2 font-bold min-w-[80px] sticky left-0 z-20 bg-white border-b border-r border-gray-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">TÊN LỚP</th>
-                                        <th className="py-3 px-2 font-bold text-center w-16">SỈ SỐ</th>
-                                        <th className="py-3 px-2 font-bold text-center w-16 bg-red-50 text-red-600">VẮNG</th>
-                                        <th className="py-3 px-2 font-bold text-center min-w-[100px] bg-green-50 text-green-700">HIỆN DIỆN</th>
-                                        {settings.visibleDefaultColumns.P && <th className="py-3 px-2 font-bold text-center min-w-[120px] bg-yellow-50 text-yellow-700">PHÉP (P)</th>}
-                                        {settings.visibleDefaultColumns.K && <th className="py-3 px-2 font-bold text-center min-w-[120px] bg-red-50 text-red-700">KHÔNG (K)</th>}
-                                        {settings.visibleDefaultColumns.T && <th className="py-3 px-2 font-bold text-center min-w-[120px] bg-blue-50 text-blue-700">TRỄ (T)</th>}
-                                        {settings.visibleDefaultColumns.VP && <th className="py-3 px-2 font-bold text-center min-w-[120px] bg-purple-50 text-purple-700">VI PHẠM (VP)</th>}
-                                        {settings.visibleDefaultColumns.KH && <th className="py-3 px-2 font-bold text-center min-w-[120px] bg-orange-50 text-orange-700">KHEN THƯỞNG (KH)</th>}
+                    <div className="animate-in slide-in-from-bottom-8 fade-in duration-500 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                        <div className="overflow-x-auto max-h-[70vh] relative scrollbar-thin scrollbar-thumb-gray-200">
+                            <table className="w-full text-left border-separate border-spacing-0">
+                                <thead className="sticky top-0 z-30">
+                                    <tr className="text-sm text-gray-500 bg-white">
+                                        <th className="py-3 px-2 font-bold min-w-[80px] sticky left-0 top-0 z-40 bg-white border-b border-r border-gray-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">TÊN LỚP</th>
+                                        <th className="py-3 px-2 font-bold text-center w-16 sticky top-0 bg-white border-b border-gray-100">SỈ SỐ</th>
+                                        <th className="py-3 px-2 font-bold text-center w-16 sticky top-0 bg-red-50 text-red-600 border-b border-gray-100">VẮNG</th>
+                                        <th className="py-3 px-2 font-bold text-center min-w-[100px] sticky top-0 bg-green-50 text-green-700 border-b border-gray-100">HIỆN DIỆN</th>
+                                        {settings.visibleDefaultColumns.P && <th className="py-3 px-2 font-bold text-center min-w-[120px] sticky top-0 bg-yellow-50 text-yellow-700 border-b border-gray-100">PHÉP (P)</th>}
+                                        {settings.visibleDefaultColumns.K && <th className="py-3 px-2 font-bold text-center min-w-[120px] sticky top-0 bg-red-50 text-red-700 border-b border-gray-100">KHÔNG (K)</th>}
+                                        {settings.visibleDefaultColumns.T && <th className="py-3 px-2 font-bold text-center min-w-[120px] sticky top-0 bg-blue-50 text-blue-700 border-b border-gray-100">TRỄ (T)</th>}
+                                        {settings.visibleDefaultColumns.VP && <th className="py-3 px-2 font-bold text-center min-w-[120px] sticky top-0 bg-purple-50 text-purple-700 border-b border-gray-100">VI PHẠM (VP)</th>}
+                                        {settings.visibleDefaultColumns.KH && <th className="py-3 px-2 font-bold text-center min-w-[120px] sticky top-0 bg-orange-50 text-orange-700 border-b border-gray-100">KHEN THƯỞNG (KH)</th>}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -523,7 +523,10 @@ export default function QuickAttendancePage() {
                                                         )}
                                                     </div>
                                                 </td>
-                                                <td className="py-4 px-2 text-center font-bold text-gray-600 align-top pt-5">
+                                                <td className={cn(
+                                                    "py-4 px-2 text-center font-black align-top pt-5",
+                                                    theme.text
+                                                )}>
                                                     {item.totalStudents}
                                                 </td>
 
