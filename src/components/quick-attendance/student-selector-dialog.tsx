@@ -3,6 +3,7 @@
 import { useState, useEffect, useTransition } from 'react';
 import { Modal } from '@/components/ui/modal';
 import { StudentAttendanceDetail, getClassAttendanceDetails } from '@/app/actions/quick-attendance';
+import { fetchAppSettings } from '@/app/actions/settings';
 import { batchMarkAttendance } from '@/services/attendance-v3-service';
 import { AttendanceStatusV3 } from '@/types/attendance-v3';
 import { useAuth } from '@/context/auth-context';
@@ -41,6 +42,12 @@ const STATUS_LABELS: Record<string, string> = {
     'T': 'Trễ',
     'VP': 'Vi Phạm',
     'V': 'Vắng (Chưa rõ)'
+};
+
+const DEFAULT_SUBJECTS = {
+    primary: "Tiếng Việt, Toán, Đạo đức, Tự nhiên, Xã hội, Khoa học, Lịch sử, Địa lí, Tin học, Ngoại ngữ, Công nghệ, Âm nhạc, Mỹ thuật, GDTC, Trải nghiệm",
+    secondary: "Ngữ văn, Toán, Ngoại ngữ, GDCD, Lịch sử, Địa lí, Vật lí, Hóa học, Sinh học, Tin học, Công nghệ, Âm nhạc, Mỹ thuật, GDTC, Trải nghiệm",
+    high: "Ngữ văn, Toán, Ngoại ngữ, Lịch sử, Địa lí, GDKTPL, Vật lí, Hóa học, Sinh học, Tin học, Công nghệ, Âm nhạc, Mỹ thuật, GDTC, GDQP-AN, Trải nghiệm"
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -101,31 +108,57 @@ export function StudentSelectorDialog({
     const [subjectOptions, setSubjectOptions] = useState<string[]>(['Không']);
     const { appUser } = useAuth();
 
-    // Load subjects from localStorage (synced from DB via Settings)
+    // Load subjects - Auto fetch if localStorage empty
     useEffect(() => {
-        const stored = localStorage.getItem('app_subjects_config');
-        if (stored) {
-            try {
-                const config = JSON.parse(stored);
-                // Determine grade level (6-9 is secondary)
-                const gradeMatch = classId?.match(/\d+/);
-                const grade = gradeMatch ? parseInt(gradeMatch[0]) : 0;
-                
-                let subjectCsv = "";
-                if (grade >= 1 && grade <= 5) subjectCsv = config.primary;
-                else if (grade >= 6 && grade <= 9) subjectCsv = config.secondary;
-                else if (grade >= 10 && grade <= 12) subjectCsv = config.high;
-                else subjectCsv = config.secondary || config.primary || config.high || "";
-
-                if (subjectCsv) {
-                    const parsed = subjectCsv.split(', ').map(s => s.trim()).filter(Boolean);
-                    setSubjectOptions(['Không', ...parsed]);
-                    setSelectedSubject('Không');
+        const loadSubjects = async () => {
+            let config: any = null;
+            const stored = localStorage.getItem('app_subjects_config');
+            
+            if (stored) {
+                try {
+                    config = JSON.parse(stored);
+                } catch (e) {
+                    console.error("Failed to parse local subjects config", e);
                 }
-            } catch (e) {
-                console.error("Failed to parse subjects config", e);
             }
-        }
+            
+            // If No config in localStorage, fetch from server
+            if (!config) {
+                try {
+                    const res = await fetchAppSettings();
+                    if (res.success && res.settings?.subjectConfig) {
+                        config = res.settings.subjectConfig;
+                        // Sync back to local storage for next time
+                        localStorage.setItem('app_subjects_config', JSON.stringify(config));
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch subjects from server", e);
+                }
+            }
+
+            // Fallback to defaults if still no config (e.g. Server error)
+            if (!config) {
+                config = DEFAULT_SUBJECTS;
+            }
+
+            // Determine grade level (6-9 is secondary)
+            const gradeMatch = classId?.match(/\d+/);
+            const grade = gradeMatch ? parseInt(gradeMatch[0]) : 0;
+            
+            let subjectCsv = "";
+            if (grade >= 1 && grade <= 5) subjectCsv = config.primary;
+            else if (grade >= 6 && grade <= 9) subjectCsv = config.secondary;
+            else if (grade >= 10 && grade <= 12) subjectCsv = config.high;
+            else subjectCsv = config.secondary || config.primary || config.high || "";
+
+            if (subjectCsv) {
+                const parsed = subjectCsv.split(', ').map((s: string) => s.trim()).filter(Boolean);
+                setSubjectOptions(['Không', ...parsed]);
+                setSelectedSubject('Không');
+            }
+        };
+
+        loadSubjects();
     }, [classId, open]);
 
     const NOTE_SUGGESTIONS = {
