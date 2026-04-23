@@ -40,7 +40,7 @@ export function MyClassesTab() {
             if (saved) {
                 setMyClassIds(JSON.parse(saved));
             } else if (appUser?.assignedClassIds && appUser.assignedClassIds.length > 0) {
-                // Tự động load từ profile trên Firebase nếu lần đầu chưa có
+                // Tự động load từ profile Supabase nếu lần đầu chưa có
                 setMyClassIds(appUser.assignedClassIds);
             }
         } catch (error) {

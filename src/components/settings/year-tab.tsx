@@ -2,10 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { Archive, Plus, AlertTriangle, ArrowRight, PlayCircle, Loader2, CheckCircle2 } from 'lucide-react';
-import { getAppSettings, createNewYear, purgeYear, getActiveYear } from '@/services/year-service';
+import { getAppSettings, createNewYear, purgeYear, getActiveYear, switchActiveYear } from '@/services/year-service';
 import { useAuth } from '@/context/auth-context';
-import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
 
 export function YearTab() {
@@ -81,16 +79,6 @@ export function YearTab() {
                 { autoGraduateGrade12: optAutoGraduate, copyClassStructure: optCopyClasses }
             );
 
-            // Add year to availableYears array
-            try {
-                await updateDoc(doc(db, 'settings', 'app'), {
-                    availableYears: arrayUnion(newYearInput)
-                });
-            } catch (e) {
-                console.error("Lỗi cập nhật availableYears array:", e);
-                // Non-critical error
-            }
-
             setMessage({
                 type: 'success',
                 text: `Chuyển năm học thành công! Đã tự động tốt nghiệp ${res.graduatedCount} học sinh. Năm học hiện tại là ${newYearInput}.`
@@ -110,10 +98,7 @@ export function YearTab() {
 
         setActionLoading(true);
         try {
-            await updateDoc(doc(db, 'settings', 'app'), {
-                activeYear: year,
-                updatedAt: new Date().toISOString(),
-            });
+            await switchActiveYear(year);
             setMessage({ type: 'success', text: `Đã đổi năm học sang ${year} thành công!` });
             loadData();
             // Force reload to update context

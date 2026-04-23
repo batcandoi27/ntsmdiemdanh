@@ -151,19 +151,18 @@ export function UserManagementTab() {
                 <div className="flex gap-2">
                     <button
                         onClick={async () => {
-                            if (confirm('Chức năng này sẽ tạo hàng loạt tài khoản cho GVCN, Giám Thị Khối và Lớp trưởng dựa trên danh sách Lớp hiện có.\n\nLƯU Ý QUAN TRỌNG: Do bảo mật của Firebase, tài khoản Admin hiện tại sẽ bị BẤT BỘC ĐĂNG XUẤT sau khi tiến trình hoàn tất. Bạn có muốn tiếp tục?')) {
+                            if (confirm('Chức năng này sẽ tạo hàng loạt tài khoản cho GVCN, Giám Thị Khối và Lớp trưởng dựa trên danh sách Lớp hiện có. Bạn có muốn tiếp tục?')) {
                                 try {
                                     setLoading(true);
                                     const { batchCreateAccounts } = await import('@/services/user-service');
                                     await batchCreateAccounts(classes, appUser?.uid || '', (msg) => {
                                         console.log(msg); // Mở console để xem progress
                                     });
-                                    alert('Tạo tài khoản hoàn tất! Vui lòng đăng nhập lại.');
-                                    // Đăng xuất admin
-                                    const { auth } = await import('@/lib/firebase');
-                                    await auth.signOut();
+                                    alert('Tạo tài khoản hoàn tất!');
+                                    loadData();
                                 } catch (e: any) {
                                     alert('Lỗi: ' + e.message);
+                                } finally {
                                     setLoading(false);
                                 }
                             }

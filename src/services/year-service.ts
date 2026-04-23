@@ -8,10 +8,12 @@
  * Spark quota: ~35 writes tạo năm mới (thay vì 15K-25K writes copy).
  */
 
-import { db as dbAdapter } from './db';
-import { db } from '@/lib/firebase';
 import { AppUser, AppSettings } from '@/types/models';
-import { writeBatch, doc, getDocs, collection, getDoc } from 'firebase/firestore';
+import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase-admin';
+
+// Ưu tiên dùng Admin Client trên server để bypass RLS
+const dbClient = (typeof window === 'undefined' && supabaseAdmin) ? supabaseAdmin : supabase;
 
 // ============================================
 // Settings
@@ -19,8 +21,8 @@ import { writeBatch, doc, getDocs, collection, getDoc } from 'firebase/firestore
 
 export async function getAppSettings(): Promise<AppSettings | null> {
     try {
-        const settings = await dbAdapter.getSettings?.() || null;
-        return settings;
+        const { data } = await dbClient.from('settings').select('value').eq('key', 'app_settings').maybeSingle();
+        return data?.value as AppSettings | null;
     } catch (e) {
         console.error("Error getAppSettings:", e);
         return null;
@@ -28,8 +30,8 @@ export async function getAppSettings(): Promise<AppSettings | null> {
 }
 
 export async function getActiveYear(): Promise<string> {
-    const settings = await getAppSettings();
-    return settings?.activeYear || '2025-2026';
+    const { data } = await dbClient.from('academic_years').select('name').eq('is_active', true).maybeSingle();
+    return data?.name || '2025-2026';
 }
 
 // ============================================
@@ -44,8 +46,6 @@ export async function getActiveYear(): Promise<string> {
  * 2. Tạo structure rỗng cho năm mới: years/{newYear}/classes, students, etc.
  * 3. Auto graduate lớp 12 (set status = 'graduated')
  * 4. Năm cũ tự động read-only (check activeYear)
- *
- * Total writes: ~35 (1 settings + ~33 classes + HS lớp 12)
  */
 export async function createNewYear(
     user: AppUser,
@@ -59,58 +59,79 @@ export async function createNewYear(
     let writesUsed = 0;
     let graduatedCount = 0;
 
-    const batch = writeBatch(db);
+    // 1. Lấy hoặc tạo newYear trong academic_years
+    let { data: newYearData } = await dbClient.from('academic_years').select('id').eq('name', newYear).maybeSingle();
+    if (!newYearData) {
+        const startString = newYear.split('-')[0];
+        const res = await dbClient.from('academic_years').insert({
+            name: newYear,
+            start_date: `${startString}-09-05`,
+            end_date: `${parseInt(startString)+1}-05-31`,
+            is_active: true
+        }).select().single();
+        if (res.error) throw res.error;
+        newYearData = res.data;
+        writesUsed++;
+    } else {
+        await dbClient.from('academic_years').update({ is_active: true }).eq('id', newYearData.id);
+        writesUsed++;
+    }
 
-    // 1. Update activeYear
-    batch.update(doc(db, 'settings', 'app'), {
-        activeYear: newYear,
-        updatedAt: new Date().toISOString(),
-    });
-    writesUsed++;
+    // Set old years as not active
+    await dbClient.from('academic_years').update({ is_active: false }).neq('id', newYearData.id);
 
-    // 2. Copy class structure (names only, no students)
-    if (options.copyClassStructure) {
-        const oldClasses = await getDocs(collection(db, `schools/default/years/${oldYear}/classes`));
-        for (const classDoc of oldClasses.docs) {
-            const data = classDoc.data();
-            // Skip grade 12 if autoGraduate (they graduate)
-            if (options.autoGraduateGrade12 && isGrade12(data.className || classDoc.id)) {
-                continue;
+    // Lấy oldYearId
+    const { data: oldYearData } = await dbClient.from('academic_years').select('id').eq('name', oldYear).maybeSingle();
+    const oldYearId = oldYearData?.id;
+
+    if (oldYearId) {
+        // 2. Copy class structure
+        if (options.copyClassStructure) {
+            const { data: oldClasses } = await dbClient.from('classes').select('*').eq('year_id', oldYearId);
+            if (oldClasses) {
+                for (const classData of oldClasses) {
+                    if (options.autoGraduateGrade12 && isGrade12(classData.name || '')) continue;
+
+                    const newClassName = bumpGrade(classData.name || '');
+                    if (newClassName) {
+                        await dbClient.from('classes').insert({
+                            year_id: newYearData.id,
+                            name: newClassName,
+                            grade: bumpGradeNumber(classData.grade),
+                            actual_student_count: 0,
+                            adjustment_count: 0,
+                            manual_student_count: 0,
+                            class_type: classData.class_type
+                        });
+                        writesUsed++;
+                    }
+                }
             }
-            // Bump grade: 8A1 → 9A1, 6A2 → 7A2
-            const newClassName = bumpGrade(data.className || classDoc.id);
-            if (newClassName) {
-                batch.set(doc(db, `schools/default/years/${newYear}/classes`, newClassName), {
-                    className: newClassName,
-                    studentCount: 0,
-                    actualStudentCount: 0,
-                    sessions: data.sessions || ['morning'],
-                    grade: bumpGradeNumber(data.grade),
-                });
-                writesUsed++;
+        }
+
+        // 3. Auto graduate lớp 12 (chỉ lấy học sinh của năm cũ đang học lớp 12)
+        if (options.autoGraduateGrade12) {
+            const { data: oldGrade12Classes } = await dbClient.from('classes')
+                .select('id, name').eq('year_id', oldYearId);
+            
+            const g12Ids = oldGrade12Classes?.filter(c => isGrade12(c.name || '')).map(c => c.id) || [];
+            
+            if (g12Ids.length > 0) {
+                const { data: studentClasses } = await dbClient.from('student_classes')
+                    .select('student_id')
+                    .in('class_id', g12Ids);
+                
+                const studentIds = studentClasses?.map(sc => sc.student_id) || [];
+                if (studentIds.length > 0) {
+                    await dbClient.from('students')
+                        .update({ status: 'graduated' })
+                        .in('id', studentIds);
+                    graduatedCount += studentIds.length;
+                    writesUsed++;
+                }
             }
         }
     }
-
-    // 3. Auto graduate lớp 12
-    if (options.autoGraduateGrade12) {
-        const students = await getDocs(collection(db, `schools/default/years/${oldYear}/students`));
-        for (const sDoc of students.docs) {
-            const student = sDoc.data();
-            const classSnap = await getDoc(doc(db, `schools/default/years/${oldYear}/classes`, student.classId));
-            if (classSnap.exists() && isGrade12(classSnap.data().className || student.classId)) {
-                batch.update(sDoc.ref, {
-                    statusV3: 'graduated',
-                    statusNote: 'Tốt nghiệp tự động khi kết thúc năm học',
-                    statusDate: new Date().toISOString(),
-                });
-                graduatedCount++;
-                writesUsed++;
-            }
-        }
-    }
-
-    await batch.commit();
 
     return { writesUsed, graduatedCount };
 }
@@ -120,14 +141,8 @@ export async function createNewYear(
 // ============================================
 
 export async function getAvailableYears(): Promise<string[]> {
-    // List all year paths
-    // Since Firestore doesn't list subcollections easily from client,
-    // we maintain a list in settings
-    const settingsSnap = await getDoc(doc(db, 'settings', 'app'));
-    if (!settingsSnap.exists()) return ['2025-2026'];
-
-    const data = settingsSnap.data();
-    return data.availableYears || [data.activeYear || '2025-2026'];
+    const { data } = await dbClient.from('academic_years').select('name').order('start_date', { ascending: false });
+    return data?.map(y => y.name) || ['2025-2026'];
 }
 
 export function isReadOnly(yearPath: string, activeYear: string): boolean {
@@ -161,8 +176,8 @@ function bumpGradeNumber(grade?: number | string): number | undefined {
 // ============================================
 
 /**
- * Xoá toàn bộ data năm cũ sau khi đã export ZIP
- * Chỉ Admin được dùng, cần confirm 2 lần
+ * Xoá toàn bộ data năm cũ.
+ * Chỉ Admin được dùng, cần confirm 2 lần.
  */
 export async function purgeYear(
     user: AppUser,
@@ -173,22 +188,20 @@ export async function purgeYear(
     const activeYear = await getActiveYear();
     if (yearToPurge === activeYear) throw new Error('Không thể xoá năm học đang active!');
 
-    // Delete all sub-collections
-    let deletedDocs = 0;
-    const collections = ['classes', 'students', 'timetables'];
+    const { data: yearData } = await dbClient.from('academic_years').select('id').eq('name', yearToPurge).maybeSingle();
+    if (!yearData) return { deletedDocs: 0 };
+    const yearId = yearData.id;
 
-    for (const col of collections) {
-        const snap = await getDocs(collection(db, `schools/default/years/${yearToPurge}/${col}`));
-        const batch = writeBatch(db);
-        snap.docs.forEach(d => {
-            batch.delete(d.ref);
-            deletedDocs++;
-        });
-        if (snap.docs.length > 0) await batch.commit();
-    }
+    const { error, count } = await dbClient.from('academic_years').delete().eq('id', yearId);
+    if (error) throw error;
+    
+    return { deletedDocs: count || 1 };
+}
 
-    // Note: attendance subcollections need recursive deletion
-    // which is complex on client-side. Recommend Cloud Function for production.
+export async function switchActiveYear(yearName: string): Promise<void> {
+    const { data: yearData } = await dbClient.from('academic_years').select('id').eq('name', yearName).maybeSingle();
+    if (!yearData) throw new Error("Năm học không tồn tại");
 
-    return { deletedDocs };
+    await dbClient.from('academic_years').update({ is_active: false }).neq('id', yearData.id);
+    await dbClient.from('academic_years').update({ is_active: true }).eq('id', yearData.id);
 }

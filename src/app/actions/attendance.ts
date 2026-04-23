@@ -19,7 +19,7 @@ export async function submitAttendance(
             notes,
             updatedBy: 'local-user', // Tạm thời
             updatedAt: new Date().toISOString(),
-            syncStatus: 'pending' // Local mode defaults to pending sync if firebase enabled later
+            syncStatus: 'synced'
         };
 
         await db.saveAttendance(record);

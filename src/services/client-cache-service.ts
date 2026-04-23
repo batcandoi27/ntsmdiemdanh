@@ -1,6 +1,6 @@
 /**
  * Persistent Client-Side Cache using localStorage.
- * Giúp UI hiển thị tức thì (Optimistic UI) như Firebase.
+ * Giúp UI hiển thị tức thì (Optimistic UI) cho trải nghiệm nhanh.
  */
 
 const IS_BROWSER = typeof window !== 'undefined';

@@ -5,8 +5,7 @@
 
 import { NextRequest } from 'next/server';
 import { authenticateRequest, apiSuccess, apiError } from '@/lib/api-middleware';
-import { getDocs, collection, query, where } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import dbClient from '@/lib/supabase-server';
 
 export async function GET(
     req: NextRequest,
@@ -28,25 +27,28 @@ export async function GET(
     }
 
     try {
-        const yearPath = 'years/2025-2026';
-        const recordsRef = collection(db, `${yearPath}/attendance/${date}/records`);
-        const q = query(recordsRef, where('classId', '==', classId));
-        const snap = await getDocs(q);
+        const { data, error: dbError } = await dbClient
+            .from('attendance_records')
+            .select('*')
+            .eq('class_id', classId)
+            .eq('date', date);
+            
+        if (dbError) throw dbError;
 
-        const records = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-        // Optional session filter
-        const session = req.nextUrl.searchParams.get('session');
-        const filtered = session
-            ? records.filter((r: any) => r.session === session)
-            : records;
+        const records = data.map((d: any) => ({
+            id: d.id,
+            studentId: d.student_id,
+            status: d.status,
+            notes: d.notes,
+            timestamp: d.created_at
+        }));
 
         return apiSuccess({
             date,
             classId,
-            recordCount: filtered.length,
+            recordCount: records.length,
             note: 'Chỉ hiện records ngoại lệ (vắng/trễ/phép). HS không có record = có mặt.',
-            records: filtered,
+            records: records,
         });
     } catch (err) {
         return apiError('Lỗi khi lấy dữ liệu điểm danh.', 500);

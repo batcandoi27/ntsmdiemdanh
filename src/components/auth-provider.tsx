@@ -41,7 +41,7 @@ function PendingBanner() {
 }
 
 function AuthGuardInner({ children }: { children: React.ReactNode }) {
-    const { firebaseUser, appUser, loading } = useAuth();
+    const { authUser, appUser, loading } = useAuth();
     const router = useRouter();
     const pathname = usePathname();
     const [checked, setChecked] = useState(false);
@@ -67,20 +67,20 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
 
         const isLoginPage = pathname === '/login';
 
-        if (!firebaseUser && !isLoginPage) {
+        if (!authUser && !isLoginPage) {
             router.push('/login');
-        } else if (firebaseUser && isLoginPage) {
+        } else if (authUser && isLoginPage) {
             if (!appUser) {
                 // Chờ profile load
             } else {
                 router.push('/');
             }
-        } else if (firebaseUser && !appUser && !isLoginPage) {
+        } else if (authUser && !appUser && !isLoginPage) {
             router.push('/login');
         } else {
             // OK
         }
-    }, [firebaseUser, appUser, loading, pathname, router]);
+    }, [authUser, appUser, loading, pathname, router]);
 
     // Loading overlay
     if (loading || !checked) {

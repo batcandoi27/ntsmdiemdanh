@@ -1,27 +1,50 @@
 /**
  * Timetable Service v3.0
+ * Supabase implementation (100%)
  *
  * CRUD thời khoá biểu, import Excel, conflict detection.
- * years/{year}/timetables/{timetableId}
  */
 
 import {
-    doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc,
-    collection, query, where, orderBy, addDoc,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-
-const isSupabase = process.env.NEXT_PUBLIC_USE_SUPABASE === 'true';
-import {
     Timetable, TimetableConflict, TimetableFlatRow, TimetableImportResult,
-    DayOfWeek, SessionType, PeriodSlot, DAY_ORDER,
+    DayOfWeek, SessionType, PeriodSlot, DAY_ORDER, WeekSchedule,
     createEmptyWeekSchedule,
 } from '@/types/timetable';
 import { AppUser } from '@/types/models';
 import { checkClassAccess } from './auth-guard';
-import { DEFAULT_YEAR } from '@/config/constants';
+import { supabase } from '@/lib/supabase';
 
-const getYearPath = (year: string = DEFAULT_YEAR) => `schools/default/years/${year}`;
+// ============================================
+// Helper: Supabase row ↔ TypeScript Timetable
+// ============================================
+
+interface TimetableRow {
+    id: string;
+    class_id: string;
+    class_name: string;
+    effective_from: string;
+    effective_to: string;
+    schedule: WeekSchedule;
+    created_by: string;
+    created_by_name: string;
+    is_active: boolean;
+    updated_at: string;
+}
+
+function rowToTimetable(row: TimetableRow): Timetable {
+    return {
+        id: row.id,
+        classId: row.class_id,
+        className: row.class_name,
+        effectiveFrom: row.effective_from,
+        effectiveTo: row.effective_to,
+        schedule: row.schedule,
+        createdBy: row.created_by,
+        createdByName: row.created_by_name,
+        isActive: row.is_active,
+        updatedAt: row.updated_at,
+    };
+}
 
 // ============================================
 // CRUD
@@ -30,71 +53,91 @@ const getYearPath = (year: string = DEFAULT_YEAR) => `schools/default/years/${ye
 export async function saveTimetable(
     user: AppUser,
     timetable: Omit<Timetable, 'id' | 'createdBy' | 'createdByName' | 'updatedAt' | 'isActive'>,
-    year?: string
 ): Promise<string> {
-    if (isSupabase) return 'tmp-id'; // TODO: Implement in Supabase
     checkClassAccess(user, timetable.classId);
-    const path = getYearPath(year);
 
-    const data = {
-        ...timetable,
-        createdBy: user.uid,
-        createdByName: user.displayName,
-        updatedAt: new Date().toISOString(),
-        isActive: true,
+    const row = {
+        class_id: timetable.classId,
+        class_name: timetable.className,
+        effective_from: timetable.effectiveFrom,
+        effective_to: timetable.effectiveTo,
+        schedule: timetable.schedule,
+        created_by: user.uid,
+        created_by_name: user.displayName,
+        is_active: true,
+        updated_at: new Date().toISOString(),
     };
 
-    const ref = await addDoc(collection(db, `${path}/timetables`), data);
-    return ref.id;
+    const { data, error } = await supabase
+        .from('timetables')
+        .insert(row)
+        .select('id')
+        .single();
+
+    if (error) {
+        console.error('Error saving timetable:', error);
+        throw new Error('Lỗi lưu thời khoá biểu: ' + error.message);
+    }
+
+    return data.id;
 }
 
-export async function getTimetable(id: string, year?: string): Promise<Timetable | null> {
-    if (isSupabase) return null;
-    const snap = await getDoc(doc(db, `${getYearPath(year)}/timetables`, id));
-    return snap.exists() ? { ...snap.data(), id: snap.id } as Timetable : null;
+export async function getTimetable(id: string): Promise<Timetable | null> {
+    const { data, error } = await supabase
+        .from('timetables')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+
+    if (error || !data) return null;
+    return rowToTimetable(data as TimetableRow);
 }
 
-export async function getTimetableForClass(classId: string, date?: string, year?: string): Promise<Timetable | null> {
-    if (isSupabase) return null;
-    const path = getYearPath(year);
-    const q = query(
-        collection(db, `${path}/timetables`),
-        where('classId', '==', classId),
-        where('isActive', '==', true)
-    );
-    const snap = await getDocs(q);
-
-    if (snap.empty) return null;
-
+export async function getTimetableForClass(classId: string, date?: string): Promise<Timetable | null> {
     const now = date || new Date().toISOString().split('T')[0];
 
-    // Find the timetable effective for the given date
-    const active = snap.docs
-        .map(d => ({ ...d.data(), id: d.id }) as Timetable)
-        .filter(t => t.effectiveFrom <= now && t.effectiveTo >= now)
-        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    const { data, error } = await supabase
+        .from('timetables')
+        .select('*')
+        .eq('class_id', classId)
+        .eq('is_active', true)
+        .lte('effective_from', now)
+        .gte('effective_to', now)
+        .order('updated_at', { ascending: false })
+        .limit(1);
 
-    return active[0] || null;
+    if (error || !data || data.length === 0) return null;
+    return rowToTimetable(data[0] as TimetableRow);
 }
 
-export async function getAllTimetables(year?: string): Promise<Timetable[]> {
-    const snap = await getDocs(collection(db, `${getYearPath(year)}/timetables`));
-    return snap.docs.map(d => ({ ...d.data(), id: d.id }) as Timetable);
+export async function getAllTimetables(): Promise<Timetable[]> {
+    const { data, error } = await supabase
+        .from('timetables')
+        .select('*')
+        .order('updated_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching timetables:', error);
+        return [];
+    }
+    return (data as TimetableRow[]).map(rowToTimetable);
 }
 
-export async function deactivateTimetable(id: string, year?: string): Promise<void> {
-    await updateDoc(doc(db, `${getYearPath(year)}/timetables`, id), { isActive: false });
+export async function deactivateTimetable(id: string): Promise<void> {
+    const { error } = await supabase
+        .from('timetables')
+        .update({ is_active: false })
+        .eq('id', id);
+
+    if (error) throw new Error('Lỗi vô hiệu hóa TKB: ' + error.message);
 }
 
 // ============================================
-// Conflict Detection
+// Conflict Detection (pure logic, không DB)
 // ============================================
 
 /**
  * Detect conflicts across ALL active timetables
- * - Teacher teaching 2 classes at same time
- * - Class having 2 subjects at same time
- * - Session warnings (class only morning but has afternoon slots)
  */
 export async function detectConflicts(
     newTimetable: Timetable,
@@ -124,7 +167,6 @@ export async function detectConflicts(
     // Check teacher conflicts against existing timetables
     for (const existing of existingTimetables) {
         if (existing.classId === newTimetable.classId) continue;
-        // Only check overlapping date ranges
         if (existing.effectiveTo < newTimetable.effectiveFrom ||
             existing.effectiveFrom > newTimetable.effectiveTo) continue;
 
@@ -155,7 +197,7 @@ export async function detectConflicts(
 }
 
 // ============================================
-// Excel Import (Flat List Format)
+// Excel Import (Flat List Format) - Pure logic
 // ============================================
 
 const DAY_MAP: Record<string, DayOfWeek> = {
@@ -174,8 +216,6 @@ const SESSION_MAP: Record<string, SessionType> = {
 
 /**
  * Parse flat rows (from Excel) → Timetable objects grouped by class
- * 
- * Expected columns: Lớp, Thứ, Buổi, Tiết, Môn, Mã môn, GV, Phòng
  */
 export function parseFlatRows(
     rows: Record<string, string>[],
@@ -189,14 +229,13 @@ export function parseFlatRows(
     let totalPeriods = 0;
 
     rows.forEach((row, idx) => {
-        const rowNum = idx + 2; // Excel rows start at 2 (header = 1)
+        const rowNum = idx + 2;
         const className = (row['Lớp'] || row['lớp'] || row['Class'] || '').trim();
         const dayRaw = (row['Thứ'] || row['thứ'] || row['Day'] || '').trim().toLowerCase();
         const sessionRaw = (row['Buổi'] || row['buổi'] || row['Session'] || '').trim().toLowerCase();
         const periodRaw = row['Tiết'] || row['tiết'] || row['Period'] || '';
         const subject = (row['Môn'] || row['môn'] || row['Subject'] || '').trim();
 
-        // Validate required fields
         if (!className) { errors.push({ row: rowNum, message: 'Thiếu tên lớp' }); return; }
         if (!subject) { errors.push({ row: rowNum, message: 'Thiếu tên môn học' }); return; }
 
@@ -212,11 +251,10 @@ export function parseFlatRows(
             return;
         }
 
-        // Get/create timetable for this class
         if (!timetableMap.has(className)) {
             timetableMap.set(className, {
-                id: '', // will be set on save
-                classId: className, // temporary, needs mapping
+                id: '',
+                classId: className,
                 className,
                 effectiveFrom,
                 effectiveTo,
@@ -246,7 +284,7 @@ export function parseFlatRows(
     return {
         success: errors.length === 0,
         timetables,
-        conflicts: [], // will be populated after detectConflicts
+        conflicts: [],
         errors,
         stats: {
             classesProcessed: timetables.length,
@@ -265,7 +303,7 @@ export async function importTimetablesFromRows(
     rows: Record<string, string>[],
     effectiveFrom: string,
     effectiveTo: string,
-    classIdMap: Record<string, string> // className → classId mapping
+    classIdMap: Record<string, string>
 ): Promise<TimetableImportResult> {
     const result = parseFlatRows(rows, effectiveFrom, effectiveTo, user.uid, user.displayName);
 

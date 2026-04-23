@@ -51,7 +51,7 @@ export default function ReportsPage() {
                     setSelectedClasses(parsed);
                 }
             } else if (appUser.assignedClassIds && appUser.assignedClassIds.length > 0) {
-                // Tự động load từ Firebase nếu chưa có
+                // Tự động load từ profile Supabase nếu chưa có
                 setSelectedClasses(appUser.assignedClassIds);
             }
         } catch (e) {

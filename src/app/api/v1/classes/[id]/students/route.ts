@@ -5,8 +5,7 @@
 
 import { NextRequest } from 'next/server';
 import { authenticateRequest, apiSuccess, apiError } from '@/lib/api-middleware';
-import { getDocs, collection, query, where } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db } from '@/services/db';
 
 export async function GET(
     req: NextRequest,
@@ -23,14 +22,8 @@ export async function GET(
     }
 
     try {
-        const yearPath = 'years/2025-2026';
-        const studentsRef = collection(db, `${yearPath}/students`);
-        const q = query(studentsRef, where('classId', '==', classId));
-        const snap = await getDocs(q);
-
-        const students = snap.docs
-            .map(d => ({ id: d.id, ...d.data() }))
-            .sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+        const students = await db.getStudentsByClass(classId);
+        students.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
 
         return apiSuccess(students);
     } catch (err) {

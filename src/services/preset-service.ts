@@ -2,75 +2,83 @@
  * Preset Service - CRUD operations for report presets
  */
 
-import { db } from '@/lib/firebase';
 import { ReportPreset, ColumnFrequency } from '@/types/models';
-import {
-    collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where
-} from 'firebase/firestore';
-import { SCHOOL_ID, DEFAULT_YEAR as CURRENT_YEAR } from '@/config/constants';
+import { supabaseAdmin } from '@/lib/supabase-admin';
+
+function mapPresetFromDB(row: any): ReportPreset {
+    return {
+        id: row.id,
+        classId: row.class_id,
+        name: row.name,
+        visibleColumnIds: row.visible_column_ids || [],
+        frequencyFilters: row.frequency_filters || [],
+        showArchived: row.show_archived || false,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+    };
+}
+
+function mapPresetToDB(preset: Partial<ReportPreset>) {
+    const data: any = {};
+    if (preset.classId !== undefined) data.class_id = preset.classId;
+    if (preset.name !== undefined) data.name = preset.name;
+    if (preset.visibleColumnIds !== undefined) data.visible_column_ids = preset.visibleColumnIds;
+    if (preset.frequencyFilters !== undefined) data.frequency_filters = preset.frequencyFilters;
+    if (preset.showArchived !== undefined) data.show_archived = preset.showArchived;
+    return data;
+}
 
 /**
  * Get all presets for a class
  */
 export async function getPresets(classId: string): Promise<ReportPreset[]> {
-    const colRef = collection(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'reportPresets');
-    const q = query(colRef, where('classId', '==', classId));
-    const snap = await getDocs(q);
-    return snap.docs.map(d => d.data() as ReportPreset);
+    const { data, error } = await supabaseAdmin.from('report_presets').select('*').eq('class_id', classId);
+    if (error) {
+        console.error('Error fetching presets:', error);
+        return [];
+    }
+    return data.map(mapPresetFromDB);
 }
 
 /**
  * Get a single preset
  */
 export async function getPreset(presetId: string): Promise<ReportPreset | null> {
-    const docRef = doc(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'reportPresets', presetId);
-    const snap = await getDoc(docRef);
-    return snap.exists() ? (snap.data() as ReportPreset) : null;
+    const { data, error } = await supabaseAdmin.from('report_presets').select('*').eq('id', presetId).single();
+    if (error || !data) return null;
+    return mapPresetFromDB(data);
 }
 
 /**
  * Create a new preset
  */
 export async function createPreset(preset: Omit<ReportPreset, 'id' | 'createdAt' | 'updatedAt'>): Promise<ReportPreset> {
-    const id = `preset_${Date.now()}`;
-    const now = new Date().toISOString();
-
-    const fullPreset: ReportPreset = {
-        ...preset,
-        id,
-        createdAt: now,
-        updatedAt: now,
-    };
-
-    const docRef = doc(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'reportPresets', id);
-    await setDoc(docRef, fullPreset);
-
-    return fullPreset;
+    const { data, error } = await supabaseAdmin.from('report_presets')
+        .insert([mapPresetToDB(preset)])
+        .select()
+        .single();
+    
+    if (error) throw error;
+    return mapPresetFromDB(data);
 }
 
 /**
  * Update a preset
  */
 export async function updatePreset(presetId: string, updates: Partial<ReportPreset>): Promise<void> {
-    const existing = await getPreset(presetId);
-    if (!existing) {
-        throw new Error('Preset not found');
-    }
-
-    const docRef = doc(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'reportPresets', presetId);
-    await setDoc(docRef, {
-        ...existing,
-        ...updates,
-        updatedAt: new Date().toISOString(),
-    }, { merge: true });
+    const { error } = await supabaseAdmin.from('report_presets')
+        .update(mapPresetToDB(updates))
+        .eq('id', presetId);
+        
+    if (error) throw error;
 }
 
 /**
  * Delete a preset
  */
 export async function deletePreset(presetId: string): Promise<void> {
-    const docRef = doc(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'reportPresets', presetId);
-    await deleteDoc(docRef);
+    const { error } = await supabaseAdmin.from('report_presets').delete().eq('id', presetId);
+    if (error) throw error;
 }
 
 /**
@@ -80,7 +88,7 @@ export function getDefaultDailyPreset(classId: string): Omit<ReportPreset, 'id' 
     return {
         classId,
         name: 'Nề nếp hàng ngày',
-        visibleColumnIds: [], // Empty means show all
+        visibleColumnIds: [],
         frequencyFilters: ['daily'],
         showArchived: false,
     };
@@ -107,17 +115,14 @@ export function applyPresetToColumns<T extends { frequency: ColumnFrequency; arc
     preset: ReportPreset
 ): T[] {
     return columns.filter(column => {
-        // Filter by frequency
         if (preset.frequencyFilters.length > 0 && !preset.frequencyFilters.includes(column.frequency)) {
             return false;
         }
 
-        // Filter archived
         if (!preset.showArchived && column.archived) {
             return false;
         }
 
-        // Filter by visible columns (if specified)
         if (preset.visibleColumnIds.length > 0 && !preset.visibleColumnIds.includes(column.id)) {
             return false;
         }

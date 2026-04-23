@@ -1,8 +1,6 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 
 export type FeatureFlags = {
     quickAttendance: boolean;
@@ -36,29 +34,44 @@ export function FeatureFlagsProvider({ children }: { children: React.ReactNode }
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const isSupabase = process.env.NEXT_PUBLIC_USE_SUPABASE === 'true';
-        if (isSupabase || !db) {
-            setLoading(false);
-            return;
-        }
+        let channel: any;
 
-        const unsubscribe = onSnapshot(
-            doc(db, 'sys_config', 'features'),
-            (docSnap) => {
-                if (docSnap.exists()) {
-                    setFlags({ ...defaultFlags, ...docSnap.data() } as FeatureFlags);
-                } else {
-                    setFlags(defaultFlags);
-                }
-                setLoading(false);
-            },
-            (error) => {
-                console.error("Lỗi khi tải Feature Flags:", error);
-                setLoading(false);
+        const init = async () => {
+            const { supabase } = await import('@/lib/supabase');
+            
+            // 1. Initial fetch
+            const { data, error } = await supabase.from('settings').select('value').eq('key', 'feature_flags').maybeSingle();
+            
+            if (!error && data?.value) {
+                setFlags({ ...defaultFlags, ...data.value } as FeatureFlags);
             }
-        );
+            setLoading(false);
 
-        return () => unsubscribe();
+            // 2. Realtime updates - Dùng unique ID để tránh lỗi "cannot add callbacks after subscribe" khi React Strict Mode mount 2 lần
+            const channelId = `feature_flags_${Math.random().toString(36).substring(2, 9)}`;
+            channel = supabase.channel(channelId)
+                .on('postgres_changes', {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'settings',
+                    filter: 'key=eq.feature_flags'
+                }, (payload) => {
+                    if (payload.new && (payload.new as any).value) {
+                        setFlags({ ...defaultFlags, ...(payload.new as any).value } as FeatureFlags);
+                    }
+                })
+                .subscribe();
+        };
+        
+        init();
+
+        return () => {
+            if (channel) {
+                import('@/lib/supabase').then(({ supabase }) => {
+                    supabase.removeChannel(channel);
+                });
+            }
+        };
     }, []);
 
     return (

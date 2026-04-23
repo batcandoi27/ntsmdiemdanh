@@ -1,4 +1,5 @@
 import { Class, Student, User, AttendanceRecord, AttendanceStatus, AppSettings } from "@/types/models";
+import { AttendanceRecordV3 } from "@/types/attendance-v3";
 
 export interface DbAdapter {
     getSettings?(): Promise<AppSettings | null>;
@@ -30,7 +31,7 @@ export interface DbAdapter {
 
     // Reporting
     // Reporting
-    getReportData(startDate: string, endDate: string, classIds?: string[]): Promise<AttendanceRecord[]>;
+    getReportData(startDate: string, endDate: string, classIds?: string[]): Promise<AttendanceRecordV3[]>;
 
     // Debug / Tools
     mockGenerateAttendance(startDate: string, endDate: string, classIds?: string[]): Promise<void>;

@@ -27,10 +27,10 @@ export interface UserPermissions {
 }
 
 /**
- * AppUser – Firestore document: users/{uid}
+ * AppUser – Supabase table: profiles
  */
 export interface AppUser {
-    uid: string;                    // Firebase Auth UID
+    uid: string;                    // Supabase Auth UUID
     email?: string;                 // GV dùng email
     studentCode?: string;           // Ban Cán Sự dùng mã HS (VD: hs8a13_01)
     displayName: string;            // 'Cô Lan', 'Nguyễn Văn A (LT 8A13)'
@@ -131,7 +131,7 @@ export const ROLE_DISPLAY: Record<UserRole, { label: string; badge: string; colo
 };
 
 /**
- * AppSettings – Firestore document: settings/app
+ * AppSettings – Supabase table: settings (key='app_settings')
  */
 export interface AppSettings {
     activeYear: string;             // '2025-2026'

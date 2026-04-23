@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { AttendanceRecordV3 } from '@/types/attendance-v3';
 import { Class, Student, User, AttendanceRecord, AttendanceStatus, AppSettings } from '@/types/models';
 import { supabase } from '@/lib/supabase';
 import { getCached, setCache, invalidateCachePrefix } from './cache-service';
@@ -461,7 +462,7 @@ export class SupabaseAdapter implements DbAdapter {
         } as any)) as any;
     }
 
-    async getReportData(startDate: string, endDate: string, classIds?: string[]): Promise<AttendanceRecord[]> {
+    async getReportData(startDate: string, endDate: string, classIds?: string[]): Promise<AttendanceRecordV3[]> {
         // Pagination: Supabase mặc định giới hạn 1000 rows
         // Với trường 2500 HS, báo cáo tháng có thể >1000 ngoại lệ
         const PAGE_SIZE = 1000;

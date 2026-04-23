@@ -64,7 +64,7 @@ export function ClassSizeTab() {
                 adjustmentCount: adj
             }));
 
-            const res = await updateManualClassSizes(year, updates, storagePath);
+            const res = await updateManualClassSizes(year, updates);
             if (res.success) {
                 setMessage({ type: 'success', text: 'Đã cập nhật biến động sĩ số thành công.' });
             } else {

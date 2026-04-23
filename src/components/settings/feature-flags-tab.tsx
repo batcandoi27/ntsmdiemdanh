@@ -2,10 +2,9 @@
 
 import { useState } from 'react';
 import { useFeatureFlags } from '@/context/feature-flags-context';
-import { doc, updateDoc, setDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { ToggleRight, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
+import { supabase } from '@/lib/supabase';
 
 export function FeatureFlagsTab() {
     const { flags, loading } = useFeatureFlags();
@@ -17,12 +16,17 @@ export function FeatureFlagsTab() {
 
         setUpdating(key);
         try {
-            await setDoc(doc(db, 'sys_config', 'features'), {
-                [key]: !currentValue
-            }, { merge: true });
+            const newFlags = { ...flags, [key]: !currentValue };
+            
+            const { error } = await supabase.from('settings').upsert(
+                { key: 'feature_flags', value: newFlags as any },
+                { onConflict: 'key' }
+            );
+
+            if (error) throw error;
         } catch (error) {
             console.error('Lỗi khi cập nhật tính năng:', error);
-            alert('Không thể lưu thay đổi. Có lỗi xảy ra với CSDL Firebase.');
+            alert('Không thể lưu thay đổi. Có lỗi xảy ra với CSDL.');
         } finally {
             setUpdating(null);
         }

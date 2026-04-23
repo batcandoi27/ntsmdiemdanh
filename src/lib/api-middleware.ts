@@ -1,15 +1,14 @@
 /**
  * API Auth Middleware
  *
- * Verify Firebase Auth token from Authorization: Bearer <token>
+ * Verify Supabase Auth token from Authorization: Bearer <token>
  * or API key from X-API-Key header.
  * Rate limiting: 100 requests/minute/IP.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { AppUser } from '@/types/models';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, getDocs, collection, query, where } from 'firebase/firestore';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 
 // ============================================
 // Rate Limiting (Simple in-memory)
@@ -34,14 +33,9 @@ function checkRateLimit(ip: string): boolean {
 }
 
 // ============================================
-// Token Verification (Client-side approach)
-// Note: For production, use Firebase Admin SDK server-side
+// Token Verification
 // ============================================
 
-/**
- * Extract user UID from Firebase ID token or API key.
- * Returns AppUser if authenticated, null otherwise.
- */
 export async function authenticateRequest(req: NextRequest): Promise<{
     user: AppUser | null;
     error: string | null;
@@ -70,23 +64,47 @@ export async function authenticateRequest(req: NextRequest): Promise<{
 
 async function verifyApiKey(apiKey: string): Promise<{ user: AppUser | null; error: string | null }> {
     try {
-        const keyDoc = await getDoc(doc(db, 'apiKeys', apiKey));
-        if (!keyDoc.exists()) {
+        if (!supabaseAdmin) return { user: null, error: 'Supabase Admin is not available.' };
+        
+        // Use Supabase Admin to check apiKeys table
+        const { data: keyData, error: keyError } = await supabaseAdmin
+            .from('api_keys')
+            .select('*')
+            .eq('id', apiKey)
+            .maybeSingle();
+
+        if (keyError || !keyData) {
             return { user: null, error: 'API key không hợp lệ.' };
         }
 
-        const keyData = keyDoc.data();
-        if (!keyData.isActive) {
+        if (!keyData.is_active) {
             return { user: null, error: 'API key đã bị vô hiệu hoá.' };
         }
 
         // Get the user who owns this key
-        const userDoc = await getDoc(doc(db, 'users', keyData.userId));
-        if (!userDoc.exists()) {
+        const { data: userDoc, error: userError } = await supabaseAdmin
+            .from('profiles')
+            .select('*')
+            .eq('id', keyData.user_id)
+            .maybeSingle();
+
+        if (userError || !userDoc) {
             return { user: null, error: 'Người dùng không tồn tại.' };
         }
 
-        return { user: userDoc.data() as AppUser, error: null };
+        const appUser: AppUser = {
+            uid: userDoc.id,
+            displayName: userDoc.full_name,
+            email: userDoc.email,
+            role: userDoc.role,
+            isActive: userDoc.is_active,
+            permissions: userDoc.permissions || {},
+            assignedClassIds: [], // Can fetch if needed
+            editWindowMinutes: userDoc.role === 'admin' ? -1 : 1440,
+            createdAt: userDoc.created_at || new Date().toISOString()
+        };
+
+        return { user: appUser, error: null };
     } catch (err) {
         return { user: null, error: 'Lỗi xác thực API key.' };
     }
@@ -94,13 +112,37 @@ async function verifyApiKey(apiKey: string): Promise<{ user: AppUser | null; err
 
 async function verifyBearerToken(token: string): Promise<{ user: AppUser | null; error: string | null }> {
     try {
-        // In a real setup, use Firebase Admin SDK to verify token server-side.
-        // For this client-side implementation, we trust the token format
-        // and look up the user by a session token stored in Firestore.
-        //
-        // Production recommendation: Move to Next.js API route middleware
-        // with firebase-admin verifyIdToken().
-        return { user: null, error: 'Bearer token verification requires Firebase Admin SDK. Use API key instead.' };
+        if (!supabaseAdmin) return { user: null, error: 'Supabase Admin is not available.' };
+        
+        const { data, error } = await supabaseAdmin.auth.getUser(token);
+        if (error || !data.user) {
+            return { user: null, error: 'Token không hợp lệ hoặc đã hết hạn.' };
+        }
+
+        // Fetch user profile
+        const { data: userDoc } = await supabaseAdmin
+            .from('profiles')
+            .select('*')
+            .eq('id', data.user.id)
+            .maybeSingle();
+            
+        if (!userDoc) {
+             return { user: null, error: 'Người dùng không tồn tại.' };
+        }
+
+        const appUser: AppUser = {
+            uid: userDoc.id,
+            displayName: userDoc.full_name,
+            email: userDoc.email || data.user.email,
+            role: userDoc.role,
+            isActive: userDoc.is_active,
+            permissions: userDoc.permissions || {},
+            assignedClassIds: [],
+            editWindowMinutes: userDoc.role === 'admin' ? -1 : 1440,
+            createdAt: userDoc.created_at || new Date().toISOString()
+        };
+        
+        return { user: appUser, error: null };
     } catch (err) {
         return { user: null, error: 'Lỗi xác thực token.' };
     }

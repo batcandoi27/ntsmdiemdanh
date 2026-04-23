@@ -8,6 +8,7 @@
  */
 
 import { AppUser, StudentStatus } from '@/types/models';
+import { checkPermission } from '@/services/permission-service';
 
 // ============================================
 // 1. Scope Check – Kiểm tra quyền truy cập lớp
@@ -29,8 +30,8 @@ export class AccessDeniedError extends Error {
  * - supervisor, teacher, class_monitor: classId phải nằm trong assignedClassIds
  */
 export function checkClassAccess(user: AppUser, classId: string): void {
-    // Ưu tiên 1: Chấp nhận nếu có quyền canViewAllClasses (Admin, Principal, Supervisor)
-    if (user.permissions?.canViewAllClasses) return;
+    // Ưu tiên 1: Chấp nhận nếu có quyền canViewAllClasses (Admin, Principal, Supervisor) hoặc đang ở SYSTEM_MODE = OPEN
+    if (checkPermission(user, 'VIEW_ALL_CLASSES')) return;
 
     // Ưu tiên 2: Chấp nhận nếu classId nằm trong assignedClassIds
     if (user.assignedClassIds && user.assignedClassIds.includes(classId)) return;
@@ -47,7 +48,7 @@ export function checkClassAccess(user: AppUser, classId: string): void {
  */
 export function checkClassEditAccess(user: AppUser, classId: string): void {
     checkClassAccess(user, classId);
-    if (!user.permissions.canEditAttendance) {
+    if (!checkPermission(user, 'EDIT_ATTENDANCE')) {
         throw new AccessDeniedError(
             `Vai trò "${user.role}" không có quyền chỉnh sửa điểm danh.`
         );
@@ -165,7 +166,7 @@ export function checkStatusChangePermission(
     fromStatus: StudentStatus,
     toStatus: StudentStatus
 ): void {
-    if (!user.permissions.canEditStudentStatus) {
+    if (!checkPermission(user, 'EDIT_STUDENT_STATUS')) {
         throw new AccessDeniedError(
             `Vai trò "${user.role}" không có quyền thay đổi trạng thái học sinh.`
         );

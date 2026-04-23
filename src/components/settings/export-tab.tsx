@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Download, FileJson, FileSpreadsheet, FileArchive, CalendarDays, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
-import { FirebaseAdapter } from '@/services/firebase-adapter';
+import { db } from '@/services/db';
 import { getAllTimetables } from '@/services/timetable-service';
 import { getActiveYear } from '@/services/year-service';
 import {
@@ -14,8 +14,6 @@ import {
     ExportData
 } from '@/services/export-v3-service';
 import { AttendanceRecordV3, formatDateKey } from '@/types/attendance-v3';
-import { collection, getDocs, doc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
 import { Student } from '@/types/models';
 
@@ -39,50 +37,49 @@ export function ExportTab() {
 
         try {
             const activeYear = await getActiveYear();
-            const adapter = new FirebaseAdapter();
 
             setStatusText('Đang tải danh sách lớp học...');
-            const classes = await adapter.getClasses();
+            const classes = await db.getClasses();
 
             setStatusText('Đang tải danh sách học sinh...');
             const students: Student[] = [];
             for (const cls of classes) {
-                const classStudents = await adapter.getStudentsByClass(cls.id);
+                const classStudents = await db.getStudentsByClass(cls.id);
                 students.push(...classStudents);
             }
 
             setStatusText('Đang tải thời khoá biểu...');
-            const timetables = await getAllTimetables(activeYear);
-            console.log(`[Export] Found ${timetables.length} timetables for year ${activeYear}`);
+            const timetables = await getAllTimetables();
+            console.log(`[Export] Found ${timetables.length} timetables`);
 
             setStatusText('Đang tổng hợp dữ liệu điểm danh...');
+            const reportRecords = await db.getReportData?.(startDate, endDate);
+
             const attendanceMap: Record<string, AttendanceRecordV3[]> = {};
 
-            // Loop through each date in range to fetch records
-            const startStr = startDate.replace(/-/g, '');
-            const endStr = endDate.replace(/-/g, '');
-            let current = new Date(startDate);
-            const end = new Date(endDate);
-
-            const totalDays = Math.round((end.getTime() - current.getTime()) / (1000 * 3600 * 24)) + 1;
-            let currentDay = 0;
-
-            while (current <= end) {
-                currentDay++;
-                const dateKey = formatDateKey(current);
-                setStatusText(`Đang xử lý điểm danh ngày ${dateKey} (${currentDay}/${totalDays})`);
-
-                try {
-                    const recordsSnap = await getDocs(collection(db, `schools/default/years/${activeYear}/attendance/${dateKey}/records`));
-                    if (!recordsSnap.empty) {
-                        attendanceMap[dateKey] = recordsSnap.docs.map(d => d.data() as AttendanceRecordV3);
-                        console.log(`[Export] Found ${recordsSnap.size} attendance records for ${dateKey}`);
+            if (reportRecords) {
+                // Nhóm reportRecords theo date và classId
+                const grouped: Record<string, Record<string, any>> = {};
+                for (const r of reportRecords) {
+                    const dateKey = r.date.replace(/-/g, '');
+                    if (!grouped[dateKey]) grouped[dateKey] = {};
+                    if (!grouped[dateKey][r.classId]) {
+                        grouped[dateKey][r.classId] = {
+                            id: dateKey,
+                            date: r.date,
+                            classId: r.classId,
+                            absences: {},
+                            updatedBy: (r as any).markedBy || 'system',
+                            updatedAt: (r as any).timestamp || new Date().toISOString(),
+                            syncStatus: 'synced'
+                        } as any;
                     }
-                } catch (e) {
-                    console.warn(`Lỗi fetch điểm danh ngày ${dateKey}:`, e);
+                    grouped[dateKey][r.classId].absences[r.studentId] = r.status as string;
                 }
 
-                current.setDate(current.getDate() + 1);
+                for (const [dateKey, clsMap] of Object.entries(grouped)) {
+                    attendanceMap[dateKey] = Object.values(clsMap);
+                }
             }
 
             setStatusText('Đang đóng gói dữ liệu...');

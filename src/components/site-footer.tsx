@@ -6,15 +6,15 @@ import { useChat } from '@/context/chat-context';
 import { MessageCircle } from 'lucide-react';
 
 export function SiteFooter() {
-    const { appUser, firebaseUser, loading } = useAuth();
+    const { appUser, authUser, loading } = useAuth();
     const { setIsChatOpen, setIsBubbleVisible, unreadCount } = useChat();
 
     let userInfo = 'Đang tải...';
     if (!loading) {
         if (appUser) {
             userInfo = `${appUser.displayName || appUser.email || appUser.studentCode || 'User'} - ${appUser.role}`;
-        } else if (firebaseUser) {
-            userInfo = `${firebaseUser.email || 'User'} - Chờ cập nhật Profile`;
+        } else if (authUser) {
+            userInfo = `${authUser.email || 'User'} - Chờ cập nhật Profile`;
         } else {
             userInfo = 'Khách (Chưa đăng nhập)';
         }

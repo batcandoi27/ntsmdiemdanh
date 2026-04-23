@@ -11,6 +11,9 @@ import { revalidatePath } from 'next/cache';
 import { fetchAppSettings } from './settings';
 import { getActiveStudents, getReportStudents } from '@/services/student-service';
 import { getClassSize } from '@/services/student-status-service';
+import { getCurrentUser, getAppUser } from '@/lib/supabase-server';
+import { checkPermission } from '@/services/permission-service';
+import { SYSTEM_MODE } from '@/config/system';
 
 const compareVietnameseNames = (nameA: string, nameB: string) => {
     const a = (nameA || '').trim();
@@ -24,24 +27,7 @@ const compareVietnameseNames = (nameA: string, nameB: string) => {
     return a.localeCompare(b, 'vi', { sensitivity: 'base' });
 };
 
-const mockAdminUser: AppUser = {
-    uid: 'admin-report',
-    displayName: 'Report System',
-    role: 'admin',
-    assignedClassIds: [],
-    permissions: {
-        canEditAttendance: true,
-        canEditStudentStatus: true,
-        canCreateAccounts: true,
-        canViewAllClasses: true,
-        canExportData: true,
-        canManageTimetable: true,
-        canAccessAPI: true,
-    },
-    editWindowMinutes: -1,
-    isActive: true,
-    createdAt: new Date().toISOString()
-};
+// User will be dynamically fetched via SSR Auth
 
 export interface ExportData {
     className: string;
@@ -252,6 +238,24 @@ export interface ReportResult {
 export async function getReports(criteria: ReportCriteria, userRole: string = 'teacher'): Promise<ReportResult> {
     console.log('=== GET REPORT CALLED ===', criteria, { userRole });
     console.time('getReports_Timer');
+    const authUser = await getCurrentUser();
+    if (!authUser) {
+        console.error('[AUTH] No authUser found in getReports. Cookies:', { 
+            count: require('next/headers').cookies().getAll().length,
+            names: require('next/headers').cookies().getAll().map((c: any) => c.name)
+        });
+        throw new Error('Unauthorized: Vui lòng đăng nhập lại để tiếp tục.');
+    }
+    
+    const appUser = await getAppUser(authUser.id, authUser.email);
+    if (!appUser) {
+        console.error('[AUTH] No appUser found for UID:', authUser.id);
+        throw new Error('User profile not found: Không tìm thấy hồ sơ người dùng.');
+    }
+    console.log('[AUTH] Success', { userId: authUser.id, role: appUser.role });
+    console.timeEnd('getReports_Timer');
+
+    const canViewAll = checkPermission(appUser, 'VIEW_ALL_CLASSES');
     
     // VALIDATION: Quota Optimization
     const start = new Date(criteria.startDate);
@@ -264,8 +268,8 @@ export async function getReports(criteria: ReportCriteria, userRole: string = 't
     }
 
     const classCount = criteria.classIds?.length || 0;
-    if ((userRole === 'teacher' || userRole === 'gvbm') && classCount > 10) {
-        throw new Error(`Giáo viên chỉ được phép chọn tối đa 10 lớp mỗi lần báo cáo. Bạn đã chọn ${classCount} lớp.`);
+    if (!canViewAll && classCount > 10) {
+        throw new Error(`Bạn chỉ được phép chọn tối đa 10 lớp mỗi lần báo cáo. Bạn đã chọn ${classCount} lớp.`);
     }
 
     console.log(`[getReports] Validation passed: ${diffDays} days, ${classCount} classes.`);
@@ -453,6 +457,18 @@ export async function getExcelExportData(
 ): Promise<ExportData[]> {
     console.log('=== GET EXCEL EXPORT CALLED ===', { startDate, endDate, classCount: classIds.length, userRole });
     
+    const authUser = await getCurrentUser();
+    if (!authUser) throw new Error('Unauthorized');
+    const appUser = await getAppUser(authUser.id, authUser.email);
+    if (!appUser) throw new Error('User profile not found');
+    console.log('[AUTH]', { userId: authUser.id, role: appUser.role, systemMode: SYSTEM_MODE });
+
+    const canExport = checkPermission(appUser, 'EXPORT_DATA');
+    if (!canExport) {
+        throw new Error('Access Denied: Bạn không có quyền xuất dữ liệu.');
+    }
+    const canViewAll = checkPermission(appUser, 'VIEW_ALL_CLASSES');
+    
     // VALIDATION: Quota Optimization
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -462,8 +478,8 @@ export async function getExcelExportData(
         throw new Error(`Khoảng thời gian xuất báo cáo quá dài (${diffDays} ngày). Vui lòng chọn tối đa 31 ngày.`);
     }
 
-    if ((userRole === 'teacher' || userRole === 'gvbm') && classIds.length > 10) {
-        throw new Error(`Giáo viên chỉ được phép xuất tối đa 10 lớp mỗi lần. Bạn đã chọn ${classIds.length} lớp.`);
+    if (!canViewAll && classIds.length > 10) {
+        throw new Error(`Bạn chỉ được phép xuất tối đa 10 lớp mỗi lần. Bạn đã chọn ${classIds.length} lớp.`);
     }
     // 0. Get Settings
     const settingsRes = await fetchAppSettings();
@@ -687,6 +703,14 @@ export async function getAdvancedReportData(
 ): Promise<TermReportData[]> {
     console.log('=== GET ADVANCED REPORT CALLED ===', { startDate, endDate, classCount: classIds.length, userRole });
 
+    const authUser = await getCurrentUser();
+    if (!authUser) throw new Error('Unauthorized');
+    const appUser = await getAppUser(authUser.id, authUser.email);
+    if (!appUser) throw new Error('User profile not found');
+    console.log('[AUTH]', { userId: authUser.id, role: appUser.role, systemMode: SYSTEM_MODE });
+
+    const canViewAll = checkPermission(appUser, 'VIEW_ALL_CLASSES');
+
     // VALIDATION: Quota Optimization
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -696,8 +720,8 @@ export async function getAdvancedReportData(
         throw new Error(`Khoảng thời gian báo cáo học kỳ quá dài (${diffDays} ngày). Vui lòng chọn tối đa 31 ngày.`);
     }
 
-    if ((userRole === 'teacher' || userRole === 'gvbm') && classIds.length > 10) {
-        throw new Error(`Giáo viên chỉ được phép báo cáo học kỳ tối đa 10 lớp mỗi lần.`);
+    if (!canViewAll && classIds.length > 10) {
+        throw new Error(`Bạn chỉ được phép báo cáo học kỳ tối đa 10 lớp mỗi lần.`);
     }
     // 1. Get Classes
     const allClasses = await db.getClasses();

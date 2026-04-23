@@ -3,8 +3,6 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { School, LogIn, Eye, EyeOff, AlertCircle, KeySquare, CheckCircle2, BookOpen, UserCheck } from 'lucide-react';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 
 /**
  * Login Page v4.0
@@ -35,9 +33,9 @@ import { db as dbInstance } from '@/services/db';
 export default function LoginPage() {
     const router = useRouter();
     const { 
-        signIn, 
-        signInWithGoogle, 
-        firebaseUser, 
+        signIn,
+        signInWithGoogle,
+        authUser,
         appUser, // Thêm appUser để kiểm tra redirect
         needsRoleCode, 
         error: authError, 
@@ -88,7 +86,7 @@ export default function LoginPage() {
     const fetchClasses = async () => {
         setLoadingClasses(true);
         try {
-            // Sử dụng dbInstance để lấy dữ liệu từ Supabase hoặc Firebase tùy chế độ
+            // Lấy danh sách lớp từ Supabase
             const listData = await dbInstance.getClasses();
             const list = listData.map(cls => ({
                 id: cls.id,
@@ -163,14 +161,14 @@ export default function LoginPage() {
         e?.preventDefault();
         setLocalError('');
 
-        if (!firebaseUser) {
+        if (!authUser) {
             setLocalError('Phiên đăng nhập Google bị mất. Vui lòng tải lại trang.');
             return;
         }
 
-        const actualUid = firebaseUser.uid || (firebaseUser as any).id;
-        const userEmail = firebaseUser.email || `${actualUid}@no-email.local`;
-        const userDisplayName = firebaseUser.displayName || (firebaseUser.email ? firebaseUser.email.split('@')[0] : 'Người dùng');
+        const actualUid = authUser.uid || (authUser as any).id;
+        const userEmail = authUser.email || `${actualUid}@no-email.local`;
+        const userDisplayName = authUser.displayName || (authUser.email ? authUser.email.split('@')[0] : 'Người dùng');
 
         // Validate chọn lớp cho GV
         if (['teacher', 'gvbm'].includes(requestedRole)) {
@@ -264,22 +262,22 @@ export default function LoginPage() {
                 </div>
 
                 {/* Form Đăng ký Google (needsRoleCode) */}
-                {needsRoleCode && firebaseUser ? (
+                {needsRoleCode && authUser ? (
                     <div className="bg-white rounded-2xl shadow-xl shadow-gray-200/50 border border-gray-100 p-6 space-y-5">
 
                         {/* Avatar */}
                         <div className="text-center border-b border-gray-100 pb-4 mb-2">
                             <div className="w-16 h-16 rounded-full overflow-hidden mx-auto mb-3 bg-gray-100 border-2 border-white shadow-sm ring-2 ring-gray-100">
-                                {firebaseUser.photoURL ? (
-                                    <img src={firebaseUser.photoURL} alt="Avatar" className="w-full h-full object-cover" />
+                                {authUser.photoURL ? (
+                                    <img src={authUser.photoURL} alt="Avatar" className="w-full h-full object-cover" />
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center text-gray-400 font-bold text-xl">
-                                        {firebaseUser.email?.charAt(0).toUpperCase()}
+                                        {authUser.email?.charAt(0).toUpperCase()}
                                     </div>
                                 )}
                             </div>
-                            <h3 className="font-semibold text-gray-800">{firebaseUser.displayName}</h3>
-                            <p className="text-sm text-gray-500">{firebaseUser.email}</p>
+                            <h3 className="font-semibold text-gray-800">{authUser.displayName}</h3>
+                            <p className="text-sm text-gray-500">{authUser.email}</p>
                             <span className="inline-block px-3 py-1 bg-amber-50 text-amber-600 text-[10px] font-bold uppercase tracking-wider rounded-full mt-2 border border-amber-200">
                                 Lần Đầu Đăng Nhập
                             </span>

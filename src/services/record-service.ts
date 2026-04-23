@@ -1,23 +1,69 @@
 /**
  * Record Service - CRUD operations for column records
+ * Supabase implementation (100%)
  * Handles DailyRecord, PeriodRecord, and OneTimeRecord
  */
 
-import { db } from '@/lib/firebase';
-import { DailyRecord, PeriodRecord, OneTimeRecord, ColumnFrequency, Column } from '@/types/models';
-import { getColumn } from './column-service';
-import {
-    collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, writeBatch
-} from 'firebase/firestore';
-import { SCHOOL_ID, DEFAULT_YEAR as CURRENT_YEAR } from '@/config/constants';
+import { DailyRecord, PeriodRecord, OneTimeRecord } from '@/types/models';
+import { supabase } from '@/lib/supabase';
 
-const isSupabase = process.env.NEXT_PUBLIC_USE_SUPABASE === 'true';
+// ============================================
+// Helper: Supabase row ↔ TypeScript types
+// ============================================
 
-/**
- * Get the Firestore path for column data
- */
-function getColumnDataPath(columnId: string) {
-    return `schools/${SCHOOL_ID}/years/${CURRENT_YEAR}/columnData/${columnId}/records`;
+interface RecordRow {
+    id: string;
+    column_id: string;
+    class_id: string;
+    student_code: string;
+    record_type: string;
+    date: string | null;
+    selected_suggestions: string[] | null;
+    period_key: string | null;
+    value: unknown;
+    status: string | null;
+    completed_at: string | null;
+    note: string | null;
+    updated_at: string;
+}
+
+function rowToDailyRecord(row: RecordRow): DailyRecord {
+    return {
+        id: row.id,
+        columnId: row.column_id,
+        classId: row.class_id,
+        studentCode: row.student_code,
+        date: row.date ?? '',
+        selectedSuggestions: (row.selected_suggestions as string[]) ?? [],
+        note: row.note ?? undefined,
+        updatedAt: row.updated_at,
+    };
+}
+
+function rowToPeriodRecord(row: RecordRow): PeriodRecord {
+    return {
+        id: row.id,
+        columnId: row.column_id,
+        classId: row.class_id,
+        studentCode: row.student_code,
+        periodKey: row.period_key ?? '',
+        value: row.value as string | number | boolean,
+        note: row.note ?? undefined,
+        updatedAt: row.updated_at,
+    };
+}
+
+function rowToOneTimeRecord(row: RecordRow): OneTimeRecord {
+    return {
+        id: row.id,
+        columnId: row.column_id,
+        classId: row.class_id,
+        studentCode: row.student_code,
+        status: (row.status as 'done' | 'pending') ?? 'pending',
+        completedAt: row.completed_at ?? undefined,
+        note: row.note ?? undefined,
+        updatedAt: row.updated_at,
+    };
 }
 
 // ============================================
@@ -28,37 +74,49 @@ function getColumnDataPath(columnId: string) {
  * Save a daily record
  */
 export async function saveDailyRecord(record: Omit<DailyRecord, 'id' | 'updatedAt'>): Promise<DailyRecord> {
-    if (isSupabase) {
-        console.warn("saveDailyRecord is not implemented for Supabase yet");
-        return { ...record, id: 'tmp', updatedAt: new Date().toISOString() } as DailyRecord;
-    }
-    const column = await getColumn(record.columnId);
-    if (!column || column.frequency !== 'daily') {
-        throw new Error('Invalid column for daily record');
-    }
-
     const id = `${record.columnId}_${record.date}_${record.studentCode}`;
-    const fullRecord: DailyRecord = {
-        ...record,
+    const now = new Date().toISOString();
+
+    const row = {
         id,
-        updatedAt: new Date().toISOString(),
+        column_id: record.columnId,
+        class_id: record.classId,
+        student_code: record.studentCode,
+        record_type: 'daily',
+        date: record.date,
+        selected_suggestions: record.selectedSuggestions,
+        note: record.note ?? null,
+        updated_at: now,
     };
 
-    const docRef = doc(db, getColumnDataPath(record.columnId), id);
-    await setDoc(docRef, fullRecord);
+    const { error } = await supabase
+        .from('column_records')
+        .upsert(row, { onConflict: 'id' });
 
-    return fullRecord;
+    if (error) {
+        console.error('Error saving daily record:', error);
+        throw new Error('Lỗi lưu record: ' + error.message);
+    }
+
+    return { ...record, id, updatedAt: now };
 }
 
 /**
  * Get daily records for a column on a specific date
  */
 export async function getDailyRecords(columnId: string, date: string): Promise<DailyRecord[]> {
-    if (isSupabase) return [];
-    const colRef = collection(db, getColumnDataPath(columnId));
-    const q = query(colRef, where('date', '==', date));
-    const snap = await getDocs(q);
-    return snap.docs.map(d => d.data() as DailyRecord);
+    const { data, error } = await supabase
+        .from('column_records')
+        .select('*')
+        .eq('column_id', columnId)
+        .eq('date', date)
+        .eq('record_type', 'daily');
+
+    if (error) {
+        console.error('Error fetching daily records:', error);
+        return [];
+    }
+    return (data as RecordRow[]).map(rowToDailyRecord);
 }
 
 /**
@@ -70,15 +128,20 @@ export async function getDailyRecordsForStudent(
     startDate: string,
     endDate: string
 ): Promise<DailyRecord[]> {
-    const colRef = collection(db, getColumnDataPath(columnId));
-    const q = query(
-        colRef,
-        where('studentCode', '==', studentCode),
-        where('date', '>=', startDate),
-        where('date', '<=', endDate)
-    );
-    const snap = await getDocs(q);
-    return snap.docs.map(d => d.data() as DailyRecord);
+    const { data, error } = await supabase
+        .from('column_records')
+        .select('*')
+        .eq('column_id', columnId)
+        .eq('student_code', studentCode)
+        .eq('record_type', 'daily')
+        .gte('date', startDate)
+        .lte('date', endDate);
+
+    if (error) {
+        console.error('Error fetching daily records for student:', error);
+        return [];
+    }
+    return (data as RecordRow[]).map(rowToDailyRecord);
 }
 
 /**
@@ -87,33 +150,30 @@ export async function getDailyRecordsForStudent(
 export async function saveDailyRecordsBatch(
     columnId: string,
     date: string,
-    records: { studentCode: string; selectedSuggestions: string[]; note?: string }[]
+    records: { studentCode: string; classId?: string; selectedSuggestions: string[]; note?: string }[]
 ): Promise<void> {
-    const column = await getColumn(columnId);
-    if (!column || column.frequency !== 'daily') {
-        throw new Error('Invalid column for daily record');
-    }
-
-    const batch = writeBatch(db);
     const now = new Date().toISOString();
 
-    for (const record of records) {
-        const id = `${columnId}_${date}_${record.studentCode}`;
-        const fullRecord: DailyRecord = {
-            id,
-            columnId,
-            classId: column.classId,
-            studentCode: record.studentCode,
-            date,
-            selectedSuggestions: record.selectedSuggestions,
-            note: record.note,
-            updatedAt: now,
-        };
-        const docRef = doc(db, getColumnDataPath(columnId), id);
-        batch.set(docRef, fullRecord);
-    }
+    const rows = records.map(record => ({
+        id: `${columnId}_${date}_${record.studentCode}`,
+        column_id: columnId,
+        class_id: record.classId ?? 'unknown',
+        student_code: record.studentCode,
+        record_type: 'daily',
+        date,
+        selected_suggestions: record.selectedSuggestions,
+        note: record.note ?? null,
+        updated_at: now,
+    }));
 
-    await batch.commit();
+    const { error } = await supabase
+        .from('column_records')
+        .upsert(rows, { onConflict: 'id' });
+
+    if (error) {
+        console.error('Error batch saving daily records:', error);
+        throw new Error('Lỗi lưu batch records: ' + error.message);
+    }
 }
 
 // ============================================
@@ -124,32 +184,49 @@ export async function saveDailyRecordsBatch(
  * Save a period record
  */
 export async function savePeriodRecord(record: Omit<PeriodRecord, 'id' | 'updatedAt'>): Promise<PeriodRecord> {
-    const column = await getColumn(record.columnId);
-    if (!column || column.frequency !== 'period') {
-        throw new Error('Invalid column for period record');
-    }
-
     const id = `${record.columnId}_${record.periodKey}_${record.studentCode}`;
-    const fullRecord: PeriodRecord = {
-        ...record,
+    const now = new Date().toISOString();
+
+    const row = {
         id,
-        updatedAt: new Date().toISOString(),
+        column_id: record.columnId,
+        class_id: record.classId,
+        student_code: record.studentCode,
+        record_type: 'period',
+        period_key: record.periodKey,
+        value: record.value,
+        note: record.note ?? null,
+        updated_at: now,
     };
 
-    const docRef = doc(db, getColumnDataPath(record.columnId), id);
-    await setDoc(docRef, fullRecord);
+    const { error } = await supabase
+        .from('column_records')
+        .upsert(row, { onConflict: 'id' });
 
-    return fullRecord;
+    if (error) {
+        console.error('Error saving period record:', error);
+        throw new Error('Lỗi lưu period record: ' + error.message);
+    }
+
+    return { ...record, id, updatedAt: now };
 }
 
 /**
  * Get period records for a column
  */
 export async function getPeriodRecords(columnId: string, periodKey: string): Promise<PeriodRecord[]> {
-    const colRef = collection(db, getColumnDataPath(columnId));
-    const q = query(colRef, where('periodKey', '==', periodKey));
-    const snap = await getDocs(q);
-    return snap.docs.map(d => d.data() as PeriodRecord);
+    const { data, error } = await supabase
+        .from('column_records')
+        .select('*')
+        .eq('column_id', columnId)
+        .eq('period_key', periodKey)
+        .eq('record_type', 'period');
+
+    if (error) {
+        console.error('Error fetching period records:', error);
+        return [];
+    }
+    return (data as RecordRow[]).map(rowToPeriodRecord);
 }
 
 // ============================================
@@ -160,41 +237,68 @@ export async function getPeriodRecords(columnId: string, periodKey: string): Pro
  * Save a one-time record
  */
 export async function saveOneTimeRecord(record: Omit<OneTimeRecord, 'id' | 'updatedAt'>): Promise<OneTimeRecord> {
-    const column = await getColumn(record.columnId);
-    if (!column || column.frequency !== 'one_time') {
-        throw new Error('Invalid column for one-time record');
-    }
-
     const id = `${record.columnId}_${record.studentCode}`;
-    const fullRecord: OneTimeRecord = {
-        ...record,
+    const now = new Date().toISOString();
+
+    const row = {
         id,
-        updatedAt: new Date().toISOString(),
-        completedAt: record.status === 'done' ? new Date().toISOString() : undefined,
+        column_id: record.columnId,
+        class_id: record.classId,
+        student_code: record.studentCode,
+        record_type: 'one_time',
+        status: record.status,
+        completed_at: record.status === 'done' ? now : null,
+        note: record.note ?? null,
+        updated_at: now,
     };
 
-    const docRef = doc(db, getColumnDataPath(record.columnId), id);
-    await setDoc(docRef, fullRecord);
+    const { error } = await supabase
+        .from('column_records')
+        .upsert(row, { onConflict: 'id' });
 
-    return fullRecord;
+    if (error) {
+        console.error('Error saving one-time record:', error);
+        throw new Error('Lỗi lưu one-time record: ' + error.message);
+    }
+
+    return {
+        ...record,
+        id,
+        completedAt: record.status === 'done' ? now : undefined,
+        updatedAt: now,
+    };
 }
 
 /**
  * Get all one-time records for a column
  */
 export async function getOneTimeRecords(columnId: string): Promise<OneTimeRecord[]> {
-    const colRef = collection(db, getColumnDataPath(columnId));
-    const snap = await getDocs(colRef);
-    return snap.docs.map(d => d.data() as OneTimeRecord);
+    const { data, error } = await supabase
+        .from('column_records')
+        .select('*')
+        .eq('column_id', columnId)
+        .eq('record_type', 'one_time');
+
+    if (error) {
+        console.error('Error fetching one-time records:', error);
+        return [];
+    }
+    return (data as RecordRow[]).map(rowToOneTimeRecord);
 }
 
 /**
  * Check if all students have completed a one-time column
  */
 export async function checkOneTimeComplete(columnId: string, totalStudents: number): Promise<boolean> {
-    const records = await getOneTimeRecords(columnId);
-    const doneCount = records.filter(r => r.status === 'done').length;
-    return doneCount >= totalStudents;
+    const { count, error } = await supabase
+        .from('column_records')
+        .select('*', { count: 'exact', head: true })
+        .eq('column_id', columnId)
+        .eq('record_type', 'one_time')
+        .eq('status', 'done');
+
+    if (error) return false;
+    return (count ?? 0) >= totalStudents;
 }
 
 // ============================================
@@ -205,9 +309,14 @@ export async function checkOneTimeComplete(columnId: string, totalStudents: numb
  * Delete a record
  */
 export async function deleteRecord(columnId: string, recordId: string): Promise<void> {
-    if (isSupabase) return;
-    const docRef = doc(db, getColumnDataPath(columnId), recordId);
-    await deleteDoc(docRef);
+    const { error } = await supabase
+        .from('column_records')
+        .delete()
+        .eq('id', recordId);
+
+    if (error) {
+        console.error('Error deleting record:', error);
+    }
 }
 
 /**
@@ -217,21 +326,34 @@ export async function getAllRecordsForColumn(
     columnId: string,
     filters?: { startDate?: string; endDate?: string; periodKey?: string }
 ): Promise<(DailyRecord | PeriodRecord | OneTimeRecord)[]> {
-    const colRef = collection(db, getColumnDataPath(columnId));
-    let q = query(colRef);
+    let q = supabase
+        .from('column_records')
+        .select('*')
+        .eq('column_id', columnId);
 
     if (filters) {
         if (filters.periodKey) {
-            q = query(q, where('periodKey', '==', filters.periodKey));
+            q = q.eq('period_key', filters.periodKey);
         }
         if (filters.startDate) {
-            q = query(q, where('date', '>=', filters.startDate));
+            q = q.gte('date', filters.startDate);
         }
         if (filters.endDate) {
-            q = query(q, where('date', '<=', filters.endDate));
+            q = q.lte('date', filters.endDate);
         }
     }
 
-    const snap = await getDocs(q);
-    return snap.docs.map(d => d.data() as DailyRecord | PeriodRecord | OneTimeRecord);
+    const { data, error } = await q;
+    if (error) {
+        console.error('Error fetching records for column:', error);
+        return [];
+    }
+
+    return (data as RecordRow[]).map(row => {
+        switch (row.record_type) {
+            case 'period': return rowToPeriodRecord(row);
+            case 'one_time': return rowToOneTimeRecord(row);
+            default: return rowToDailyRecord(row);
+        }
+    });
 }

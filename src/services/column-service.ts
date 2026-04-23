@@ -1,37 +1,105 @@
 /**
  * Column Service - CRUD operations for custom columns
+ * Supabase implementation (100%)
  */
 
-import { db } from '@/lib/firebase';
 import { Column, ColumnFrequency } from '@/types/models';
-import { createFixedColumnsForClass, isFixedColumn, FIXED_COLUMN_IDS } from '@/lib/defaults';
-import {
-    collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, writeBatch
-} from 'firebase/firestore';
-import { SCHOOL_ID, DEFAULT_YEAR as CURRENT_YEAR } from '@/config/constants';
+import { createFixedColumnsForClass, isFixedColumn } from '@/lib/defaults';
+import { supabase } from '@/lib/supabase';
 
-const isSupabase = process.env.NEXT_PUBLIC_USE_SUPABASE === 'true';
+// ============================================
+// Helper: Supabase row ↔ TypeScript Column
+// ============================================
+
+interface ColumnRow {
+    id: string;
+    class_id: string;
+    user_id: string;
+    name: string;
+    scope: string;
+    frequency: string;
+    period_config: Record<string, unknown> | null;
+    sub_periods: Record<string, unknown>[] | null;
+    suggestions: string[] | null;
+    allow_free_text: boolean;
+    applicable_scope: string | null;
+    applicable_student_ids: string[] | null;
+    archived: boolean;
+    default_visibility: boolean;
+    order: number;
+    created_at: string;
+    updated_at: string;
+}
+
+function rowToColumn(row: ColumnRow): Column {
+    return {
+        id: row.id,
+        classId: row.class_id,
+        userId: row.user_id,
+        name: row.name,
+        scope: row.scope as Column['scope'],
+        frequency: row.frequency as ColumnFrequency,
+        periodConfig: (row.period_config as unknown) as Column['periodConfig'],
+        subPeriods: ((row.sub_periods as unknown) as Column['subPeriods']) ?? [],
+        suggestions: row.suggestions ?? [],
+        allowFreeText: row.allow_free_text,
+        applicableScope: (row.applicable_scope as Column['applicableScope']) ?? 'all',
+        applicableStudentIds: row.applicable_student_ids ?? undefined,
+        archived: row.archived,
+        defaultVisibility: row.default_visibility,
+        order: row.order,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+    };
+}
+
+function columnToRow(col: Column): Record<string, unknown> {
+    return {
+        id: col.id,
+        class_id: col.classId,
+        user_id: col.userId,
+        name: col.name,
+        scope: col.scope,
+        frequency: col.frequency,
+        period_config: col.periodConfig ?? null,
+        sub_periods: col.subPeriods ?? [],
+        suggestions: col.suggestions ?? [],
+        allow_free_text: col.allowFreeText,
+        applicable_scope: col.applicableScope ?? 'all',
+        applicable_student_ids: col.applicableStudentIds ?? null,
+        archived: col.archived,
+        default_visibility: col.defaultVisibility ?? true,
+        order: col.order,
+        created_at: col.createdAt,
+        updated_at: col.updatedAt,
+    };
+}
+
+// ============================================
+// CRUD Functions
+// ============================================
 
 /**
  * Get all columns for a class
  */
 export async function getColumns(classId: string, userId?: string): Promise<Column[]> {
-    if (isSupabase) return []; // TODO: Implement custom columns in Supabase
-    const colRef = collection(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'columns');
-    const q = query(colRef, where('classId', '==', classId));
-    const snap = await getDocs(q);
-    let columns = snap.docs.map(d => d.data() as Column);
+    let q = supabase
+        .from('columns')
+        .select('*')
+        .eq('class_id', classId);
 
-    // Filter by userId if requested
     if (userId) {
-        columns = columns.filter(c => c.userId === 'system' || c.userId === userId);
+        q = q.or(`user_id.eq.system,user_id.eq.${userId}`);
     }
 
-    // Sort by order, then by createdAt
-    return columns.sort((a, b) => {
-        if (a.order !== b.order) return a.order - b.order;
-        return a.createdAt.localeCompare(b.createdAt);
-    });
+    q = q.order('order', { ascending: true }).order('created_at', { ascending: true });
+
+    const { data, error } = await q;
+    if (error) {
+        console.error('Error fetching columns:', error);
+        return [];
+    }
+    return (data as ColumnRow[]).map(rowToColumn);
 }
 
 /**
@@ -46,20 +114,20 @@ export async function getColumnsByFrequency(classId: string, frequency: ColumnFr
  * Get a single column by ID
  */
 export async function getColumn(columnId: string): Promise<Column | null> {
-    if (isSupabase) return null;
-    const docRef = doc(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'columns', columnId);
-    const snap = await getDoc(docRef);
-    return snap.exists() ? (snap.data() as Column) : null;
+    const { data, error } = await supabase
+        .from('columns')
+        .select('*')
+        .eq('id', columnId)
+        .maybeSingle();
+
+    if (error || !data) return null;
+    return rowToColumn(data as ColumnRow);
 }
 
 /**
  * Create a new column
  */
 export async function createColumn(column: Omit<Column, 'createdAt' | 'updatedAt'>): Promise<Column> {
-    if (isSupabase) {
-        console.warn("createColumn is not implemented for Supabase yet");
-        return { ...column, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as Column;
-    }
     // Validate frequency is provided
     if (!column.frequency) {
         throw new Error('Column frequency is required');
@@ -78,7 +146,6 @@ export async function createColumn(column: Omit<Column, 'createdAt' | 'updatedAt
     const now = new Date().toISOString();
     const fullColumn: Column = {
         ...column,
-        // Set defaults
         applicableScope: column.applicableScope || 'all',
         defaultVisibility: column.defaultVisibility ?? true,
         subPeriods: column.subPeriods || [],
@@ -86,8 +153,14 @@ export async function createColumn(column: Omit<Column, 'createdAt' | 'updatedAt
         updatedAt: now,
     };
 
-    const docRef = doc(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'columns', column.id);
-    await setDoc(docRef, fullColumn);
+    const { error } = await supabase
+        .from('columns')
+        .upsert(columnToRow(fullColumn));
+
+    if (error) {
+        console.error('Error creating column:', error);
+        throw new Error('Lỗi tạo cột: ' + error.message);
+    }
 
     return fullColumn;
 }
@@ -103,23 +176,37 @@ export async function updateColumn(columnId: string, updates: Partial<Column>): 
 
     // Fixed columns can only update suggestions
     if (isFixedColumn(columnId)) {
-        const allowedUpdates: Partial<Column> = {
-            suggestions: updates.suggestions,
-            updatedAt: new Date().toISOString(),
-        };
+        const { error } = await supabase
+            .from('columns')
+            .update({
+                suggestions: updates.suggestions ?? existing.suggestions,
+                updated_at: new Date().toISOString(),
+            })
+            .eq('id', columnId);
 
-        const docRef = doc(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'columns', columnId);
-        await setDoc(docRef, { ...existing, ...allowedUpdates }, { merge: true });
+        if (error) throw new Error('Lỗi cập nhật cột: ' + error.message);
         return;
     }
 
     // Custom columns can update more fields
-    const docRef = doc(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'columns', columnId);
-    await setDoc(docRef, {
-        ...existing,
-        ...updates,
-        updatedAt: new Date().toISOString(),
-    }, { merge: true });
+    const updateData: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (updates.name !== undefined) updateData.name = updates.name;
+    if (updates.suggestions !== undefined) updateData.suggestions = updates.suggestions;
+    if (updates.allowFreeText !== undefined) updateData.allow_free_text = updates.allowFreeText;
+    if (updates.archived !== undefined) updateData.archived = updates.archived;
+    if (updates.defaultVisibility !== undefined) updateData.default_visibility = updates.defaultVisibility;
+    if (updates.order !== undefined) updateData.order = updates.order;
+    if (updates.periodConfig !== undefined) updateData.period_config = updates.periodConfig;
+    if (updates.subPeriods !== undefined) updateData.sub_periods = updates.subPeriods;
+    if (updates.applicableScope !== undefined) updateData.applicable_scope = updates.applicableScope;
+    if (updates.applicableStudentIds !== undefined) updateData.applicable_student_ids = updates.applicableStudentIds;
+
+    const { error } = await supabase
+        .from('columns')
+        .update(updateData)
+        .eq('id', columnId);
+
+    if (error) throw new Error('Lỗi cập nhật cột: ' + error.message);
 }
 
 /**
@@ -130,8 +217,12 @@ export async function deleteColumn(columnId: string): Promise<void> {
         throw new Error('Cannot delete fixed columns');
     }
 
-    const docRef = doc(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'columns', columnId);
-    await deleteDoc(docRef);
+    const { error } = await supabase
+        .from('columns')
+        .delete()
+        .eq('id', columnId);
+
+    if (error) throw new Error('Lỗi xóa cột: ' + error.message);
 }
 
 /**
@@ -158,8 +249,7 @@ export async function initializeFixedColumns(classId: string): Promise<void> {
     const fixedColumnTemplates = createFixedColumnsForClass(classId);
     const now = new Date().toISOString();
 
-    const batch = writeBatch(db);
-    let hasNewColumns = false;
+    const newRows: Record<string, unknown>[] = [];
 
     for (const template of fixedColumnTemplates) {
         if (!existingIds.has(template.id)) {
@@ -168,14 +258,16 @@ export async function initializeFixedColumns(classId: string): Promise<void> {
                 createdAt: now,
                 updatedAt: now,
             };
-            const docRef = doc(db, 'schools', SCHOOL_ID, 'years', CURRENT_YEAR, 'columns', template.id);
-            batch.set(docRef, fullColumn);
-            hasNewColumns = true;
+            newRows.push(columnToRow(fullColumn));
         }
     }
 
-    if (hasNewColumns) {
-        await batch.commit();
+    if (newRows.length > 0) {
+        const { error } = await supabase
+            .from('columns')
+            .upsert(newRows);
+
+        if (error) console.error('Error initializing fixed columns:', error);
     }
 }
 
@@ -230,7 +322,6 @@ export async function getExpiredColumns(classId: string, userId?: string): Promi
         if (c.archived) return false;
         if (c.frequency === 'period' && c.periodConfig) {
             const endDate = new Date(c.periodConfig.endDate);
-            // End of the day
             endDate.setHours(23, 59, 59, 999);
             return endDate < now;
         }

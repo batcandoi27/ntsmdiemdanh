@@ -15,7 +15,7 @@ export default function Home() {
             <DashboardContent />
 
             <div className="mt-12 text-sm text-gray-400">
-                Phiên bản 02.2026 | Mode: {process.env.NEXT_PUBLIC_USE_SUPABASE === 'true' ? 'Supabase Online' : (process.env.NEXT_PUBLIC_FIREBASE_API_KEY ? 'Firebase Online' : 'Local Offline')}
+                Phiên bản 02.2026 | Mode: Supabase Online
             </div>
         </main>
     );

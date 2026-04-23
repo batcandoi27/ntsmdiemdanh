@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useViewMode } from '@/context/view-mode-context';
 import { useAuth } from '@/context/auth-context';
-import { FirebaseAdapter } from '@/services/firebase-adapter';
+import { db } from '@/services/db';
 
 interface ClassListProps {
     initialClasses: Class[];
@@ -52,8 +52,7 @@ export function ClassList({ initialClasses }: ClassListProps) {
     const fetchPersonalClasses = async () => {
         setIsLoadingPersonal(true);
         try {
-            const adapter = new FirebaseAdapter();
-            const list = await adapter.getClasses({ isPersonal: true, ownerId: appUser?.uid });
+            const list = await db.getClasses({ isPersonal: true, ownerId: appUser?.uid });
             setPersonalClasses(list);
             setClasses(list); // Replace view with personal classes
             fetchStats(list); // Fetch stats for these specific personal classes
