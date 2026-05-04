@@ -4,60 +4,95 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { BookOpen, UserCheck, BarChart3, Settings, Zap, School } from "lucide-react";
 import { useViewMode } from "@/context/view-mode-context";
+import { useAuth } from "@/context/auth-context";
 
 export default function DashboardContent() {
     const { viewDevice } = useViewMode();
+    const { appUser } = useAuth();
 
     const isMobile = viewDevice === 'mobile';
+    const isAdmin = appUser?.role === 'admin' || appUser?.role === 'principal';
+    const isTeacher = appUser?.role === 'teacher';
 
     return (
         <div className={cn(
             "grid gap-4 sm:gap-6 w-full max-w-4xl transition-all",
             isMobile ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2"
         )}>
+            {/* --- KHỐI HỌC SINH (Admin mới thấy) --- */}
+            {isAdmin && (
+                <>
+                    <DashboardCard
+                        href="/quick-attendance"
+                        icon={<Zap className={cn("w-10 h-10 sm:w-12 sm:h-12 text-white")} />}
+                        title="Điểm Danh HS"
+                        description="Chọn lớp & Điểm danh"
+                        color="bg-yellow-500"
+                        hoverColor="group-hover:text-yellow-700"
+                        borderColor="border-b-yellow-600"
+                        compact={isMobile}
+                    />
+
+                    <DashboardCard
+                        href="/classes"
+                        icon={<School className={cn("w-10 h-10 sm:w-12 sm:h-12 text-white")} />}
+                        title="Quản Lý Lớp"
+                        description="DS Lớp & Import Dữ Liệu"
+                        color="bg-blue-600"
+                        hoverColor="group-hover:text-blue-700"
+                        borderColor="border-b-blue-700"
+                        compact={isMobile}
+                    />
+
+                    <DashboardCard
+                        href="/reports"
+                        icon={<BarChart3 className={cn("w-10 h-10 sm:w-12 sm:h-12 text-white")} />}
+                        title="Báo Cáo HS"
+                        description="Thống kê Tình hình Nề nếp"
+                        color="bg-emerald-500"
+                        hoverColor="group-hover:text-emerald-700"
+                        borderColor="border-b-emerald-600"
+                        compact={isMobile}
+                    />
+
+                    <DashboardCard
+                        href="/admin/teachers"
+                        icon={<UserCheck className={cn("w-10 h-10 sm:w-12 sm:h-12 text-white")} />}
+                        title="Hồ Sơ Giáo Viên"
+                        description="Import & Quản lý Nhóm GV"
+                        color="bg-purple-600"
+                        hoverColor="group-hover:text-purple-700"
+                        borderColor="border-b-purple-700"
+                        compact={isMobile}
+                    />
+                </>
+            )}
+
+            {/* --- KHỐI HỘI HỌP (Admin và GV đều thấy nhưng link khác nhau) --- */}
             <DashboardCard
-                href="/quick-attendance"
-                icon={<Zap className={cn("w-10 h-10 sm:w-12 sm:h-12 text-white")} />}
-                title="Điểm Danh"
-                description="Chọn lớp & Điểm danh"
-                color="bg-yellow-500"
-                hoverColor="group-hover:text-yellow-700"
-                borderColor="border-b-yellow-600"
+                href={isAdmin ? "/admin/events" : "/teacher/dashboard"}
+                icon={<BookOpen className={cn("w-10 h-10 sm:w-12 sm:h-12 text-white")} />}
+                title="Hội Họp / Sự Kiện"
+                description={isAdmin ? "Quản lý & Tạo mã QR" : "Lịch họp & Điểm danh QR"}
+                color="bg-orange-500"
+                hoverColor="group-hover:text-orange-700"
+                borderColor="border-b-orange-600"
                 compact={isMobile}
             />
 
-            <DashboardCard
-                href="/classes"
-                icon={<School className={cn("w-10 h-10 sm:w-12 sm:h-12 text-white")} />}
-                title="Quản Lý Lớp"
-                description="DS Lớp & Import Dữ Liệu"
-                color="bg-blue-600"
-                hoverColor="group-hover:text-blue-700"
-                borderColor="border-b-blue-700"
-                compact={isMobile}
-            />
-
-            <DashboardCard
-                href="/reports"
-                icon={<BarChart3 className={cn("w-10 h-10 sm:w-12 sm:h-12 text-white")} />}
-                title="Báo Cáo"
-                description="Thống kê Tình hình Nề nếp"
-                color="bg-emerald-500"
-                hoverColor="group-hover:text-emerald-700"
-                borderColor="border-b-emerald-600"
-                compact={isMobile}
-            />
-
-            <DashboardCard
-                href="/settings"
-                icon={<Settings className={cn("w-10 h-10 sm:w-12 sm:h-12 text-white")} />}
-                title="Cài Đặt"
-                description="Công cụ quản trị & Test"
-                color="bg-slate-500"
-                hoverColor="group-hover:text-slate-700"
-                borderColor="border-b-slate-600"
-                compact={isMobile}
-            />
+            {/* --- CÀI ĐẶT (Chỉ Admin) --- */}
+            {isAdmin && (
+                <DashboardCard
+                    href="/settings"
+                    icon={<Settings className={cn("w-10 h-10 sm:w-12 sm:h-12 text-white")} />}
+                    title="Cài Đặt"
+                    description="Công cụ quản trị & Test"
+                    color="bg-slate-500"
+                    hoverColor="group-hover:text-slate-700"
+                    borderColor="border-b-slate-600"
+                    compact={isMobile}
+                />
+            )}
         </div>
     );
 }

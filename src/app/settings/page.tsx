@@ -16,11 +16,14 @@ import { ApiTab } from '@/components/settings/api-tab';
 import { FeatureFlagsTab } from '@/components/settings/feature-flags-tab';
 import { ClassSizeTab } from '@/components/settings/class-size-tab';
 import { SubjectsTab } from '@/components/settings/subjects-tab';
+import { TeacherGroupsTab } from '@/components/settings/teacher-groups-tab';
 import { useAuth } from '@/context/auth-context';
 import { db } from '@/services/db';
 import { Class } from '@/types/models';
+import { TeacherGroup } from '@/types/teacher';
+import { getAllGroups } from '@/services/teacher-service';
 
-type TabType = 'data' | 'subjects' | 'fixed-columns' | 'custom-columns' | 'my-classes' | 'users' | 'timetable' | 'year' | 'export' | 'api' | 'feature-flags' | 'class-size';
+type TabType = 'data' | 'subjects' | 'teacher-groups' | 'fixed-columns' | 'custom-columns' | 'my-classes' | 'users' | 'timetable' | 'year' | 'export' | 'api' | 'feature-flags' | 'class-size';
 
 export default function SettingsPage() {
     const [isPending, startTransition] = useTransition();
@@ -28,6 +31,7 @@ export default function SettingsPage() {
     const [activeTab, setActiveTab] = useState<TabType>('data');
     const [myClassIds, setMyClassIds] = useState<string[]>([]);
     const [classes, setClasses] = useState<Class[]>([]);
+    const [teacherGroups, setTeacherGroups] = useState<TeacherGroup[]>([]);
 
     // States cho tính năng xoá dữ liệu mở rộng
     const [deleteStartDate, setDeleteStartDate] = useState('');
@@ -42,6 +46,9 @@ export default function SettingsPage() {
         if (appUser) {
             loadMyClasses();
             loadClasses();
+            if (appUser.role === 'admin' || appUser.role === 'principal') {
+                loadTeacherGroups();
+            }
         }
 
         // Listen for updates from MyClassesTab
@@ -58,6 +65,15 @@ export default function SettingsPage() {
             setClasses(classList);
         } catch (error) {
             console.error('Error loading classes:', error);
+        }
+    };
+
+    const loadTeacherGroups = async () => {
+        try {
+            const groups = await getAllGroups();
+            setTeacherGroups(groups);
+        } catch (error) {
+            console.error('Error loading teacher groups:', error);
         }
     };
 
@@ -161,6 +177,7 @@ export default function SettingsPage() {
         tabs.push({ id: 'class-size' as TabType, label: 'Sĩ số lớp', icon: Users });
         tabs.push({ id: 'feature-flags' as TabType, label: 'Tính năng', icon: ToggleRight });
         tabs.push({ id: 'subjects' as TabType, label: 'Môn học', icon: BookOpen });
+        tabs.push({ id: 'teacher-groups' as TabType, label: 'Nhóm Giáo viên', icon: Users });
     }
 
     tabs.push(
@@ -321,6 +338,10 @@ export default function SettingsPage() {
 
                     {activeTab === 'subjects' && (
                         <SubjectsTab />
+                    )}
+
+                    {activeTab === 'teacher-groups' && (
+                        <TeacherGroupsTab initialGroups={teacherGroups} />
                     )}
 
                     {activeTab === 'users' && (
