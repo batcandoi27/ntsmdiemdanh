@@ -220,7 +220,7 @@ export function FixedColumnsTab({ classIds, selectedClasses = [] }: Props) {
                                 <h3 className="font-bold text-gray-800">{displayName}</h3>
                                 <div className="flex items-center gap-2 mt-1">
                                     <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
-                                        Cột cố định
+                                        Gợi ý điểm danh
                                     </span>
                                     {isAttendance && (
                                         <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded font-medium">

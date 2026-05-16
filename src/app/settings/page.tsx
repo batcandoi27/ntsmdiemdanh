@@ -182,8 +182,8 @@ export default function SettingsPage() {
 
     tabs.push(
         { id: 'my-classes' as TabType, label: 'Lớp của tôi', icon: BookOpen },
-        { id: 'fixed-columns' as TabType, label: 'Cột cố định', icon: Lock },
-        { id: 'custom-columns' as TabType, label: 'Cột tùy chỉnh', icon: Sliders }
+        { id: 'fixed-columns' as TabType, label: 'Gợi ý điểm danh', icon: Lock },
+        { id: 'custom-columns' as TabType, label: 'Sổ Theo dõi', icon: Sliders }
     );
 
     if (appUser?.role === 'admin' || appUser?.role === 'principal') {

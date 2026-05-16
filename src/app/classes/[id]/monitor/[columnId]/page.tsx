@@ -6,9 +6,29 @@ import { getColumn } from '@/services/column-service';
 import { getStudents, getActiveStudents } from '@/services/student-service';
 import { getAllRecordsForColumn, savePeriodRecord, getOneTimeRecords, saveOneTimeRecord } from '@/services/record-service';
 import { Column, Student, PeriodRecord, OneTimeRecord } from '@/types/models';
-import { ArrowLeft, Loader2, Save, CheckCircle2, Circle, X } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, CheckCircle2, Circle, X, FileDown, Share2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Modal } from '@/components/ui/modal';
+import { getMonitorExportData } from '@/app/actions/monitor';
+import { exportMonitorBook, MonitorExportData, compareVietnameseNames } from '@/lib/export-utils';
+import { MonitorMessageModal } from '@/components/monitor/monitor-message-modal';
+import { db } from '@/services/db';
+import { useMemo } from 'react';
+
+/** Format số: 100000 → 100 000 (dùng thin space) */
+const formatNum = (v: string | number): string => {
+    const n = Number(v);
+    if (isNaN(n)) return String(v);
+    return n.toLocaleString('fr-FR').replace(/\u202F/g, ' ');
+};
+
+const isNumVal = (v: any): boolean => v !== undefined && v !== '' && !isNaN(Number(v));
+
+/** Hiển thị giá trị: nếu là số thì format, không thì giữ nguyên */
+const displayVal = (v: string | undefined): string => {
+    if (!v) return '-';
+    return isNumVal(v) ? formatNum(v) : v;
+};
 
 export default function MonitorDetailPage() {
     const params = useParams();
@@ -18,11 +38,16 @@ export default function MonitorDetailPage() {
 
     const [loading, setLoading] = useState(true);
     const [column, setColumn] = useState<Column | null>(null);
+    const [currentClass, setCurrentClass] = useState<any>(null);
     const [students, setStudents] = useState<Student[]>([]);
 
     // Records State
     const [periodRecords, setPeriodRecords] = useState<Record<string, Record<string, string>>>({}); // studentCode -> periodKey -> value
     const [oneTimeRecords, setOneTimeRecords] = useState<Record<string, { completed: boolean; value?: string; note?: string }>>({}); // studentCode -> { completed, value, note }
+
+    // Export & Share State
+    const [exportLoading, setExportLoading] = useState(false);
+    const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
 
     // Edit State for Note/Value
     const [editingCell, setEditingCell] = useState<{ studentCode: string; periodKey?: string; type: 'period' | 'one_time'; initialValue: string } | null>(null);
@@ -33,9 +58,10 @@ export default function MonitorDetailPage() {
 
     const loadData = async () => {
         try {
-            const [col, studList] = await Promise.all([
+            const [col, studList, cls] = await Promise.all([
                 getColumn(columnId),
-                getActiveStudents(classId)
+                getActiveStudents(classId),
+                db.getClass(classId)
             ]);
 
             if (!col) {
@@ -45,14 +71,15 @@ export default function MonitorDetailPage() {
             }
 
             setColumn(col);
+            setCurrentClass(cls);
 
             // Filter students by scope
             let filteredStudents = studList;
             if (col.applicableScope === 'subset' && col.applicableStudentIds) {
                 filteredStudents = studList.filter(s => col.applicableStudentIds?.includes(s.id));
             }
-            // Sort by order/name
-            filteredStudents.sort((a, b) => (a.order || 999) - (b.order || 999) || a.firstName.localeCompare(b.firstName));
+            // Sort by Vietnamese name
+            filteredStudents.sort((a, b) => compareVietnameseNames(a.fullName, b.fullName));
 
             setStudents(filteredStudents);
 
@@ -201,6 +228,50 @@ export default function MonitorDetailPage() {
         return s.fullName;
     };
 
+    const handleExportExcel = async () => {
+        try {
+            setExportLoading(true);
+            const exportData = await getMonitorExportData(columnId);
+            await exportMonitorBook(exportData, column?.name || 'So_theo_doi');
+        } catch (error) {
+            console.error('Export Excel Error:', error);
+            alert('Lỗi xuất Excel');
+        } finally {
+            setExportLoading(false);
+        }
+    };
+
+    const currentClassData = useMemo(() => {
+        if (!column || !students || !currentClass) return null;
+        
+        const mappedStudents = students.map(s => {
+            let recs: Record<string, any> = {};
+            if (column.frequency === 'period') {
+                recs = periodRecords[s.code] || {};
+            } else {
+                const rec = oneTimeRecords[s.code];
+                if (rec?.completed) recs['status'] = 'done';
+                if (rec?.value) recs['value'] = rec.value;
+            }
+            return {
+                id: s.id,
+                code: s.code,
+                name: s.fullName,
+                records: recs
+            };
+        });
+
+        return {
+            classId,
+            className: currentClass.name || 'Lớp',
+            columnId,
+            columnName: column.name,
+            frequency: column.frequency as any,
+            subPeriods: column.subPeriods,
+            students: mappedStudents
+        } as MonitorExportData;
+    }, [column, students, periodRecords, oneTimeRecords, currentClass, classId, columnId]);
+
     if (loading || !column) {
         return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-blue-600" /></div>;
     }
@@ -221,6 +292,27 @@ export default function MonitorDetailPage() {
                         {students.length} học sinh • {column.frequency === 'period' ? 'Theo giai đoạn' : 'Một lần'}
                     </p>
                 </div>
+
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setIsMessageModalOpen(true)}
+                        className="p-2.5 bg-teal-50 text-teal-600 rounded-xl hover:bg-teal-100 transition-colors flex items-center gap-2 text-sm font-black shadow-sm border border-teal-100"
+                        title="Báo cáo nhanh cho phụ huynh"
+                    >
+                        <Share2 size={18} />
+                        <span className="hidden sm:inline">Báo cáo nhanh</span>
+                    </button>
+
+                    <button
+                        onClick={handleExportExcel}
+                        disabled={exportLoading}
+                        className="p-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm font-black shadow-md disabled:opacity-50"
+                        title="Xuất file Excel chuyên nghiệp"
+                    >
+                        {exportLoading ? <Loader2 size={18} className="animate-spin" /> : <FileDown size={18} />}
+                        <span className="hidden sm:inline">Xuất Excel</span>
+                    </button>
+                </div>
             </div>
 
             <div className="p-4 overflow-x-auto">
@@ -239,60 +331,127 @@ export default function MonitorDetailPage() {
                                     {(!column.subPeriods || column.subPeriods.length === 0) && (
                                         <th className="text-center p-2 border-b font-medium text-gray-500">Trạng thái</th>
                                     )}
+                                    {/* Cột Tổng nếu có sub-periods */}
+                                    {column.subPeriods && column.subPeriods.length > 0 && (() => {
+                                        const allNum = students.some(s => {
+                                            return column.subPeriods!.some(sp => {
+                                                const v = periodRecords[s.code]?.[sp.id];
+                                                return v !== undefined && v !== '' && !isNaN(Number(v));
+                                            });
+                                        });
+                                        return allNum ? (
+                                            <th className="text-center p-2 border-b font-bold text-blue-700 bg-blue-50 min-w-[100px]">Tổng</th>
+                                        ) : null;
+                                    })()}
                                 </tr>
                             </thead>
                             <tbody>
-                                {students.map((student, idx) => (
-                                    <tr key={student.id} className="hover:bg-gray-50 group">
-                                        <td className="p-2 border-b sticky left-0 bg-white group-hover:bg-gray-50 z-10 font-medium text-sm text-gray-700">
-                                            <div className="flex items-center gap-2">
-                                                <span className="w-5 h-5 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center text-xs">
-                                                    {student.order || idx + 1}
-                                                </span>
-                                                <span className="truncate max-w-[150px]">{getStudentName(student)}</span>
-                                            </div>
-                                        </td>
+                                {students.map((student, idx) => {
+                                    // Tính tổng hàng nếu có giá trị số
+                                    const subPeriodValues = column.subPeriods?.map(sp => periodRecords[student.code]?.[sp.id]) || [];
+                                    const numericValues = subPeriodValues.filter(v => v !== undefined && v !== '' && !isNaN(Number(v)));
+                                    const hasNumericData = numericValues.length > 0 && numericValues.length === subPeriodValues.filter(v => v !== undefined && v !== '').length;
+                                    const rowTotal = hasNumericData ? numericValues.reduce((a, v) => a + Number(v), 0) : null;
+                                    
+                                    return (
+                                        <tr key={student.id} className="hover:bg-gray-50 group">
+                                            <td className="p-2 border-b sticky left-0 bg-white group-hover:bg-gray-50 z-10 font-medium text-sm text-gray-700">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="w-5 h-5 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center text-xs">
+                                                        {idx + 1}
+                                                    </span>
+                                                    <span className="truncate max-w-[150px]">{getStudentName(student)}</span>
+                                                </div>
+                                            </td>
 
-                                        {column.subPeriods?.map(sub => {
-                                            const val = periodRecords[student.code]?.[sub.id];
-                                            return (
-                                                <td key={sub.id} className="p-1 border-b text-center">
+                                            {column.subPeriods?.map(sub => {
+                                                const val = periodRecords[student.code]?.[sub.id];
+                                                return (
+                                                    <td key={sub.id} className="p-1 border-b text-center">
+                                                        <button
+                                                            onClick={() => handlePeriodCellClick(student.code, sub.id)}
+                                                            className={cn(
+                                                                "w-full h-10 rounded-lg flex items-center justify-center transition-all text-sm",
+                                                                val
+                                                                    ? "bg-white border-2 border-blue-500 text-blue-800 font-black shadow-sm"
+                                                                    : "bg-gray-50 text-gray-300 hover:bg-gray-100 border border-gray-200"
+                                                            )}
+                                                        >
+                                                            {displayVal(val)}
+                                                        </button>
+                                                    </td>
+                                                );
+                                            })}
+
+                                            {(!column.subPeriods || column.subPeriods.length === 0) && (
+                                                <td className="p-1 border-b text-center">
                                                     <button
-                                                        onClick={() => handlePeriodCellClick(student.code, sub.id)}
+                                                        onClick={() => handlePeriodCellClick(student.code, 'main')}
                                                         className={cn(
-                                                            "w-full h-10 rounded-lg flex items-center justify-center transition-all text-sm font-medium",
-                                                            val
-                                                                ? "bg-blue-100 text-blue-700 font-bold"
-                                                                : "bg-gray-50 text-gray-400 hover:bg-gray-100"
+                                                            "w-full h-10 rounded-lg flex items-center justify-center transition-all text-sm",
+                                                            periodRecords[student.code]?.['main']
+                                                                ? "bg-white border-2 border-blue-500 text-blue-800 font-black shadow-sm"
+                                                                : "bg-gray-50 text-gray-300 hover:bg-gray-100 border border-gray-200"
                                                         )}
                                                     >
-                                                        {val || '-'}
+                                                        {displayVal(periodRecords[student.code]?.['main'])}
                                                     </button>
                                                 </td>
-                                            );
-                                        })}
+                                            )}
 
-                                        {(!column.subPeriods || column.subPeriods.length === 0) && (
-                                            <td className="p-1 border-b text-center">
-                                                <button
-                                                    onClick={() => handlePeriodCellClick(student.code, 'main')}
-                                                    className={cn(
-                                                        "w-full h-10 rounded-lg flex items-center justify-center transition-all text-sm font-medium",
-                                                        periodRecords[student.code]?.['main']
-                                                            ? "bg-blue-100 text-blue-700 font-bold"
-                                                            : "bg-gray-50 text-gray-400 hover:bg-gray-100"
-                                                    )}
-                                                >
-                                                    {periodRecords[student.code]?.['main'] || '-'}
-                                                </button>
-                                            </td>
-                                        )}
-                                    </tr>
-                                ))}
+                                            {/* Cột tổng hàng */}
+                                            {column.subPeriods && column.subPeriods.length > 0 && rowTotal !== null && (
+                                                <td className="p-1 border-b text-center">
+                                                    <div className="w-full h-10 rounded-lg flex items-center justify-center bg-amber-50 text-amber-900 font-black text-sm border-2 border-amber-300">
+                                                        {formatNum(rowTotal)}
+                                                    </div>
+                                                </td>
+                                            )}
+                                            {column.subPeriods && column.subPeriods.length > 0 && rowTotal === null && numericValues.length === 0 && (
+                                                <td className="p-1 border-b" />
+                                            )}
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
 
-                        <div className="mt-4 text-xs text-gray-400 text-center">
+                        {/* Summary Footer */}
+                        {(() => {
+                            if (!column.subPeriods || column.subPeriods.length === 0) return null;
+                            const colTotals = column.subPeriods.map(sp => {
+                                const vals = students.map(s => periodRecords[s.code]?.[sp.id]).filter(v => v !== undefined && v !== '' && !isNaN(Number(v)));
+                                return vals.length > 0 ? vals.reduce((a, v) => a + Number(v), 0) : null;
+                            });
+                            const hasAnyTotal = colTotals.some(t => t !== null);
+                            if (!hasAnyTotal) return null;
+                            const grandTotal = colTotals.filter(t => t !== null).reduce((a, t) => a + t!, 0);
+
+                            return (
+                                <div className="mt-4 bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-sm">
+                                    <div className="text-xs font-black uppercase tracking-wider text-amber-700 mb-3 flex items-center gap-2">
+                                        <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+                                        Tổng kết thu
+                                    </div>
+                                    <div className="flex flex-wrap gap-3">
+                                        {column.subPeriods.map((sp, idx) => (
+                                            colTotals[idx] !== null && (
+                                                <div key={sp.id} className="bg-white rounded-xl px-4 py-2.5 border border-amber-100 text-center min-w-[100px]">
+                                                    <div className="text-[11px] text-gray-500 font-medium mb-1">{sp.label}</div>
+                                                    <div className="text-base font-black text-blue-700">{formatNum(colTotals[idx]!)}</div>
+                                                </div>
+                                            )
+                                        ))}
+                                        <div className="bg-amber-100 rounded-xl px-4 py-2.5 border border-amber-200 text-center min-w-[120px]">
+                                            <div className="text-[11px] text-amber-700 font-black mb-1 uppercase">Tổng tiền</div>
+                                            <div className="text-base font-black text-amber-800">{formatNum(grandTotal)}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        <div className="mt-3 text-xs text-gray-400 text-center">
                             Chạm vào ô để thay đổi trạng thái
                         </div>
                     </div>
@@ -333,14 +492,14 @@ export default function MonitorDetailPage() {
                                             "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors",
                                             isDone ? "bg-blue-200 text-blue-700" : "bg-gray-100 text-gray-400"
                                         )}>
-                                            {student.order || idx + 1}
+                                            {idx + 1}
                                         </div>
                                         <div>
                                             <div className={cn("font-medium", isDone ? "text-blue-900" : "text-gray-700")}>
                                                 {getStudentName(student)}
                                             </div>
                                             {record?.value && (
-                                                <div className="text-xs text-blue-600 font-medium">
+                                                <div className="text-xs text-blue-700 font-bold">
                                                     {record.value}
                                                 </div>
                                             )}
@@ -359,6 +518,15 @@ export default function MonitorDetailPage() {
                     </div>
                 )}
             </div>
+
+            {/* Message Modal */}
+            {currentClassData && (
+                <MonitorMessageModal 
+                    isOpen={isMessageModalOpen}
+                    onClose={() => setIsMessageModalOpen(false)}
+                    data={currentClassData}
+                />
+            )}
         </div>
     );
 }

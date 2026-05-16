@@ -45,6 +45,21 @@ interface ExportData {
     totalStudents?: number; // Sĩ số cấu hình
 }
 
+export interface MonitorExportData {
+    classId: string;
+    className: string;
+    columnId: string;
+    columnName: string;
+    frequency: 'period' | 'one_time' | 'daily';
+    subPeriods?: { id: string; label: string }[];
+    students: {
+        id: string;
+        code: string;
+        name: string;
+        records: Record<string, any>; // periodKey -> value OR 'status' -> 'done'
+    }[];
+}
+
 // --- Helpers ---
 
 // Hàm helper để convert sang border style (Xám nhạt thay vì Đen theo feedback Sếp)
@@ -95,6 +110,21 @@ const getBaseCode = (label: string): string => {
     if (!label) return '';
     const match = label.trim().match(/^([A-Z]+)/);
     return match ? match[1] : label.split('(')[0].trim();
+};
+
+/**
+ * So sánh tên tiếng Việt (sắp xếp theo Tên trước, sau đó mới đến Họ đệm)
+ */
+export const compareVietnameseNames = (nameA: string, nameB: string) => {
+    const a = (nameA || '').trim();
+    const b = (nameB || '').trim();
+    const partsA = a.split(' ');
+    const partsB = b.split(' ');
+    const lastNameA = partsA.pop() || '';
+    const lastNameB = partsB.pop() || '';
+    const cmp = lastNameA.localeCompare(lastNameB, 'vi', { sensitivity: 'base' });
+    if (cmp !== 0) return cmp;
+    return a.localeCompare(b, 'vi', { sensitivity: 'base' });
 };
 
 
@@ -1566,6 +1596,245 @@ export const exportMonthlyReportV2 = async (data: ExportData[], fileName: string
         triggerDownload(blob, `${fileName}_V2_SC.xlsx`);
     } catch (err) {
         console.error("[exportMonthlyReportV2] Lỗi:", err);
+        throw err;
+    }
+};
+
+// --- BÁO CÁO SỔ THEO DÕI ---
+export const exportMonitorBook = async (data: MonitorExportData[], fileName: string) => {
+    const workbook = new ExcelJS.Workbook();
+    const nowStr = format(new Date(), 'dd/MM/yyyy HH:mm');
+
+    data.forEach((classData) => {
+        const sheet = workbook.addWorksheet(classData.className);
+        sheet.views = [{ state: 'frozen', xSplit: 3, ySplit: 5 }];
+
+        const hasSubPeriods = classData.frequency === 'period' && classData.subPeriods && classData.subPeriods.length > 0;
+        const subColsCount = hasSubPeriods ? classData.subPeriods!.length : 1;
+        const totalCols = 3 + subColsCount;
+        const lastColChar = getColumnLabel(totalCols);
+
+        // --- 1. Header Section ---
+        sheet.mergeCells(`A1:${lastColChar}1`);
+        const schoolCell = sheet.getCell('A1');
+        schoolCell.value = "TRƯỜNG THCS TRẦN BỘI CƠ";
+        schoolCell.font = { bold: true, size: 12, name: 'Times New Roman' };
+        schoolCell.alignment = { horizontal: 'left' };
+
+        sheet.mergeCells(`A2:${lastColChar}2`);
+        const titleCell = sheet.getCell('A2');
+        titleCell.value = classData.columnName.toUpperCase();
+        titleCell.font = { bold: true, size: 18, name: 'Times New Roman', color: { argb: 'FF1E40AF' } };
+        titleCell.alignment = { horizontal: 'center' };
+
+        sheet.mergeCells(`A3:${lastColChar}3`);
+        const classInfoCell = sheet.getCell('A3');
+        classInfoCell.value = `Lớp: ${classData.className} - Ngày xuất: ${nowStr}`;
+        classInfoCell.font = { italic: true, size: 11, name: 'Times New Roman' };
+        classInfoCell.alignment = { horizontal: 'center' };
+
+        // --- 2. Table Header ---
+        const hRowIdx = 5;
+        sheet.getColumn(1).width = 8;  // STT
+        sheet.getColumn(2).width = 15; // Mã HS
+        sheet.getColumn(3).width = 30; // Họ và Tên
+
+        const hSTT = sheet.getCell(`A${hRowIdx}`);
+        hSTT.value = "STT";
+        setHeaderStyle(hSTT, 'F3F4F6');
+
+        const hCode = sheet.getCell(`B${hRowIdx}`);
+        hCode.value = "Mã HS";
+        setHeaderStyle(hCode, 'F3F4F6');
+
+        const hName = sheet.getCell(`C${hRowIdx}`);
+        hName.value = "Họ và Tên Học Sinh";
+        setHeaderStyle(hName, 'F3F4F6');
+
+        if (hasSubPeriods) {
+            classData.subPeriods!.forEach((sp, idx) => {
+                const cell = sheet.getRow(hRowIdx).getCell(4 + idx);
+                cell.value = sp.label;
+                setHeaderStyle(cell, 'DBEAFE'); // Light Blue
+                sheet.getColumn(4 + idx).width = 15;
+            });
+        } else {
+            const cell = sheet.getCell(`D${hRowIdx}`);
+            cell.value = "Trạng thái / Ghi chú";
+            setHeaderStyle(cell, 'DBEAFE');
+            sheet.getColumn(4).width = 40;
+        }
+
+        // --- 3. Data Rows ---
+        let currentRowIdx = 6;
+        
+        // Sắp xếp học sinh theo tên Tiếng Việt
+        const sortedStudents = [...classData.students].sort((a, b) => compareVietnameseNames(a.name, b.name));
+        
+        // Kiểm tra xem tất cả giá trị có phải số không (để quyết định thêm cột Tổng)
+        const isNumeric = (v: any) => v !== undefined && v !== '' && !isNaN(Number(v));
+        
+        let allValuesAreNumeric = false;
+        if (hasSubPeriods && classData.subPeriods!.length > 0) {
+            const valuesWithData = sortedStudents.flatMap(s =>
+                classData.subPeriods!.map(sp => s.records[sp.id]).filter(v => v !== undefined && v !== '')
+            );
+            allValuesAreNumeric = valuesWithData.length > 0 && valuesWithData.every(v => isNumeric(v));
+        }
+
+        // Nếu là số → thêm cột Tổng ở cuối header
+        const totalColIdx = 4 + (hasSubPeriods ? classData.subPeriods!.length : 0);
+        const totalColsWithSum = allValuesAreNumeric ? totalCols + 1 : totalCols;
+        const lastColCharFinal = getColumnLabel(totalColsWithSum);
+
+        // Cập nhật lại merge của header nếu cần
+        if (allValuesAreNumeric) {
+            // Unmerge và re-merge các row title để cover thêm cột Tổng
+            ['A1', 'A2', 'A3'].forEach((addr, ri) => {
+                try { sheet.unMergeCells(`${addr}:${getColumnLabel(totalCols)}${ri + 1}`); } catch {}
+                sheet.mergeCells(`${addr}:${lastColCharFinal}${ri + 1}`);
+            });
+
+            const hTotalCell = sheet.getRow(hRowIdx).getCell(totalColIdx);
+            hTotalCell.value = "Tổng";
+            setHeaderStyle(hTotalCell, 'FEF9C3'); // Yellow
+            sheet.getColumn(totalColIdx).width = 16;
+        }
+        
+        // Stats để tổng kết
+        const stats: Record<string, number> = {};
+        const colSums: Record<number, number> = {}; // colIdx -> sum
+        const rowSums: Record<string, number> = {}; // studentCode -> sum
+
+        sortedStudents.forEach((s, sIdx) => {
+            const row = sheet.getRow(currentRowIdx);
+            
+            const cSTT = row.getCell(1);
+            cSTT.value = sIdx + 1;
+            cSTT.alignment = { horizontal: 'center' };
+            cSTT.border = BORDER_STYLE;
+
+            const cCode = row.getCell(2);
+            cCode.value = s.code;
+            cCode.alignment = { horizontal: 'center' };
+            cCode.border = BORDER_STYLE;
+
+            const cName = row.getCell(3);
+            cName.value = s.name;
+            cName.font = { bold: false, name: 'Times New Roman' };
+            cName.border = BORDER_STYLE;
+
+            if (hasSubPeriods) {
+                let rowTotal = 0;
+                classData.subPeriods!.forEach((sp, idx) => {
+                    const cell = row.getCell(4 + idx);
+                    const val = s.records[sp.id];
+                    const numVal = isNumeric(val) ? Number(val) : null;
+                    
+                    cell.value = val !== undefined ? (numVal !== null ? numVal : String(val)) : '';
+                    cell.border = BORDER_STYLE;
+                    cell.alignment = { horizontal: 'center', wrapText: true };
+                    
+                    if (val !== undefined && val !== '') {
+                        if (numVal !== null) {
+                            cell.font = { bold: true, color: { argb: 'FF1E40AF' }, name: 'Times New Roman' };
+                            cell.numFmt = '#,##0'; // Format số: 100000 → 100,000
+                            rowTotal += numVal;
+                            colSums[4 + idx] = (colSums[4 + idx] || 0) + numVal;
+                        }
+                        stats[sp.id] = (stats[sp.id] || 0) + 1;
+                    }
+                });
+
+                if (allValuesAreNumeric) {
+                    const totalCell = row.getCell(totalColIdx);
+                    totalCell.value = rowTotal;
+                    totalCell.border = BORDER_STYLE;
+                    totalCell.alignment = { horizontal: 'center' };
+                    totalCell.font = { bold: true, color: { argb: 'FF1E40AF' }, name: 'Times New Roman' };
+                    totalCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEFCE8' } };
+                    totalCell.numFmt = '#,##0';
+                    rowSums[s.code] = rowTotal;
+                }
+            } else {
+                const cell = row.getCell(4);
+                const status = s.records['status'];
+                const value = s.records['value'];
+                
+                cell.value = status === 'done' ? '✓' : (value || '');
+                cell.border = BORDER_STYLE;
+                cell.alignment = { horizontal: 'center' };
+                if (status === 'done') {
+                    cell.font = { bold: true, color: { argb: 'FF059669' } };
+                    stats['done'] = (stats['done'] || 0) + 1;
+                } else if (value) {
+                    stats['value'] = (stats['value'] || 0) + 1;
+                }
+            }
+
+            currentRowIdx++;
+        });
+
+        // --- 4. Summary Row (Tổng cộng / Tổng tiền) ---
+        const summaryRowIdx = currentRowIdx;
+        sheet.mergeCells(`A${summaryRowIdx}:C${summaryRowIdx}`);
+        const summaryLabelCell = sheet.getCell(`A${summaryRowIdx}`);
+        summaryLabelCell.value = allValuesAreNumeric ? "TỔNG TIỀN" : "TỔNG CỘNG";
+        setHeaderStyle(summaryLabelCell, allValuesAreNumeric ? 'FEF9C3' : 'FEE2E2');
+        summaryLabelCell.font = { bold: true, name: 'Times New Roman', color: { argb: allValuesAreNumeric ? 'FF854D0E' : 'FF991B1B' } };
+
+        if (hasSubPeriods) {
+            classData.subPeriods!.forEach((sp, idx) => {
+                const cell = sheet.getRow(summaryRowIdx).getCell(4 + idx);
+                if (allValuesAreNumeric) {
+                    const sum = colSums[4 + idx] || 0;
+                    cell.value = sum > 0 ? sum : '';
+                    setHeaderStyle(cell, 'FEF9C3');
+                    cell.font = { bold: true, name: 'Times New Roman', color: { argb: 'FF854D0E' } };
+                    cell.numFmt = '#,##0';
+                } else {
+                    const val = stats[sp.id] || 0;
+                    cell.value = val > 0 ? val : '';
+                    setHeaderStyle(cell, 'FEE2E2');
+                    cell.font = { bold: true, name: 'Times New Roman', color: { argb: 'FF991B1B' } };
+                }
+            });
+
+            if (allValuesAreNumeric) {
+                const grandTotal = Object.values(colSums).reduce((a, b) => a + b, 0);
+                const grandCell = sheet.getRow(summaryRowIdx).getCell(totalColIdx);
+                grandCell.value = grandTotal > 0 ? grandTotal : '';
+                setHeaderStyle(grandCell, 'FEF08A');
+                grandCell.font = { bold: true, name: 'Times New Roman', color: { argb: 'FF854D0E' } };
+                grandCell.numFmt = '#,##0';
+            }
+        } else {
+            const cell = sheet.getCell(`D${summaryRowIdx}`);
+            const total = (stats['done'] || 0) + (stats['value'] || 0);
+            cell.value = total > 0 ? total : '';
+            setHeaderStyle(cell, 'FEE2E2');
+            cell.font = { bold: true, name: 'Times New Roman', color: { argb: 'FF991B1B' } };
+        }
+
+        // --- 5. Page Setup for PDF ---
+        sheet.pageSetup = {
+            paperSize: 9, // A4
+            orientation: totalColsWithSum > 6 ? 'landscape' : 'portrait',
+            fitToPage: true,
+            fitToWidth: 1,
+            fitToHeight: 0,
+            margins: { left: 0.5, right: 0.5, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 }
+        };
+    });
+
+
+    try {
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        // Dùng saveAs (file-saver) thay vì triggerDownload để hoạt động ổn định nhiều lần liên tiếp
+        saveAs(blob, `${fileName}_${format(new Date(), 'ddMMyy')}.xlsx`);
+    } catch (err) {
+        console.error("[exportMonitorBook] Lỗi:", err);
         throw err;
     }
 };
