@@ -236,8 +236,9 @@ export interface ReportResult {
 // filterActiveStudentsForReport removed - logic moved to DB RPC getReportStudents
 
 export async function getReports(criteria: ReportCriteria, userRole: string = 'teacher'): Promise<ReportResult> {
+    const timerLabel = `getReports_Timer_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     console.log('=== GET REPORT CALLED ===', criteria, { userRole });
-    console.time('getReports_Timer');
+    console.time(timerLabel);
     const authUser = await getCurrentUser();
     if (!authUser) {
         console.error('[AUTH] No authUser found in getReports. Cookies:', { 
@@ -439,7 +440,7 @@ export async function getReports(criteria: ReportCriteria, userRole: string = 't
     absences.sort((a, b) => compareVietnameseNames(a.studentName, b.studentName));
 
     console.log(`[getReports] Processed ${absences.length} merged records. Totals: P=${totalP}, K=${totalK}, T=${totalT}, VP=${totalVP}, KH=${totalKH}`);
-    console.timeEnd('getReports_Timer');
+    console.timeEnd(timerLabel);
 
     return {
         totalP, totalK, totalV, totalT, totalVP, totalKH,
