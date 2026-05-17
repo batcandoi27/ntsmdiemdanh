@@ -15,8 +15,7 @@ export default function AdminDashboardLayout({
 
     const navItems = [
         { href: "/admin/dashboard", label: "Tổng quan", icon: LayoutDashboard },
-        { href: "/admin/dashboard/warnings", label: "Cảnh báo sớm", icon: AlertTriangle },
-        { href: "/admin/dashboard/trends", label: "Phân tích xu hướng", icon: TrendingUp },
+        { href: "/admin/dashboard/warnings", label: "Phân tích & Cảnh báo", icon: TrendingUp },
     ];
 
     return (
@@ -30,7 +29,7 @@ export default function AdminDashboardLayout({
                                 <ArrowLeft className="w-5 h-5" />
                             </Link>
                             <h1 className="text-xl font-bold text-slate-800">
-                                Trung tâm Điều hành Dữ liệu
+                                Quản trị và Điều hành
                             </h1>
                         </div>
                         <div className="flex items-center space-x-3">

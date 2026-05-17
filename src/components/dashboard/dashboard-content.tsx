@@ -18,12 +18,12 @@ export default function DashboardContent() {
             "grid gap-4 sm:gap-6 w-full max-w-4xl transition-all",
             isMobile ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2"
         )}>
-            {/* 1. Điều Hành Dữ Liệu (Chỉ Admin/BGH) */}
+            {/* 1. Quản Trị và Điều Hành (Chỉ Admin/BGH) */}
             {isAdmin && (
                 <DashboardCard
                     href="/admin/dashboard"
                     icon={<BarChart3 className={cn("w-10 h-10 sm:w-12 sm:h-12 text-white")} />}
-                    title="Điều Hành Dữ Liệu"
+                    title="Quản Trị và Điều Hành"
                     description="Dashboard Phân tích & Cảnh báo"
                     color="bg-sky-500"
                     hoverColor="group-hover:text-sky-700"

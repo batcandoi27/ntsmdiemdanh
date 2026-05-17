@@ -160,14 +160,17 @@ export function GlobalDataFilter({
                     </button>
                 </div>
 
-                {isDirty && (
-                    <button 
-                        onClick={applyFilter}
-                        className="animate-in fade-in zoom-in px-4 py-1.5 bg-blue-600 text-white text-sm font-bold rounded shadow-sm hover:bg-blue-700 transition-all flex items-center gap-1.5"
-                    >
-                        Xem
-                    </button>
-                )}
+                <button 
+                    onClick={applyFilter}
+                    className={cn(
+                        "px-4 py-1.5 text-sm font-bold rounded shadow-sm transition-all flex items-center gap-1.5",
+                        isDirty 
+                            ? "bg-blue-600 text-white hover:bg-blue-700 animate-pulse ring-2 ring-blue-300" 
+                            : "bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200"
+                    )}
+                >
+                    {isDirty ? '🔄 Xem' : '✓ Đã áp dụng'}
+                </button>
             </div>
 
             {/* Compare Toggle */}
