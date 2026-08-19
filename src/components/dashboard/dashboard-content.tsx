@@ -32,7 +32,19 @@ export default function DashboardContent() {
                 />
             )}
 
-            {/* 2. Điểm Danh HS (Tất cả) */}
+            {/* 2. Giáo Viên Chủ Nhiệm (Phân hệ GVCN) */}
+            <DashboardCard
+                href="/homeroom"
+                icon={<School className={cn("w-10 h-10 sm:w-12 sm:h-12 text-white")} />}
+                title="Giáo Viên Chủ Nhiệm"
+                description="Trợ lý Lớp, Nề nếp & In ấn"
+                color="bg-indigo-600"
+                hoverColor="group-hover:text-indigo-700"
+                borderColor="border-b-indigo-700"
+                compact={isMobile}
+            />
+
+            {/* 3. Điểm Danh HS (Tất cả) */}
             <DashboardCard
                 href="/quick-attendance"
                 icon={<Zap className={cn("w-10 h-10 sm:w-12 sm:h-12 text-white")} />}
@@ -44,7 +56,7 @@ export default function DashboardContent() {
                 compact={isMobile}
             />
 
-            {/* 3. Quản Lý Lớp (Tất cả) */}
+            {/* 4. Quản Lý Lớp (Tất cả) */}
             <DashboardCard
                 href="/classes"
                 icon={<School className={cn("w-10 h-10 sm:w-12 sm:h-12 text-white")} />}
