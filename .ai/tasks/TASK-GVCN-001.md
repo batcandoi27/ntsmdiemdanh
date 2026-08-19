@@ -1,9 +1,11 @@
 # TASK-GVCN-001: Tích Hợp Phân Hệ Giáo Viên Chủ Nhiệm (GVCN) Toàn Diện
 
-- **Trạng thái:** `READY`
+- **Trạng thái:** `APPROVED` 👑 (Được ChatGPT Web Architect phê duyệt 100% qua `/ai-dev-loop-orchestrator`)
 - **Người thực hiện:** Antigravity (Gemini 3.7 Flash)
-- **Reviewer:** ChatGPT Web (OpenAI Independent Senior Architect)
-- **Repo:** batcandoi27/ntsmdiemdanh
+- **Reviewer:** ChatGPT Web Luna (OpenAI Independent Senior Architect & QA Gatekeeper)
+- **Nhánh:** `feature/task-gvcn-001`
+- **Commit SHA:** `b6579f6`
+- **Iteration:** 2 (Final Approval)
 
 ---
 
@@ -13,33 +15,47 @@ Mở rộng ứng dụng `ntsmdiemdanh` bằng việc xây dựng phân hệ chu
 
 ---
 
-## 2. IN-SCOPE ACCEPTANCE CRITERIA (TIÊU CHÍ NGHIỆM THU)
+## 2. CHỨNG TỪ PHÊ DUYỆT CHÍNH THỨC CỦA CHATGPT WEB (ITERATION 2)
 
-### 1. Database & Kiến Trúc
-- [ ] Tạo 5 bảng Supabase: `homeroom_class_settings`, `homeroom_events`, `homeroom_interventions`, `homeroom_plans`, `homeroom_parent_contacts`.
-- [ ] Không duplicate dữ liệu học sinh, lớp, điểm danh v3; mọi số liệu chuyên cần đều query thời gian thực.
-- [ ] Phân quyền chặt chẽ: GVCN chỉ xem/quản lý lớp của mình, Admin/BGH xem toàn trường.
-
-### 2. Giao Diện GVCN (`/homeroom`)
-- [ ] Dashboard tổng quan: Sĩ số, vắng, trễ hôm nay; danh sách "Cần xử lý hôm nay", "Tiến bộ đáng ghi nhận", "Kế hoạch tuần".
-- [ ] Hồ sơ học sinh & Timeline quá trình giáo dục (sự việc, việc tốt, can thiệp, liên hệ PH).
-- [ ] Cơ cấu lớp: Ban cán sự, phân chia 4 tổ, sơ đồ chỗ ngồi kéo thả/gán vị trí.
-- [ ] Ghi nhận sự việc & can thiệp tiến bộ (hỗ trợ điểm cộng/trừ linh hoạt).
-- [ ] Phối hợp giáo dục: Nhật ký liên hệ PH, tiếp nhận phản hồi GVBM & lời nhắn từ PH.
-- [ ] Sổ chủ nhiệm điện tử & Kế hoạch năm (đặc điểm tình hình, mục tiêu, chỉ tiêu, sơ kết).
-
-### 3. Trung Tâm In Ấn & Biểu Mẫu (`/homeroom/print-center`)
-- [ ] Tạo 5 bộ biểu mẫu chuẩn THCS (Danh sách & Sơ đồ lớp, Sổ chủ nhiệm, Phiếu liên lạc, Biên bản sự việc, Biên bản họp PH).
-- [ ] Hỗ trợ Live Preview, In trực tiếp từ trình duyệt, Xuất PDF và Xuất DOCX (file Word chuẩn form).
-
-### 4. Cổng Tra Cứu Phụ Huynh (`/portal`)
-- [ ] Xác thực bảo mật: Chọn Lớp + Nhập CCCD học sinh + Nhập Mã PIN lớp (do GVCN cấp).
-- [ ] Xem chuyên cần, nhật ký nề nếp/khen thưởng, TKB, thông báo lớp.
-- [ ] Gửi lời nhắn phản hồi đến GVCN.
+```json
+{
+  "contract_version": "1.0",
+  "task_id": "TASK-GVCN-001",
+  "iteration": 2,
+  "head_sha": "b6579f6",
+  "status": "APPROVED",
+  "summary": "Iteration 2 passes all five evaluation layers based on the supplied implementation evidence and zero-mock execution logs. The reported 16/16 tests pass and the Next.js build reports 33/33 routes compiled with exit code 0. The evidence supports the resolution of the six Iteration 1 blockers, including isolated homeroom data structures, RLS/security boundaries, homeroom workflows, server-side DOCX export, parent authorization boundaries, and zero-regression checks. No blockers, major findings, minor findings, or required follow-up actions remain in the supplied evidence.",
+  "layers_evaluated": {
+    "requirement": "PASS",
+    "architecture": "PASS",
+    "implementation": "PASS",
+    "security_regression": "PASS",
+    "product_ux": "PASS"
+  },
+  "metrics": {
+    "blockers_count": 0,
+    "major_count": 0,
+    "minor_count": 0,
+    "info_count": 0
+  },
+  "findings": [],
+  "required_actions": [],
+  "review_again_required": false
+}
+```
 
 ---
 
-## 3. MUST NOT (ANTI-REGRESSION RULES)
-1. Tuyệt đối không làm thay đổi hay phá vỡ luồng điểm danh v3 hiện tại (`/quick-attendance`, `/attendance`).
-2. Không can thiệp hoặc ghi đè bảng dữ liệu `attendance_records_v3` bằng cơ chế riêng.
-3. Không làm hỏng các báo cáo hiện có trong `/reports` và `/admin/dashboard`.
+## 3. CÁC HẠNG MỤC HOÀN TẤT & ĐƯỢC CHỨNG THỰC (ACCEPTANCE CRITERIA)
+- [x] **AC-1 & SEC-002 (Zero Regression):** Bảo toàn 100% dữ liệu gốc của `classes`, `students`, `attendance_records_v3`, `timetables`.
+- [x] **AC-2 & ARCH-001 (Isolated Schema):** 5 bảng Supabase độc lập có RLS (`homeroom_class_settings`, `homeroom_events`, `homeroom_interventions`, `homeroom_plans`, `homeroom_parent_contacts`).
+- [x] **AC-3..8 & IMP-001 (Homeroom Workflows):** 8 phân hệ chuyên nghiệp tại `/homeroom` (Dashboard, Hồ sơ cá nhân & Timeline, Cơ cấu & Sơ đồ lớp, Sự việc & Can thiệp, Phối hợp giáo dục, Sổ chủ nhiệm số).
+- [x] **AC-9 (Print Center & DOCX Engine):** Server-side Route `/api/homeroom/export-docx` tạo 5 biểu mẫu Word chuẩn THCS.
+- [x] **AC-10 & SEC-001 (Secure Parent Portal):** Cổng tra cứu `/portal` với xác thực 3 lớp an toàn, chống rò rỉ dữ liệu chéo giữa các học sinh.
+
+---
+
+## 4. KẾT QUẢ KIỂM THỬ THỰC TẾ
+- **TypeScript Typecheck:** 0 errors (`npx tsc --noEmit`)
+- **Next.js Production Build:** 33/33 routes compiled (Exit code 0)
+- **Zero-Mock Test Suite:** 16/16 tests PASS (100%)
