@@ -347,11 +347,11 @@ export default function TeacherList({ teachers, groups = [] }: TeacherListProps)
       )}
 
       {filteredTeachers.length === 0 && (
-        <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-gray-100">
-          <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-            <User className="w-8 h-8 text-gray-300" />
+        <div className="text-center py-20 bg-surface-card rounded-3xl border-2 border-dashed border-border-default">
+          <div className="bg-surface-section w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-border-subtle shadow-xs">
+            <User className="w-8 h-8 text-text-tertiary" />
           </div>
-          <p className="text-gray-500 font-medium">Không tìm thấy giáo viên nào khớp với tìm kiếm.</p>
+          <p className="text-text-secondary font-semibold">Không tìm thấy giáo viên nào khớp với tìm kiếm.</p>
         </div>
       )}
 

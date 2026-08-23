@@ -305,10 +305,10 @@ export function ClassList({ initialClasses }: ClassListProps) {
                     ))}
 
                     {classes.length === 0 && (
-                        <div className="col-span-full text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
-                            <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                            <p className="text-gray-500">{viewType === 'personal' ? 'Bạn chưa tạo Lớp Của Tôi nào.' : 'Chưa có lớp học nào.'}</p>
-                            <button onClick={openCreateModal} className={`font-medium hover:underline mt-2 ${viewType === 'personal' ? 'text-purple-600' : 'text-primary'}`}>
+                        <div className="col-span-full text-center py-12 bg-surface-section rounded-2xl border-2 border-dashed border-border-default">
+                            <Users className="w-12 h-12 text-text-tertiary mx-auto mb-3" />
+                            <p className="text-text-secondary font-semibold">{viewType === 'personal' ? 'Bạn chưa tạo Lớp Của Tôi nào.' : 'Chưa có lớp học nào.'}</p>
+                            <button onClick={openCreateModal} className={`font-bold hover:underline mt-2 inline-block ${viewType === 'personal' ? 'text-purple-600' : 'text-primary'}`}>
                                 Tạo lớp đầu tiên ngay
                             </button>
                         </div>

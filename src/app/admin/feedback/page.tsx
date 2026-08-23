@@ -136,8 +136,8 @@ export default function AdminFeedbackPage() {
                     replyingTo ? "hidden lg:flex" : "flex"
                 )}>
                     {filtered.length === 0 ? (
-                        <div className="text-center py-20 bg-gray-50/50 rounded-3xl border-2 border-dashed border-gray-100">
-                            <p className="text-sm font-black text-gray-300 uppercase italic tracking-widest">Không có dữ liệu</p>
+                        <div className="text-center py-20 bg-surface-section rounded-3xl border-2 border-dashed border-border-default">
+                            <p className="text-sm font-black text-text-tertiary uppercase italic tracking-widest">Không có dữ liệu</p>
                         </div>
                     ) : (
                         filtered.map(f => (
@@ -195,13 +195,13 @@ export default function AdminFeedbackPage() {
                     !replyingTo ? "hidden lg:flex items-center justify-center" : "flex"
                 )}>
                     {!replyingTo ? (
-                        <div className="flex flex-col items-center justify-center text-gray-300 gap-6 py-20 animate-in fade-in zoom-in duration-500">
-                            <div className="bg-gray-50 p-10 rounded-[2.5rem] shadow-inner">
-                                <MessageSquare size={80} strokeWidth={1} />
+                        <div className="flex flex-col items-center justify-center text-text-tertiary gap-6 py-20 animate-in fade-in zoom-in duration-500">
+                            <div className="bg-surface-section p-10 rounded-[2.5rem] shadow-xs border border-border-subtle">
+                                <MessageSquare size={80} strokeWidth={1.5} className="text-text-tertiary" />
                             </div>
                             <div className="text-center space-y-1">
-                                <p className="font-black text-lg uppercase tracking-[0.2em]">Khu vực trực chiến</p>
-                                <p className="font-bold italic text-sm">Chọn một tín hiệu từ giáo viên để xử lý</p>
+                                <p className="font-black text-lg uppercase tracking-[0.2em] text-text-primary">Khu vực trực chiến</p>
+                                <p className="font-bold italic text-sm text-text-secondary">Chọn một tín hiệu từ giáo viên để xử lý</p>
                             </div>
                         </div>
                     ) : (

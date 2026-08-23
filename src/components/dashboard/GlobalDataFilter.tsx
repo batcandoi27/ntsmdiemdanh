@@ -4,6 +4,9 @@ import React from 'react';
 import { Calendar as CalendarIcon, Filter, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, addWeeks, subWeeks, addMonths, subMonths, parseISO, format } from "date-fns";
+import { Card } from '@/design-system/components/Card/card';
+import { Select } from '@/design-system/components/Select/select';
+import { Button } from '@/design-system/components/Button/button';
 
 interface FilterOption {
     value: string;
@@ -96,40 +99,54 @@ export function GlobalDataFilter({
     const isDirty = pendingDateRange.start !== dateRange.start || pendingDateRange.end !== dateRange.end || pendingFilterMode !== filterMode;
 
     return (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <Card className="mb-6 p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             
             {/* Period Navigation */}
-            <div className="flex flex-col sm:flex-row items-center gap-2 bg-slate-50 p-1.5 rounded-lg border border-slate-200 w-full md:w-auto">
-                <div className="flex bg-white p-1 rounded border border-slate-200 shadow-sm w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row items-center gap-2 bg-surface-section p-1.5 rounded-xl border border-border-subtle w-full lg:w-auto">
+                <div className="flex bg-surface-card p-1 rounded-lg border border-border-subtle shadow-xs w-full sm:w-auto">
                     <button
                         onClick={() => setMode('WEEK')}
-                        className={cn("flex-1 px-4 py-1.5 text-xs font-bold rounded transition-colors uppercase tracking-wide", pendingFilterMode === 'WEEK' ? "bg-blue-100 text-blue-800 border border-blue-200" : "text-slate-600 hover:bg-slate-100")}
+                        className={cn(
+                            "flex-1 px-3.5 py-1.5 text-xs font-bold rounded-md transition-all uppercase tracking-wide select-none",
+                            pendingFilterMode === 'WEEK'
+                                ? "bg-primary-soft text-primary border border-primary/20 shadow-xs"
+                                : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+                        )}
                     >
                         Tuần
                     </button>
                     <button
                         onClick={() => setMode('MONTH')}
-                        className={cn("flex-1 px-4 py-1.5 text-xs font-bold rounded transition-colors uppercase tracking-wide", pendingFilterMode === 'MONTH' ? "bg-blue-100 text-blue-800 border border-blue-200" : "text-slate-600 hover:bg-slate-100")}
+                        className={cn(
+                            "flex-1 px-3.5 py-1.5 text-xs font-bold rounded-md transition-all uppercase tracking-wide select-none",
+                            pendingFilterMode === 'MONTH'
+                                ? "bg-primary-soft text-primary border border-primary/20 shadow-xs"
+                                : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+                        )}
                     >
                         Tháng
                     </button>
                 </div>
 
-                <div className="flex items-center gap-1 w-full sm:w-auto justify-between sm:justify-center">
-                    <button onClick={() => navigate(-1)} className="p-1.5 rounded-full hover:bg-slate-200 text-slate-600 transition-colors border border-transparent hover:border-slate-300 shrink-0">
+                <div className="flex items-center gap-1.5 w-full sm:w-auto justify-between sm:justify-center">
+                    <button
+                        onClick={() => navigate(-1)}
+                        className="p-1.5 rounded-lg hover:bg-surface-hover text-text-secondary transition-colors border border-transparent hover:border-border-subtle shrink-0"
+                        title="Lùi kỳ trước"
+                    >
                         <ChevronLeft size={18} strokeWidth={2.5} />
                     </button>
 
                     <div 
-                        className="relative flex items-center gap-2 px-2 py-1 text-sm font-black text-slate-800 sm:min-w-[130px] justify-center text-center cursor-pointer hover:bg-slate-200 rounded transition-colors group"
+                        className="relative flex items-center gap-2 px-3 py-1.5 text-sm font-bold text-text-primary sm:min-w-[140px] justify-center text-center cursor-pointer hover:bg-surface-hover rounded-lg transition-colors border border-border-subtle/40 bg-surface-card shadow-xs select-none"
                         onClick={() => {
                             if (dateInputRef.current && typeof dateInputRef.current.showPicker === 'function') {
                                 dateInputRef.current.showPicker();
                             }
                         }}
                     >
-                        {pendingFilterMode === 'WEEK' && <span>T.02-{format(parseISO(pendingDateRange.start), "dd/MM")}</span>}
-                        {pendingFilterMode === 'MONTH' && <span>Th.{format(parseISO(pendingDateRange.start), 'MM/yyyy')}</span>}
+                        {pendingFilterMode === 'WEEK' && <span>T.02 - {format(parseISO(pendingDateRange.start), "dd/MM")}</span>}
+                        {pendingFilterMode === 'MONTH' && <span>Tháng {format(parseISO(pendingDateRange.start), 'MM/yyyy')}</span>}
                         {pendingFilterMode === 'CUSTOM' && <span>Tùy Chọn</span>}
                         
                         {(pendingFilterMode === 'WEEK' || pendingFilterMode === 'MONTH') && (
@@ -151,40 +168,51 @@ export function GlobalDataFilter({
                             />
                         )}
                         {(pendingFilterMode === 'WEEK' || pendingFilterMode === 'MONTH') && (
-                            <CalendarIcon className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-500 opacity-50" />
+                            <CalendarIcon className="w-3.5 h-3.5 text-text-tertiary" />
                         )}
                     </div>
 
-                    <button onClick={() => navigate(1)} className="p-1.5 rounded-full hover:bg-slate-200 text-slate-600 transition-colors border border-transparent hover:border-slate-300 shrink-0">
+                    <button
+                        onClick={() => navigate(1)}
+                        className="p-1.5 rounded-lg hover:bg-surface-hover text-text-secondary transition-colors border border-transparent hover:border-border-subtle shrink-0"
+                        title="Tiến kỳ sau"
+                    >
                         <ChevronRight size={18} strokeWidth={2.5} />
                     </button>
                 </div>
 
-                <button 
+                <Button 
+                    size="sm"
+                    variant={isDirty ? "primary" : "secondary"}
                     onClick={applyFilter}
-                    className={cn(
-                        "px-4 py-1.5 text-sm font-bold rounded shadow-sm transition-all flex items-center gap-1.5",
-                        isDirty 
-                            ? "bg-blue-600 text-white hover:bg-blue-700 animate-pulse ring-2 ring-blue-300" 
-                            : "bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200"
-                    )}
+                    className="w-full sm:w-auto"
                 >
-                    {isDirty ? '🔄 Xem' : '✓ Đã áp dụng'}
-                </button>
+                    {isDirty ? '🔄 Xem dữ liệu' : '✓ Đã áp dụng'}
+                </Button>
             </div>
 
             {/* Compare Toggle */}
             {setCompareMode && (
-                <div className="flex bg-slate-50 p-1 rounded-lg border border-slate-200">
+                <div className="flex bg-surface-section p-1 rounded-xl border border-border-subtle w-full sm:w-auto">
                     <button
                         onClick={() => setCompareMode(false)}
-                        className={cn("px-4 py-1.5 text-xs font-bold rounded transition-colors", !compareMode ? "bg-white text-slate-800 shadow-sm border border-slate-200" : "text-slate-500 hover:text-slate-700")}
+                        className={cn(
+                            "flex-1 sm:flex-none px-3 py-1.5 text-xs font-bold rounded-lg transition-all select-none",
+                            !compareMode
+                                ? "bg-surface-card text-text-primary shadow-xs border border-border-subtle"
+                                : "text-text-secondary hover:text-text-primary"
+                        )}
                     >
                         Số liệu hiện tại
                     </button>
                     <button
                         onClick={() => setCompareMode(true)}
-                        className={cn("px-4 py-1.5 text-xs font-bold rounded transition-colors", compareMode ? "bg-white text-slate-800 shadow-sm border border-slate-200" : "text-slate-500 hover:text-slate-700")}
+                        className={cn(
+                            "flex-1 sm:flex-none px-3 py-1.5 text-xs font-bold rounded-lg transition-all select-none",
+                            compareMode
+                                ? "bg-surface-card text-text-primary shadow-xs border border-border-subtle"
+                                : "text-text-secondary hover:text-text-primary"
+                        )}
                     >
                         So với tuần trước
                     </button>
@@ -192,40 +220,36 @@ export function GlobalDataFilter({
             )}
 
             {/* Selectors */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
                 {gradeOptions && setSelectedGrade && (
-                    <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                        <Filter className="w-4 h-4 text-slate-400 mr-2" />
-                        <select 
+                    <div className="min-w-[140px]">
+                        <Select 
                             value={selectedGrade || ''} 
                             onChange={(e) => setSelectedGrade(e.target.value)}
-                            className="bg-transparent text-sm font-medium text-slate-700 outline-none w-full min-w-[100px]"
-                        >
-                            <option value="">Tất cả khối</option>
-                            {gradeOptions.map(opt => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                            ))}
-                        </select>
+                            leftIcon={<Filter className="w-4 h-4" />}
+                            options={[
+                                { value: '', label: 'Tất cả khối' },
+                                ...gradeOptions
+                            ]}
+                        />
                     </div>
                 )}
 
                 {classOptions && setSelectedClass && (
-                    <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                        <Users className="w-4 h-4 text-slate-400 mr-2" />
-                        <select 
+                    <div className="min-w-[140px]">
+                        <Select 
                             value={selectedClass || ''} 
                             onChange={(e) => setSelectedClass(e.target.value)}
-                            className="bg-transparent text-sm font-medium text-slate-700 outline-none w-full min-w-[100px]"
-                        >
-                            <option value="">Tất cả lớp</option>
-                            {classOptions.map(opt => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                            ))}
-                        </select>
+                            leftIcon={<Users className="w-4 h-4" />}
+                            options={[
+                                { value: '', label: 'Tất cả lớp' },
+                                ...classOptions
+                            ]}
+                        />
                     </div>
                 )}
             </div>
             
-        </div>
+        </Card>
     );
 }

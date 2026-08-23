@@ -1,6 +1,7 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { LucideIcon } from 'lucide-react';
+import { Card } from '@/design-system/components/Card/card';
 
 interface StatCardProps {
     title: string;
@@ -29,36 +30,36 @@ export function StatCard({
     className 
 }: StatCardProps) {
     return (
-        <div className={cn("bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col relative overflow-hidden group", className)}>
+        <Card className={cn("flex flex-col relative overflow-hidden group hover:border-border-strong transition-all duration-200", className)}>
             {/* Background Decoration */}
-            <div className={cn("absolute -right-6 -top-6 w-24 h-24 rounded-full opacity-10 transition-transform group-hover:scale-150", colorClass)} />
+            <div className={cn("absolute -right-6 -top-6 w-24 h-24 rounded-full opacity-10 transition-transform group-hover:scale-150 pointer-events-none", colorClass)} />
             
             <div className="flex justify-between items-start mb-4">
-                <div className={cn("p-3 rounded-xl", colorClass, "bg-opacity-10 text-opacity-100")}>
+                <div className={cn("p-3 rounded-xl shadow-xs", colorClass, "bg-opacity-10 text-opacity-100")}>
                     <Icon className="w-6 h-6" />
                 </div>
                 {trend && (
                     <div className={cn(
-                        "flex items-center space-x-1 text-sm font-semibold px-2 py-1 rounded-full",
-                        trend.isGoodDirection ? "text-emerald-700 bg-emerald-50" : "text-rose-700 bg-rose-50"
+                        "flex items-center space-x-1 text-xs font-bold px-2.5 py-1 rounded-full border shadow-xs select-none",
+                        trend.isGoodDirection ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-rose-700 bg-rose-50 border-rose-200"
                     )}>
                         <span>{trend.isPositive ? '↑' : '↓'}</span>
-                        <span>{Math.abs(trend.value)}{trend.value.toString().includes('.') ? '' : ''}</span>
+                        <span>{Math.abs(trend.value)}</span>
                     </div>
                 )}
             </div>
 
             <div className="flex justify-between items-end">
                 <div>
-                    <h3 className="text-slate-500 font-medium text-sm mb-1">{title}</h3>
+                    <h3 className="text-text-secondary font-semibold text-xs sm:text-sm mb-1">{title}</h3>
                     <div className="flex items-baseline space-x-2">
-                        <span className="text-3xl font-black text-slate-800 tracking-tight">{value}</span>
+                        <span className="text-2xl sm:text-3xl font-black text-text-primary tracking-tight">{value}</span>
                         {subtitle && (
-                            <span className="text-sm text-slate-500 font-medium">{subtitle}</span>
+                            <span className="text-xs sm:text-sm text-text-tertiary font-medium">{subtitle}</span>
                         )}
                     </div>
                     {trend?.label && (
-                        <p className="text-xs text-slate-400 mt-2 font-medium">
+                        <p className="text-[11px] text-text-tertiary mt-2 font-medium">
                             {trend.label}
                         </p>
                     )}
@@ -66,11 +67,11 @@ export function StatCard({
                 
                 {/* Tiny Sparkline */}
                 {sparklineData && sparklineData.length > 1 && (
-                    <div className="w-20 h-10 mb-2 opacity-50 grayscale group-hover:grayscale-0 transition-all duration-300">
+                    <div className="w-20 h-10 mb-1 opacity-70 group-hover:opacity-100 transition-all duration-300">
                         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
                             <polyline 
                                 fill="none" 
-                                stroke={trend?.isGoodDirection ? "#10b981" : "#f43f5e"} 
+                                stroke={trend?.isGoodDirection ? "#059669" : "#E11D48"} 
                                 strokeWidth="4" 
                                 points={sparklineData.map((d, i) => {
                                     const max = Math.max(...sparklineData);
@@ -87,6 +88,6 @@ export function StatCard({
                     </div>
                 )}
             </div>
-        </div>
+        </Card>
     );
 }

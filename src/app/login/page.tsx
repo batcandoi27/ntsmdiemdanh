@@ -317,7 +317,7 @@ export default function LoginPage() {
                                         id="roleSelect"
                                         value={requestedRole}
                                         onChange={(e) => { setRequestedRole(e.target.value); setHomeroomClassId(''); setSubjectClassIds([]); }}
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-blue-700 font-bold hover:bg-blue-50 bg-white transition-all cursor-pointer"
+                                        className="w-full px-4 py-3 rounded-xl border border-border-default focus:border-border-focus focus:ring-4 focus:ring-sky-500/15 outline-none text-text-primary font-bold hover:bg-surface-hover bg-surface-card transition-all cursor-pointer shadow-xs"
                                     >
                                         <option value="teacher">Giáo viên chủ nhiệm (GVCN)</option>
                                         <option value="gvbm">Giáo viên bộ môn (GVBM)</option>
@@ -406,13 +406,13 @@ export default function LoginPage() {
                                                 <select
                                                     value={homeroomClassId}
                                                     onChange={(e) => setHomeroomClassId(e.target.value)}
-                                                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 outline-none text-teal-700 font-bold hover:bg-teal-50 bg-white transition-all cursor-pointer"
+                                                    className="w-full px-4 py-3 rounded-xl border border-border-default focus:border-border-focus focus:ring-4 focus:ring-sky-500/15 outline-none text-text-primary font-bold hover:bg-surface-hover bg-surface-card transition-all cursor-pointer shadow-xs"
                                                 >
                                                     <option value="">-- Chọn lớp chủ nhiệm --</option>
                                                     {Object.entries(classesByGrade).map(([grade, classes]) => (
-                                                        <optgroup key={grade} label={`Khối ${grade}`}>
+                                                        <optgroup key={grade} label={`Khối ${grade}`} className="text-text-secondary bg-surface-section font-bold">
                                                             {classes.map(cls => (
-                                                                <option key={cls.id} value={cls.id}>
+                                                                <option key={cls.id} value={cls.id} className="text-text-primary bg-surface-card font-medium">
                                                                     {cls.name} {cls.teacherName ? `— GV: ${cls.teacherName}` : ''}
                                                                 </option>
                                                             ))}

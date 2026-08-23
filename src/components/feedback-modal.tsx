@@ -138,16 +138,16 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
                             </div>
 
                             <div className="space-y-3">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] px-1">Nội dung phản hồi:</label>
+                                <label className="text-[10px] font-black text-text-secondary uppercase tracking-[0.2em] px-1">Nội dung phản hồi:</label>
                                 <div className="relative group">
                                     <textarea
                                         value={content}
                                         onChange={(e) => setContent(e.target.value)}
-                                        placeholder="Để lại ý kiến của Sếp tại đây..."
-                                        className="w-full h-44 p-5 text-sm font-semibold border-2 border-gray-100 rounded-[1.5rem] focus:ring-0 focus:border-blue-500 outline-none transition-all resize-none bg-gray-50 group-hover:bg-white placeholder:text-gray-300 placeholder:italic shadow-inner"
+                                        placeholder="Để lại ý kiến của bạn tại đây..."
+                                        className="w-full h-44 p-5 text-sm font-semibold border border-border-default rounded-[1.5rem] focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none transition-all resize-none bg-surface-card text-text-primary placeholder:text-text-disabled shadow-xs"
                                         disabled={isSending}
                                     />
-                                    <div className="absolute bottom-4 right-4 text-[10px] font-black text-gray-300 bg-white/80 px-2 py-1 rounded-lg">
+                                    <div className="absolute bottom-4 right-4 text-[10px] font-black text-text-tertiary bg-surface-section/90 px-2 py-1 rounded-lg border border-border-subtle">
                                         {content.trim().length}/10 ký tự
                                     </div>
                                 </div>
@@ -163,7 +163,7 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
                                     )}
                                 >
                                     {isSending ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} strokeWidth={2.5} />}
-                                    GỬI ADMIN CHIẾN NGAY
+                                    GỬI PHẢN HỒI
                                 </button>
                             </div>
                         </div>
@@ -171,16 +171,16 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
                         <div className="space-y-8 py-4 pb-12">
                             {isLoadingHistory ? (
                                 <div className="flex flex-col items-center justify-center py-24 gap-4">
-                                    <Loader2 className="animate-spin text-blue-500 border-4 border-t-transparent rounded-full" size={40} />
-                                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-[0.3em] animate-pulse">Lục lại lịch sử...</span>
+                                    <Loader2 className="animate-spin text-primary" size={40} />
+                                    <span className="text-[11px] font-black text-text-tertiary uppercase tracking-[0.3em] animate-pulse">Lục lại lịch sử...</span>
                                 </div>
                             ) : history.length === 0 ? (
                                 <div className="text-center py-24 animate-in fade-in zoom-in duration-500">
-                                    <div className="bg-gray-50 w-24 h-24 rounded-[2.5rem] flex items-center justify-center mx-auto mb-6 shadow-inner rotate-12">
-                                        <MessageSquare className="text-gray-200 -rotate-12" size={48} strokeWidth={1} />
+                                    <div className="bg-surface-section w-24 h-24 rounded-[2.5rem] flex items-center justify-center mx-auto mb-6 shadow-xs border border-border-subtle rotate-12">
+                                        <MessageSquare className="text-text-tertiary -rotate-12" size={48} strokeWidth={1.5} />
                                     </div>
-                                    <div className="text-gray-300 font-black italic text-sm uppercase tracking-widest">Trống trơn sếp ơi!</div>
-                                    <p className="text-[10px] text-gray-400 font-bold mt-2 uppercase tracking-tight">Hãy để lại dấu ấn đầu tiên tại tab Gửi Góp Ý</p>
+                                    <div className="text-text-primary font-black italic text-sm uppercase tracking-widest">Chưa có phản hồi nào</div>
+                                    <p className="text-xs text-text-secondary font-semibold mt-2 tracking-tight">Hãy để lại dấu ấn đầu tiên tại tab Gửi Góp Ý</p>
                                 </div>
                             ) : (
                                 history.map((h) => (

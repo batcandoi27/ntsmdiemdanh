@@ -410,7 +410,7 @@ export default function HomeroomEventsPage() {
                 ) : (
                   displayedEvents.map((evt) => {
                     const student = students.find(s => s.id === evt.student_id);
-                    const studentName = (student as any)?.full_name || (student as any)?.name || 'Học sinh';
+                    const studentName = (student as any)?.fullName || (student as any)?.full_name || (student as any)?.name || 'Học sinh';
                     const isPositive = evt.type === 'positive';
                     return (
                       <tr key={evt.id} className="hover:bg-slate-50 transition-colors">
@@ -532,7 +532,7 @@ export default function HomeroomEventsPage() {
                   <option value="">-- Chọn học sinh trong lớp --</option>
                   {students.map(st => (
                     <option key={st.id} value={st.id}>
-                      {st.code ? `[${st.code}] ` : ''}{(st as any).full_name || (st as any).name}
+                      {st.code ? `[${st.code}] ` : ''}{(st as any).fullName || (st as any).full_name || (st as any).name}
                     </option>
                   ))}
                 </select>
@@ -659,7 +659,7 @@ export default function HomeroomEventsPage() {
                 >
                   <option value="">-- Chọn học sinh --</option>
                   {students.map(st => (
-                    <option key={st.id} value={st.id}>{(st as any).full_name || (st as any).name}</option>
+                    <option key={st.id} value={st.id}>{(st as any).fullName || (st as any).full_name || (st as any).name}</option>
                   ))}
                 </select>
               </div>

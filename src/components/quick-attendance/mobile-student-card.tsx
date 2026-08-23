@@ -329,7 +329,7 @@ export function MobileStudentCard({
                                                     <span className="text-[10px] text-orange-700 font-medium italic">Chuyển sang cột Phép (P) để theo dõi</span>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <span className={cn("text-xs font-black transition-colors", !localNote.includes('Có bổ sung Phép') ? "text-red-500" : "text-gray-300")}>K</span>
+                                                    <span className={cn("text-xs font-black transition-colors", !localNote.includes('Có bổ sung Phép') ? "text-danger" : "text-text-tertiary")}>K</span>
                                                     <Switch 
                                                         id="bo-sung-p"
                                                         className="data-[state=checked]:bg-blue-500 data-[state=unchecked]:bg-red-500"
@@ -348,7 +348,7 @@ export function MobileStudentCard({
                                                             }
                                                         }}
                                                     />
-                                                    <span className={cn("text-xs font-black transition-colors", localNote.includes('Có bổ sung Phép') ? "text-blue-600" : "text-gray-300")}>P</span>
+                                                    <span className={cn("text-xs font-black transition-colors", localNote.includes('Có bổ sung Phép') ? "text-primary" : "text-text-tertiary")}>P</span>
                                                 </div>
                                             </div>
                                         )}

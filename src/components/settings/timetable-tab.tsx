@@ -105,16 +105,16 @@ export function TimetableTab() {
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm flex flex-col md:flex-row min-h-[500px]">
                 {/* Left Sidebar: Class List */}
                 <div className="w-full md:w-64 border-r border-gray-200 bg-gray-50/50 flex flex-col">
-                    <div className="p-4 border-b border-gray-200 bg-white">
-                        <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Chọn Lớp</label>
+                    <div className="p-4 border-b border-border-subtle bg-surface-card">
+                        <label className="text-xs font-bold text-text-secondary uppercase mb-2 block">Chọn Lớp</label>
                         <select
                             value={selectedClassId}
                             onChange={(e) => setSelectedClassId(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm font-bold text-blue-700 bg-white hover:bg-blue-50 transition-colors"
+                            className="w-full px-3.5 py-2.5 bg-surface-card border border-border-default rounded-xl focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none text-sm font-bold text-text-primary hover:bg-surface-hover transition-colors shadow-xs cursor-pointer"
                         >
                             <option value="">-- Chọn lớp --</option>
                             {classes.map(c => (
-                                <option key={c.id} value={c.id}>{c.name}</option>
+                                <option key={c.id} value={c.id} className="text-text-primary bg-surface-card">{c.name}</option>
                             ))}
                         </select>
                     </div>
@@ -229,7 +229,7 @@ export function TimetableTab() {
                                                                     ))}
                                                                 </div>
                                                             ) : (
-                                                                <div className="h-full flex items-center justify-center text-gray-300 text-xs italic">-</div>
+                                                                <div className="h-full flex items-center justify-center text-text-disabled text-xs font-bold">-</div>
                                                             )}
                                                         </div>
                                                     );
@@ -260,7 +260,7 @@ export function TimetableTab() {
                                                                     ))}
                                                                 </div>
                                                             ) : (
-                                                                <div className="h-full flex items-center justify-center text-gray-300 text-xs italic">-</div>
+                                                                <div className="h-full flex items-center justify-center text-text-disabled text-xs font-bold">-</div>
                                                             )}
                                                         </div>
                                                     );

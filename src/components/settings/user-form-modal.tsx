@@ -118,29 +118,29 @@ export function UserFormModal({ isOpen, onClose, onSuccess, userToEdit, classes 
                         )}
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Vai trò</label>
+                            <label className="block text-xs sm:text-sm font-bold text-text-primary mb-1.5">Vai trò</label>
                             <select
                                 value={role}
                                 onChange={(e) => setRole(e.target.value as UserRole)}
-                                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none bg-white text-blue-700 font-bold hover:bg-blue-50 transition-colors"
+                                className="w-full px-4 py-2.5 bg-surface-card border border-border-default rounded-xl focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none text-text-primary font-bold hover:bg-surface-hover transition-colors shadow-xs cursor-pointer text-sm"
                             >
-                                <option value="teacher">Giáo viên</option>
-                                <option value="class_monitor">Ban cán sự lớp</option>
-                                <option value="supervisor">Giám thị</option>
-                                <option value="principal">Hiệu trưởng / PHT</option>
-                                <option value="admin">Admin</option>
+                                <option value="teacher" className="text-text-primary bg-surface-card font-medium">Giáo viên</option>
+                                <option value="class_monitor" className="text-text-primary bg-surface-card font-medium">Ban cán sự lớp</option>
+                                <option value="supervisor" className="text-text-primary bg-surface-card font-medium">Giám thị</option>
+                                <option value="principal" className="text-text-primary bg-surface-card font-medium">Hiệu trưởng / PHT</option>
+                                <option value="admin" className="text-text-primary bg-surface-card font-medium">Admin</option>
                             </select>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Họ và tên hiển thị</label>
+                            <label className="block text-xs sm:text-sm font-bold text-text-primary mb-1.5">Họ và tên hiển thị</label>
                             <input
                                 type="text"
                                 required
                                 value={displayName}
                                 onChange={(e) => setDisplayName(e.target.value)}
                                 placeholder="VD: Cô Lê Hạnh Nhàn"
-                                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                                className="w-full px-4 py-2.5 bg-surface-card border border-border-default rounded-xl focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none text-text-primary placeholder:text-text-disabled shadow-xs text-sm font-medium"
                             />
                         </div>
 

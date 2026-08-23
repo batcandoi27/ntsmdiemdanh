@@ -192,29 +192,29 @@ export function UserManagementTab() {
                         placeholder="Tìm theo tên, email, mã HS..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                        className="w-full pl-10 pr-4 py-2.5 bg-surface-card border border-border-default rounded-xl focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none text-text-primary placeholder:text-text-disabled shadow-xs text-sm font-medium"
                     />
                 </div>
                 <select
                     value={roleFilter}
                     onChange={(e) => setRoleFilter(e.target.value as any)}
-                    className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none bg-white text-blue-700 font-bold hover:bg-blue-50 transition-colors"
+                    className="px-4 py-2.5 bg-surface-card border border-border-default rounded-xl focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none text-text-primary font-bold hover:bg-surface-hover transition-colors shadow-xs cursor-pointer text-sm"
                 >
-                    <option value="all">Tất cả vai trò</option>
-                    <option value="admin">Admin</option>
-                    <option value="principal">Hiệu trưởng / PHT</option>
-                    <option value="supervisor">Giám thị</option>
-                    <option value="teacher">Giáo viên</option>
-                    <option value="class_monitor">Ban cán sự</option>
+                    <option value="all" className="text-text-primary bg-surface-card">Tất cả vai trò</option>
+                    <option value="admin" className="text-text-primary bg-surface-card">Admin</option>
+                    <option value="principal" className="text-text-primary bg-surface-card">Hiệu trưởng / PHT</option>
+                    <option value="supervisor" className="text-text-primary bg-surface-card">Giám thị</option>
+                    <option value="teacher" className="text-text-primary bg-surface-card">Giáo viên</option>
+                    <option value="class_monitor" className="text-text-primary bg-surface-card">Ban cán sự</option>
                 </select>
                 <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value as any)}
-                    className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none bg-white text-blue-700 font-bold hover:bg-blue-50 transition-colors"
+                    className="px-4 py-2.5 bg-surface-card border border-border-default rounded-xl focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none text-text-primary font-bold hover:bg-surface-hover transition-colors shadow-xs cursor-pointer text-sm"
                 >
-                    <option value="all">Tất cả trạng thái</option>
-                    <option value="active">Đang hoạt động</option>
-                    <option value="pending">Chờ duyệt</option>
+                    <option value="all" className="text-text-primary bg-surface-card">Tất cả trạng thái</option>
+                    <option value="active" className="text-text-primary bg-surface-card">Đang hoạt động</option>
+                    <option value="pending" className="text-text-primary bg-surface-card">Chờ duyệt</option>
                 </select>
             </div>
 

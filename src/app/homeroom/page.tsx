@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import { HomeroomTooltip } from '@/components/homeroom/homeroom-tooltip';
 import { PresetPicker } from '@/components/homeroom/preset-picker';
 import { HomeroomPresetItem } from '@/types/homeroom-presets';
+import { ThemedStatCard, ThemedCard } from '@/design-system';
 import toast from 'react-hot-toast';
 
 export default function HomeroomDashboard() {
@@ -170,57 +171,36 @@ export default function HomeroomDashboard() {
         </div>
       </div>
 
-      {/* 2. 4 THẺ THỐNG KÊ CHUYÊN CẦN THỜI GIAN THỰC */}
+      {/* 2. 4 THẺ THỐNG KÊ CHUYÊN CẦN THỜI GIAN THỰC (Tự động lên màu Pastel theo index) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Thẻ 1: Sĩ số */}
-        <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-xs font-bold text-slate-500 block mb-1">Sĩ số lớp</span>
-            <span className="text-2xl font-black text-slate-900">{total}</span>
-            <span className="text-[11px] text-slate-400 block mt-0.5">học sinh</span>
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-            <Users className="w-6 h-6" />
-          </div>
-        </div>
-
-        {/* Thẻ 2: Có mặt % */}
-        <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-xs font-bold text-slate-500 block mb-1">Có mặt hôm nay</span>
-            <span className="text-2xl font-black text-emerald-600">{present}</span>
-            <span className="text-[11px] text-emerald-700 font-semibold block mt-0.5">({rate}%)</span>
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-            <UserCheck className="w-6 h-6" />
-          </div>
-        </div>
-
-        {/* Thẻ 3: Đi muộn */}
-        <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-xs font-bold text-slate-500 block mb-1">Đi muộn</span>
-            <span className="text-2xl font-black text-amber-600">{late}</span>
-            <span className="text-[11px] text-slate-400 block mt-0.5">lượt hôm nay</span>
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
-            <Clock className="w-6 h-6" />
-          </div>
-        </div>
-
-        {/* Thẻ 4: Vắng */}
-        <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-xs font-bold text-slate-500 block mb-1">Vắng hôm nay</span>
-            <span className="text-2xl font-black text-rose-600">{absent}</span>
-            <span className="text-[11px] text-rose-700 font-medium block mt-0.5">
-              ({dashboardData?.excusedAbsenceCount || 0} phép / {dashboardData?.unexcusedAbsenceCount || 0} KP)
-            </span>
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center">
-            <UserX className="w-6 h-6" />
-          </div>
-        </div>
+        <ThemedStatCard
+          index={0}
+          label="Sĩ số lớp"
+          value={total}
+          subtext="học sinh"
+          icon={Users}
+        />
+        <ThemedStatCard
+          index={1}
+          label="Có mặt hôm nay"
+          value={present}
+          subtext={`(${rate}%)`}
+          icon={UserCheck}
+        />
+        <ThemedStatCard
+          index={2}
+          label="Đi muộn"
+          value={late}
+          subtext="lượt hôm nay"
+          icon={Clock}
+        />
+        <ThemedStatCard
+          index={3}
+          label="Vắng hôm nay"
+          value={absent}
+          subtext={`(${dashboardData?.excusedAbsenceCount || 0} phép / ${dashboardData?.unexcusedAbsenceCount || 0} KP)`}
+          icon={UserX}
+        />
       </div>
 
       {/* 3. GRID 2 CỘT: CẦN THEO DÕI & TIẾN BỘ NỔI BẬT */}

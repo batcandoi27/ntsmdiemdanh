@@ -277,17 +277,19 @@ export default function HomeroomPrintCenterPage() {
 
           {/* Selector chọn học sinh cho phiếu cá nhân */}
           {(selectedTemplateId === 'template_student_report' || selectedTemplateId === 'template_incident') && (
-            <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm space-y-2">
-              <label className="font-bold text-xs text-slate-800 block">
+            <div className="bg-surface-card p-4 rounded-2xl border border-border-default shadow-xs space-y-2">
+              <label className="font-bold text-xs text-text-primary block">
                 Chọn học sinh để xuất biểu mẫu:
               </label>
               <select
                 value={selectedStudentId}
                 onChange={(e) => setSelectedStudentId(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold focus:ring-2 focus:ring-indigo-500/20"
+                className="w-full bg-surface-card border border-border-default rounded-xl px-3 py-2 text-xs text-text-primary font-bold focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none transition-all shadow-xs cursor-pointer"
               >
                 {students.map(st => (
-                  <option key={st.id} value={st.id}>{(st as any).full_name || (st as any).name}</option>
+                  <option key={st.id} value={st.id} className="text-text-primary bg-surface-card font-bold">
+                    {st.fullName || (st as any).name || (st as any).full_name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -344,8 +346,8 @@ export default function HomeroomPrintCenterPage() {
                         <tr key={s.id}>
                           <td className="border border-slate-300 p-1.5 text-center">{idx + 1}</td>
                           <td className="border border-slate-300 p-1.5 font-mono">{s.code || ''}</td>
-                          <td className="border border-slate-300 p-1.5 font-bold">{(s as any).full_name || (s as any).name}</td>
-                          <td className="border border-slate-300 p-1.5 text-center">{(s as any).gender === 'female' || (s as any).gender === 'F' || (s as any).gender === 'Nữ' ? 'Nữ' : 'Nam'}</td>
+                          <td className="border border-slate-300 p-1.5 font-bold">{s.fullName || (s as any).full_name || (s as any).name}</td>
+                          <td className="border border-slate-300 p-1.5 text-center">{(s as any).gender === 'female' || (s as any).gender === 'F' || (s as any).gender === 'Nữ' || s.gender === 'Nữ' ? 'Nữ' : 'Nam'}</td>
                           <td className="border border-slate-300 p-1.5">{s.birthday || ''}</td>
                           <td className="border border-slate-300 p-1.5">{(s as any).parent_phone || (s as any).phone || ''}</td>
                         </tr>
@@ -392,7 +394,7 @@ export default function HomeroomPrintCenterPage() {
                 <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-between">
                   <div>
                     <h4 className="font-black text-indigo-900 text-sm">
-                      {(selectedStudent as any)?.full_name || (selectedStudent as any)?.name}
+                      {selectedStudent?.fullName || (selectedStudent as any)?.full_name || (selectedStudent as any)?.name}
                     </h4>
                     <p className="text-slate-500 font-medium">Lớp: {className} • Mã HS: {selectedStudent?.code || '—'}</p>
                   </div>

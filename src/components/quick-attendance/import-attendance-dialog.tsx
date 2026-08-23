@@ -687,29 +687,29 @@ export function ImportAttendanceDialog({ open, onOpenChange, onSuccess }: Import
                                                                                     </span>
                                                                                     <div className="flex-1 relative">
                                                                                         <select
-                                                                                            className="w-full h-8 px-3 text-sm font-bold border border-red-200 rounded-md bg-white text-blue-700 hover:text-blue-800 focus:ring-blue-500 focus:border-blue-500 cursor-pointer appearance-none outline-none hover:bg-blue-50 transition-colors shadow-sm"
+                                                                                            className="w-full h-9 px-3 text-xs sm:text-sm font-bold border border-danger/40 rounded-xl bg-surface-card text-primary focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus cursor-pointer outline-none hover:bg-surface-hover transition-colors shadow-xs"
                                                                                             value=""
                                                                                             onChange={(e) => resolveStudent(rIdx, cIdx, s.id, e.target.value)}
                                                                                         >
                                                                                             <option value="" disabled>-- Chọn tên HS --</option>
                                                                                             {cls.allClassStudents.map(dbs => (
-                                                                                                <option key={dbs.code} value={dbs.code} className="text-gray-900 font-medium bg-white">{dbs.fullName}</option>
+                                                                                                <option key={dbs.code} value={dbs.code} className="text-text-primary font-medium bg-surface-card">{dbs.fullName}</option>
                                                                                             ))}
                                                                                         </select>
-                                                                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-red-400">
+                                                                                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-danger">
                                                                                             <PlusCircle className="w-4 h-4" />
                                                                                         </div>
                                                                                     </div>
                                                                                 </div>
                                                                                 {s.suggestedMatches && s.suggestedMatches.length > 0 && (
                                                                                     <div className="flex items-start gap-2 pl-6 pb-1">
-                                                                                        <span className="text-xs text-red-500/70 font-semibold mt-1 flex-shrink-0">Gợi ý:</span>
+                                                                                        <span className="text-xs text-danger font-semibold mt-1 flex-shrink-0">Gợi ý:</span>
                                                                                         <div className="flex gap-2 flex-wrap">
                                                                                             {s.suggestedMatches.map((sug: any) => (
                                                                                                 <button
                                                                                                     key={sug.code}
                                                                                                     onClick={() => resolveStudent(rIdx, cIdx, s.id, sug.code)}
-                                                                                                    className="px-2.5 py-1 text-xs font-bold bg-white text-blue-700 border border-blue-300 rounded-md hover:bg-blue-50 hover:border-blue-500 transition-colors shadow-sm"
+                                                                                                    className="px-2.5 py-1 text-xs font-bold bg-surface-card text-primary border border-primary/30 rounded-lg hover:bg-primary-soft transition-colors shadow-xs"
                                                                                                 >
                                                                                                     {sug.fullName}
                                                                                                 </button>
@@ -720,10 +720,10 @@ export function ImportAttendanceDialog({ open, onOpenChange, onSuccess }: Import
                                                                             </div>
                                                                         ) : (
                                                                             <div className="flex-1 flex items-center gap-2">
-                                                                                 <span className="text-sm font-black text-gray-800 flex-1">
+                                                                                 <span className="text-sm font-black text-text-primary flex-1">
                                                                                     {s.studentName}
                                                                                     {s.missedPeriods && s.missedPeriods.length > 0 && (
-                                                                                        <span className="ml-2 text-[10px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded border border-red-100">
+                                                                                        <span className="ml-2 text-[10px] font-bold text-danger bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
                                                                                             T{s.missedPeriods.join(', ')}
                                                                                         </span>
                                                                                     )}
@@ -733,7 +733,7 @@ export function ImportAttendanceDialog({ open, onOpenChange, onSuccess }: Import
 
                                                                         <div className="w-32">
                                                                             <select
-                                                                                className="w-full h-8 px-2 text-xs font-bold rounded-md bg-white text-blue-700 border border-gray-200 hover:bg-blue-50 transition-colors cursor-pointer"
+                                                                                className="w-full h-9 px-2 text-xs font-bold rounded-xl bg-surface-card text-text-primary border border-border-default hover:bg-surface-hover hover:border-border-strong transition-colors cursor-pointer shadow-xs"
                                                                                 value={s.status}
                                                                                 onChange={(e) => {
                                                                                     const newData = [...processedData];

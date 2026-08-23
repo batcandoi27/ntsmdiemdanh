@@ -168,16 +168,16 @@ export function BankSettingsModal({ isOpen, onClose, userId, isSchoolAdmin }: Ba
                 placeholder="🔍 Tìm nhanh tên ngân hàng (VD: MB, VCB, Techcombank, BIDV...)"
                 value={bankSearch}
                 onChange={e => setBankSearch(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs mb-2 focus:ring-2 focus:ring-indigo-500/20"
+                className="w-full bg-surface-card border border-border-default rounded-xl px-3.5 py-2 text-xs mb-2 text-text-primary placeholder:text-text-disabled focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none shadow-xs"
               />
 
               <select
                 value={bankId}
                 onChange={e => setBankId(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
+                className="w-full bg-surface-card border border-border-default rounded-xl px-3.5 py-2.5 font-bold text-text-primary focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none shadow-xs cursor-pointer text-sm"
               >
                 {filteredBanks.map(b => (
-                  <option key={b.id} value={b.id}>
+                  <option key={b.id} value={b.id} className="text-text-primary bg-surface-card">
                     {b.shortName} ({b.code}) - {b.name}
                   </option>
                 ))}

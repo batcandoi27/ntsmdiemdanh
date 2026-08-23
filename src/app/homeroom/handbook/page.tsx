@@ -24,6 +24,7 @@ import { Student } from '@/types/models';
 import { cn } from '@/lib/utils';
 import { HomeroomTooltip } from '@/components/homeroom/homeroom-tooltip';
 import { HANDBOOK_TEMPLATES } from '@/types/homeroom-presets';
+import { ThemedCard } from '@/design-system';
 import toast from 'react-hot-toast';
 
 export default function HomeroomHandbookPage() {
@@ -192,17 +193,15 @@ export default function HomeroomHandbookPage() {
         </div>
       </div>
 
-      {/* 2. FORM PHẦN I: ĐẶC ĐIỂM TÌNH HÌNH LỚP */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-        <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-          <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-            <BookOpen className="w-4 h-4" />
-          </div>
-          <h3 className="font-black text-slate-900 text-sm uppercase tracking-wider">
-            Phần I: Đặc Điểm Tình Hình Lớp
-          </h3>
-        </div>
-
+      {/* 2. FORM PHẦN I: ĐẶC ĐIỂM TÌNH HÌNH LỚP (Auto Theme Index 0 - Sky) */}
+      <ThemedCard
+        index={0}
+        badgeText="PHẦN I: ĐẶC ĐIỂM TÌNH HÌNH LỚP"
+        icon={BookOpen}
+        showNumber={true}
+        innerContainer={true}
+        className="space-y-4"
+      >
         {/* 1. Thuận lợi */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -214,7 +213,7 @@ export default function HomeroomHandbookPage() {
                   key={idx}
                   type="button"
                   onClick={() => setFormContent(prev => ({ ...prev, strengths: stText }))}
-                  className="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-[10px] font-bold text-slate-600 transition-colors"
+                  className="px-2 py-0.5 rounded-lg bg-sky-100/70 hover:bg-sky-600 hover:text-white text-[10px] font-bold text-sky-900 transition-colors"
                 >
                   Mẫu {idx + 1}
                 </button>
@@ -226,12 +225,12 @@ export default function HomeroomHandbookPage() {
             value={formContent.strengths}
             onChange={(e) => setFormContent({ ...formContent, strengths: e.target.value })}
             placeholder="Nêu các điểm thuận lợi về ý thức học sinh, sự quan tâm của phụ huynh..."
-            className="w-full bg-slate-50 border border-slate-300 rounded-2xl p-3.5 text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
+            className="w-full bg-slate-50 border border-slate-300 rounded-2xl p-3.5 text-xs text-slate-900 font-medium focus:bg-white focus:ring-4 focus:ring-sky-500/15 focus:border-sky-500 outline-none transition-all"
           />
         </div>
 
         {/* 2. Khó khăn */}
-        <div className="space-y-2">
+        <div className="space-y-2 pt-2 border-t border-slate-100">
           <div className="flex items-center justify-between">
             <label className="font-bold text-xs text-slate-700">2. Khó khăn:</label>
             <div className="flex items-center gap-1">
@@ -241,7 +240,7 @@ export default function HomeroomHandbookPage() {
                   key={idx}
                   type="button"
                   onClick={() => setFormContent(prev => ({ ...prev, challenges: chText }))}
-                  className="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-[10px] font-bold text-slate-600 transition-colors"
+                  className="px-2 py-0.5 rounded-lg bg-sky-100/70 hover:bg-sky-600 hover:text-white text-[10px] font-bold text-sky-900 transition-colors"
                 >
                   Mẫu {idx + 1}
                 </button>
@@ -253,22 +252,20 @@ export default function HomeroomHandbookPage() {
             value={formContent.challenges}
             onChange={(e) => setFormContent({ ...formContent, challenges: e.target.value })}
             placeholder="Nêu các khó khăn về học lực, nề nếp, hoàn cảnh học sinh..."
-            className="w-full bg-slate-50 border border-slate-300 rounded-2xl p-3.5 text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
+            className="w-full bg-slate-50 border border-slate-300 rounded-2xl p-3.5 text-xs text-slate-900 font-medium focus:bg-white focus:ring-4 focus:ring-sky-500/15 focus:border-sky-500 outline-none transition-all"
           />
         </div>
-      </div>
+      </ThemedCard>
 
-      {/* 3. FORM PHẦN II: MỤC TIÊU & CHỈ TIÊU PHẤN ĐẤU */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-        <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-          <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-            <Award className="w-4 h-4" />
-          </div>
-          <h3 className="font-black text-slate-900 text-sm uppercase tracking-wider">
-            Phần II: Mục Tiêu & Chỉ Tiêu Phấn Đấu
-          </h3>
-        </div>
-
+      {/* 3. FORM PHẦN II: MỤC TIÊU & CHỈ TIÊU PHẤN ĐẤU (Auto Theme Index 1 - Emerald) */}
+      <ThemedCard
+        index={1}
+        badgeText="PHẦN II: MỤC TIÊU & CHỈ TIÊU PHẤN ĐẤU"
+        icon={Award}
+        showNumber={true}
+        innerContainer={true}
+        className="space-y-4"
+      >
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="font-bold text-xs text-slate-700 block mb-1">Chỉ tiêu Học lực Tốt/Khá (%)</label>
@@ -279,7 +276,7 @@ export default function HomeroomHandbookPage() {
                 ...formContent,
                 targets: { ...formContent.targets, academic_good_percent: parseInt(e.target.value) || 0 }
               })}
-              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold"
+              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold focus:bg-white focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500 outline-none transition-all"
             />
           </div>
 
@@ -292,7 +289,7 @@ export default function HomeroomHandbookPage() {
                 ...formContent,
                 targets: { ...formContent.targets, conduct_good_percent: parseInt(e.target.value) || 0 }
               })}
-              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold"
+              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold focus:bg-white focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500 outline-none transition-all"
             />
           </div>
 
@@ -306,13 +303,22 @@ export default function HomeroomHandbookPage() {
                 targets: { ...formContent.targets, competitions: e.target.value }
               })}
               placeholder="VD: Tập thể Lớp Xuất Sắc"
-              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold"
+              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold focus:bg-white focus:ring-4 focus:ring-emerald-500/15 focus:border-emerald-500 outline-none transition-all"
             />
           </div>
         </div>
+      </ThemedCard>
 
-        {/* 3. Biện pháp thực hiện */}
-        <div className="space-y-2 pt-2">
+      {/* 4. FORM PHẦN III: BIỆN PHÁP THỰC HIỆN (Auto Theme Index 2 - Amber) */}
+      <ThemedCard
+        index={2}
+        badgeText="PHẦN III: BIỆN PHÁP THỰC HIỆN"
+        icon={Sparkles}
+        showNumber={true}
+        innerContainer={true}
+        className="space-y-4"
+      >
+        <div className="space-y-2">
           <div className="flex items-center justify-between">
             <label className="font-bold text-xs text-slate-700">Các biện pháp thực hiện chính:</label>
             <div className="flex items-center gap-1">
@@ -322,7 +328,7 @@ export default function HomeroomHandbookPage() {
                   key={idx}
                   type="button"
                   onClick={() => setFormContent(prev => ({ ...prev, measures: msText }))}
-                  className="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-[10px] font-bold text-slate-600 transition-colors"
+                  className="px-2 py-0.5 rounded-lg bg-amber-100/70 hover:bg-amber-600 hover:text-white text-[10px] font-bold text-amber-900 transition-colors"
                 >
                   Mẫu {idx + 1}
                 </button>
@@ -334,10 +340,10 @@ export default function HomeroomHandbookPage() {
             value={formContent.measures}
             onChange={(e) => setFormContent({ ...formContent, measures: e.target.value })}
             placeholder="Nêu các giải pháp nâng cao chất lượng học tập, rèn luyện nề nếp..."
-            className="w-full bg-slate-50 border border-slate-300 rounded-2xl p-3.5 text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
+            className="w-full bg-slate-50 border border-slate-300 rounded-2xl p-3.5 text-xs text-slate-900 font-medium focus:bg-white focus:ring-4 focus:ring-amber-500/15 focus:border-amber-500 outline-none transition-all"
           />
         </div>
-      </div>
+      </ThemedCard>
     </div>
   );
 }

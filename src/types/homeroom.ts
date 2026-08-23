@@ -122,7 +122,8 @@ export interface ClassStructure {
 export interface HomeroomClassSettings {
   class_id: string;
   pin_code: string; // Mã PIN 6 số cho phụ huynh tra cứu (mặc định '123456')
-  seating_chart: SeatingChartConfig;
+  seating_chart: SeatingChartConfig | any;
+  classroom_layout?: any; // Seat Layout Editor ClassroomLayout
   class_structure: ClassStructure;
   announcement?: string; // Thông báo chung của GVCN gửi phụ huynh
   updated_at: string;

@@ -187,9 +187,9 @@ export default function HomeroomCooperationPage() {
         ) : (
           filteredContacts.map((item) => {
             const student = students.find(s => s.id === item.student_id);
-            const studentName = (student as any)?.full_name || (student as any)?.name || 'Học sinh';
+            const studentName = student?.fullName || (student as any)?.full_name || (student as any)?.name || 'Học sinh';
             return (
-              <div key={item.id} className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-2">
+              <div key={item.id} className="bg-surface-card p-5 rounded-3xl border border-border-default shadow-xs space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
@@ -197,12 +197,12 @@ export default function HomeroomCooperationPage() {
                        item.contact_type === 'meeting' ? '🤝 Gặp trực tiếp' :
                        item.contact_type === 'portal_feedback' ? '💬 Cổng phụ huynh' : '📝 Phản hồi'}
                     </span>
-                    <span className="font-bold text-slate-900 text-sm">{studentName}</span>
+                    <span className="font-bold text-text-primary text-sm">{studentName}</span>
                   </div>
-                  <span className="text-[11px] text-slate-400">{item.contact_date}</span>
+                  <span className="text-[11px] text-text-tertiary font-mono">{item.contact_date}</span>
                 </div>
 
-                <p className="text-xs text-slate-800 font-medium">{item.content}</p>
+                <p className="text-xs text-text-primary font-medium">{item.content}</p>
                 {item.agreed_solution && (
                   <p className="text-[11px] text-emerald-700 font-medium">↳ Thống nhất: {item.agreed_solution}</p>
                 )}
@@ -237,7 +237,7 @@ export default function HomeroomCooperationPage() {
                 >
                   <option value="">-- Chọn học sinh --</option>
                   {students.map(st => (
-                    <option key={st.id} value={st.id}>{(st as any).full_name || (st as any).name}</option>
+                    <option key={st.id} value={st.id}>{st.fullName || (st as any).full_name || (st as any).name}</option>
                   ))}
                 </select>
               </div>

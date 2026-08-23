@@ -76,7 +76,7 @@ export function ClassForm({ initialData, onSubmit, onCancel }: ClassFormProps) {
                         value={formData.name}
                         onChange={handleChange}
                         placeholder="VD: 6A1"
-                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                        className="w-full px-3.5 py-2.5 bg-surface-card border border-border-default rounded-xl text-text-primary focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none shadow-xs font-semibold text-sm"
                         required
                     />
                 </div>
@@ -84,26 +84,26 @@ export function ClassForm({ initialData, onSubmit, onCancel }: ClassFormProps) {
 
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Khối</label>
+                    <label className="text-xs sm:text-sm font-bold text-text-primary">Khối</label>
                     <select
                         name="grade"
                         value={formData.grade}
                         onChange={handleChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-blue-700 font-bold bg-white focus:ring-2 focus:ring-primary focus:border-primary outline-none hover:bg-blue-50 transition-colors"
+                        className="w-full px-3.5 py-2.5 bg-surface-card border border-border-default rounded-xl text-text-primary font-bold focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none shadow-xs cursor-pointer text-sm"
                     >
                         {[6, 7, 8, 9, 10, 11, 12].map(g => (
-                            <option key={g} value={g}>Khối {g}</option>
+                            <option key={g} value={g} className="text-text-primary bg-surface-card font-bold">Khối {g}</option>
                         ))}
                     </select>
                 </div>
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">GVCN</label>
+                    <label className="text-xs sm:text-sm font-bold text-text-primary">GVCN</label>
                     <input
                         name="teacherName"
                         value={formData.teacherName}
                         onChange={handleChange}
                         placeholder="Nhập tên GVCN"
-                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                        className="w-full px-3.5 py-2.5 bg-surface-card border border-border-default rounded-xl text-text-primary focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none shadow-xs font-semibold text-sm"
                     />
                 </div>
             </div>

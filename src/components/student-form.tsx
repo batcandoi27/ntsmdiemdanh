@@ -122,16 +122,16 @@ export function StudentForm({ classId, initialData, onSubmit, onCancel }: Studen
                         value={formData.birthday}
                         onChange={handleChange}
                         placeholder="dd/mm/yyyy"
-                        className="w-full px-3 py-2 border rounded-lg"
+                        className="w-full px-3.5 py-2.5 bg-surface-card border border-border-default rounded-xl text-text-primary focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none shadow-xs font-medium text-sm"
                     />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Giới tính</label>
+                    <label className="text-xs sm:text-sm font-bold text-text-primary">Giới tính</label>
                     <select
                         name="gender"
                         value={formData.gender}
                         onChange={handleChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-blue-700 font-bold bg-white focus:ring-2 focus:ring-blue-500 outline-none hover:bg-blue-50 transition-colors"
+                        className="w-full px-3.5 py-2.5 bg-surface-card border border-border-default rounded-xl text-text-primary font-bold focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none shadow-xs cursor-pointer text-sm"
                     >
                         <option value="Nam">Nam</option>
                         <option value="Nữ">Nữ</option>
@@ -141,21 +141,21 @@ export function StudentForm({ classId, initialData, onSubmit, onCancel }: Studen
 
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Mã Định Danh</label>
+                    <label className="text-xs sm:text-sm font-bold text-text-primary">Mã Định Danh</label>
                     <input
                         name="govId"
                         value={formData.govId}
                         onChange={handleChange}
-                        className="w-full px-3 py-2 border rounded-lg"
+                        className="w-full px-3.5 py-2.5 bg-surface-card border border-border-default rounded-xl text-text-primary focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none shadow-xs font-medium text-sm"
                     />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Trạng thái</label>
+                    <label className="text-xs sm:text-sm font-bold text-text-primary">Trạng thái</label>
                     <select
                         name="status"
                         value={formData.status}
                         onChange={handleChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-blue-700 font-bold bg-white focus:ring-2 focus:ring-blue-500 outline-none hover:bg-blue-50 transition-colors"
+                        className="w-full px-3.5 py-2.5 bg-surface-card border border-border-default rounded-xl text-text-primary font-bold focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none shadow-xs cursor-pointer text-sm"
                     >
                         <option value="Đang học">Đang học</option>
                         <option value="Nghỉ học">Nghỉ học</option>
@@ -165,17 +165,17 @@ export function StudentForm({ classId, initialData, onSubmit, onCancel }: Studen
             </div>
 
             {(formData.status === 'Nghỉ học' || formData.status === 'Chuyển trường') && (
-                <div className="space-y-2 p-3 bg-red-50 border border-red-100 rounded-lg">
-                    <label className="text-sm font-bold text-red-700">Ngày bắt đầu nghỉ học <span className="text-red-500">*</span></label>
+                <div className="space-y-2 p-3.5 bg-rose-50 border border-rose-200 rounded-xl">
+                    <label className="text-xs sm:text-sm font-bold text-danger">Ngày bắt đầu nghỉ học <span className="text-danger">*</span></label>
                     <input
                         type="date"
                         name="statusDate"
                         value={formData.statusDate ? formData.statusDate.slice(0, 10) : ''}
                         onChange={handleChange}
-                        className="w-full px-3 py-2 border border-red-200 rounded-lg text-red-900 bg-white"
+                        className="w-full px-3.5 py-2 bg-surface-card border border-rose-300 rounded-xl text-danger font-bold focus:ring-4 focus:ring-rose-500/15 outline-none shadow-xs text-sm"
                         required
                     />
-                    <p className="text-xs text-red-600 mt-1">Thông tin này rất quan trọng để hệ thống lọc báo cáo chính xác.</p>
+                    <p className="text-xs text-danger font-medium mt-1">Thông tin này rất quan trọng để hệ thống lọc báo cáo chính xác.</p>
                 </div>
             )}
 

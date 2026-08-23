@@ -94,18 +94,18 @@ export default function CreateEventModal({ isOpen, onClose, organizerId }: Creat
                 required
                 type="text"
                 placeholder="Ví dụ: Họp Hội đồng Sư phạm tháng 10"
-                className="mt-2 w-full px-5 py-4 rounded-2xl border-2 border-gray-100 focus:border-orange-500 transition-all outline-none font-bold text-gray-800 placeholder:text-gray-300"
+                className="mt-2 w-full px-5 py-3.5 rounded-2xl border border-border-default focus:border-border-focus focus:ring-4 focus:ring-sky-500/15 transition-all outline-none font-bold text-text-primary placeholder:text-text-disabled bg-surface-card shadow-xs"
                 value={formData.title}
                 onChange={e => setFormData({ ...formData, title: e.target.value })}
               />
             </label>
 
             <label className="block">
-              <span className="text-sm font-black text-gray-700 ml-1 uppercase tracking-wider">Mô tả chi tiết</span>
+              <span className="text-sm font-black text-text-primary ml-1 uppercase tracking-wider">Mô tả chi tiết</span>
               <textarea
                 placeholder="Nội dung tóm tắt buổi họp..."
                 rows={3}
-                className="mt-2 w-full px-5 py-4 rounded-2xl border-2 border-gray-100 focus:border-orange-500 transition-all outline-none font-medium text-gray-700 placeholder:text-gray-300 resize-none"
+                className="mt-2 w-full px-5 py-3.5 rounded-2xl border border-border-default focus:border-border-focus focus:ring-4 focus:ring-sky-500/15 transition-all outline-none font-medium text-text-primary placeholder:text-text-disabled bg-surface-card shadow-xs resize-none"
                 value={formData.description}
                 onChange={e => setFormData({ ...formData, description: e.target.value })}
               />

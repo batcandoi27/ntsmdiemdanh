@@ -220,8 +220,8 @@ export function TeacherAttendanceReportModal({
                   )}
                 </div>
                 
-                <div className="mt-10 pt-6 border-t border-dashed text-center">
-                   <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest italic">Tạo bởi Hệ thống TAS v2.0</p>
+                <div className="mt-10 pt-6 border-t border-dashed border-border-default text-center">
+                   <p className="text-[9px] font-black text-text-tertiary uppercase tracking-widest italic">Tạo bởi Hệ thống TAS v2.0</p>
                 </div>
               </div>
 

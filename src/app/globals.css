@@ -2,24 +2,101 @@
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
 
-/* Cache buster: 1713437600 */
-
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  /* Surface Hierarchy (Tier 1 to Tier 4) */
+  --bg-app: #F4F6FA;
+  --surface-card: #FFFFFF;
+  --surface-section: #F8FAFC;
+  --surface-input: #FFFFFF;
+  --surface-hover: #F1F5F9;
+  --surface-selected: #E0F2FE;
+  --surface-subtle: #F8FAFC;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Typography Colors (WCAG AA compliant high contrast) */
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-tertiary: #64748B;
+  --text-disabled: #94A3B8;
+  --text-inverse: #FFFFFF;
+
+  /* Borders & Dividers */
+  --border-subtle: #E2E8F0;
+  --border-default: #CBD5E1;
+  --border-strong: #94A3B8;
+  --border-focus: #0284C7;
+
+  /* Brand / Semantic Colors */
+  --primary: #0284C7;
+  --primary-hover: #0369A1;
+  --primary-active: #075985;
+  --primary-soft: #E0F2FE;
+  --primary-foreground: #FFFFFF;
+
+  --success: #059669;
+  --success-hover: #047857;
+  --success-soft: #D1FAE5;
+  --success-foreground: #FFFFFF;
+
+  --warning: #D97706;
+  --warning-hover: #B45309;
+  --warning-soft: #FEF3C7;
+  --warning-foreground: #FFFFFF;
+
+  --danger: #E11D48;
+  --danger-hover: #BE123C;
+  --danger-soft: #FFE4E6;
+  --danger-foreground: #FFFFFF;
+
+  --info: #0EA5E9;
+  --info-hover: #0284C7;
+  --info-soft: #E0F2FE;
+  --info-foreground: #FFFFFF;
+
+  /* Legacy variables compatibility */
+  --background: var(--bg-app);
+  --foreground: var(--text-primary);
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--text-primary);
+  background-color: var(--bg-app);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Accessible focus ring utility */
+.focus-ring {
+  @apply outline-none ring-2 ring-sky-500/30 border-sky-600 ring-offset-1;
+}
+
+/* Surface Utility Classes */
+.ds-surface-card {
+  background-color: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04);
+}
+
+.ds-surface-section {
+  background-color: var(--surface-section);
+  border: 1px solid var(--border-subtle);
+}
+
+.ds-surface-input {
+  background-color: var(--surface-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+}
+
+.ds-surface-input:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.ds-surface-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.2);
 }
 
 /* Hide scrollbar for horizontal scroll containers */
@@ -31,4 +108,7 @@ body {
   display: none;
 }
 
-/* Cache buster: 1713437599 */
+/* Safe area padding for mobile notches / home indicators */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 16px);
+}

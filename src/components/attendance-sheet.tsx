@@ -696,18 +696,18 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                     {/* Period Selector Button (Mobile Friendly) */}
                     <button
                         onClick={() => setIsPeriodSheetOpen(true)}
-                        className="py-2 px-3 border border-blue-200 rounded-lg text-sm font-semibold text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none bg-white md:hidden flex items-center gap-1.5 active:scale-95 transition-transform"
+                        className="py-2 px-3.5 border border-border-default rounded-xl text-xs sm:text-sm font-bold text-text-primary focus:ring-2 focus:ring-sky-500/20 outline-none bg-surface-card md:hidden flex items-center gap-1.5 active:scale-95 transition-all shadow-xs"
                     >
-                        <Clock size={16} className="text-blue-500" />
+                        <Clock size={16} className="text-primary" />
                         <span>{period ? `Tiết ${period}` : 'Cả buổi'}</span>
-                        <ChevronDown size={14} className="text-gray-400" />
+                        <ChevronDown size={14} className="text-text-tertiary" />
                     </button>
 
                     {/* Desktop Select */}
                     <select
                         value={period || ''}
                         onChange={(e) => { triggerHapticFeedback(); setPeriod(e.target.value ? Number(e.target.value) : null); }}
-                        className="hidden md:block py-2 pl-3 pr-8 border border-blue-200 rounded-lg text-sm font-bold text-blue-700 hover:bg-blue-50 focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white cursor-pointer transition-colors"
+                        className="hidden md:block py-2 pl-3 pr-8 border border-border-default rounded-xl text-sm font-bold text-text-primary hover:bg-surface-hover hover:border-border-strong focus:border-border-focus focus:ring-4 focus:ring-sky-500/15 outline-none appearance-none bg-surface-card cursor-pointer transition-all shadow-xs"
                     >
                         <option value="">Cả buổi</option>
                         <option value="1">Tiết 1</option>
@@ -718,12 +718,12 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                     </select>
 
                     <div className="relative">
-                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" size={16} />
                         <input
                             type="date"
                             value={date}
                             onChange={(e) => setDate(e.target.value)}
-                            className="pl-9 pr-3 py-2 border border-blue-200 rounded-lg text-sm font-semibold text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                            className="py-2 pl-9 pr-3 border border-border-default rounded-xl text-xs sm:text-sm font-bold text-text-primary bg-surface-card hover:border-border-strong focus:border-border-focus focus:ring-4 focus:ring-sky-500/15 outline-none transition-all shadow-xs"
                         />
                     </div>
                 </div>

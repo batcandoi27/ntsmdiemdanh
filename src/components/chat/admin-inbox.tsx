@@ -200,9 +200,9 @@ export function AdminInbox() {
                                                             });
                                                         }
                                                     }}
-                                                    className="p-1 text-gray-300 hover:text-red-500 transition-colors"
+                                                    className="p-1 text-text-tertiary hover:text-danger transition-colors"
                                                 >
-                                                    <Trash2 size={12} />
+                                                    <Trash2 size={14} />
                                                 </button>
                                             </div>
                                         </div>
@@ -298,12 +298,12 @@ export function AdminInbox() {
                         </form>
                     </>
                 ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-8 text-center">
-                        <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                            <MessageSquare size={40} className="text-gray-300" />
+                    <div className="flex-1 flex flex-col items-center justify-center text-text-secondary p-8 text-center bg-surface-card">
+                        <div className="w-20 h-20 bg-surface-section rounded-full flex items-center justify-center mb-4 border border-border-subtle shadow-xs">
+                            <MessageSquare size={40} className="text-text-tertiary" />
                         </div>
-                        <h3 className="text-xl font-bold text-gray-600 mb-2">Hộp thư hỗ trợ</h3>
-                        <p className="max-w-xs">Chọn một cuộc trò chuyện từ bên trái để bắt đầu phản hồi giáo viên và học sinh.</p>
+                        <h3 className="text-xl font-bold text-text-primary mb-2">Hộp thư hỗ trợ</h3>
+                        <p className="max-w-xs text-text-secondary text-sm font-medium">Chọn một cuộc trò chuyện từ bên trái để bắt đầu phản hồi giáo viên và học sinh.</p>
                     </div>
                 )}
             </div>

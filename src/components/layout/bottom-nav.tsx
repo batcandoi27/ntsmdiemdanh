@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Users, BarChart3, Settings, UserCircle } from 'lucide-react';
+import { Home, Users, BarChart3, Settings, UserCircle, BookOpen } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { cn } from '@/lib/utils';
 
@@ -17,42 +17,41 @@ export function BottomNav() {
             name: 'Cài Đặt',
             href: '/settings',
             icon: Settings,
-            show: true // Bất kì ai đăng nhập cũng có icon này, hoặc giới hạn tuỳ permissions
+            show: ['admin', 'principal'].includes(appUser.role),
         },
         {
             name: 'Quản Lý Lớp',
             href: '/classes',
             icon: Users,
-            show: ['admin', 'principal', 'supervisor', 'teacher'].includes(appUser.role)
+            show: ['admin', 'principal', 'supervisor', 'teacher'].includes(appUser.role),
         },
         {
-            // Center floating-like action for attendance
             name: 'Điểm Danh',
             href: '/quick-attendance',
             icon: Home,
-            show: true
+            show: true,
         },
         {
-            name: 'Báo cáo',
+            name: 'Sổ Theo Dõi',
+            href: '/monitor',
+            icon: BookOpen,
+            show: ['admin', 'principal', 'supervisor', 'teacher'].includes(appUser.role),
+        },
+        {
+            name: 'Báo Cáo',
             href: '/reports',
             icon: BarChart3,
-            show: ['admin', 'principal', 'supervisor', 'teacher'].includes(appUser.role)
+            show: ['admin', 'principal', 'supervisor', 'teacher'].includes(appUser.role),
         },
-        {
-            name: 'Tài Khoản',
-            href: '/login', // Nơi có tuỳ chọn Logout
-            icon: UserCircle,
-            show: true
-        }
     ];
 
-    const visibleItems = navItems.filter(item => item.show);
+    const visibleItems = navItems.filter((item) => item.show);
 
     return (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 pb-safe pb-2 px-2 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
-            <nav className="flex justify-around items-center h-16">
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-surface-card/95 backdrop-blur-md border-t border-border-subtle z-50 pb-safe pb-2 px-3 shadow-dropdown">
+            <nav className="flex justify-around items-center h-16 max-w-md mx-auto">
                 {visibleItems.map((item) => {
-                    const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+                    const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
                     const Icon = item.icon;
 
                     return (
@@ -60,20 +59,26 @@ export function BottomNav() {
                             key={item.href}
                             href={item.href}
                             className={cn(
-                                "flex flex-col items-center justify-center w-full h-full space-y-1 rounded-xl transition-all active:scale-95",
-                                isActive ? "text-blue-600" : "text-gray-400 hover:text-gray-600"
+                                "flex flex-col items-center justify-center w-full h-full space-y-1 rounded-2xl transition-all duration-150 active:scale-95 select-none",
+                                isActive ? "text-primary" : "text-text-tertiary hover:text-text-primary"
                             )}
                         >
-                            <div className={cn(
-                                "p-1.5 rounded-full transition-colors",
-                                isActive ? "bg-blue-50" : "bg-transparent"
-                            )}>
-                                <Icon size={20} className={cn(isActive && "fill-blue-100")} />
+                            <div
+                                className={cn(
+                                    "p-1.5 rounded-xl transition-all duration-150",
+                                    isActive
+                                        ? "bg-primary-soft text-primary shadow-xs border border-primary/20"
+                                        : "bg-transparent"
+                                )}
+                            >
+                                <Icon size={20} className={cn(isActive && "stroke-[2.5]")} />
                             </div>
-                            <span className={cn(
-                                "text-[10px] font-bold tracking-tight transition-colors",
-                                isActive ? "text-blue-600" : "text-gray-500"
-                            )}>
+                            <span
+                                className={cn(
+                                    "text-[10px] tracking-tight transition-colors leading-tight",
+                                    isActive ? "font-bold text-primary" : "font-semibold text-text-secondary"
+                                )}
+                            >
                                 {item.name}
                             </span>
                         </Link>

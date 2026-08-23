@@ -154,7 +154,7 @@ export default function AttendanceReportList({
                           ? `${sBtnConfig.bgColor} ${sBtnConfig.color} border-current shadow-sm` 
                           : isPendingStatus
                           ? "bg-amber-100 text-amber-600 border-amber-300 animate-pulse"
-                          : "bg-gray-50 text-gray-300 border-transparent hover:bg-gray-100 hover:text-gray-400"
+                          : "bg-surface-section text-text-tertiary border-border-subtle hover:bg-surface-hover hover:text-text-primary"
                       )}
                     >
                       <SIcon className={cn("w-5 h-5", isUpdating && "animate-pulse")} />
@@ -168,9 +168,9 @@ export default function AttendanceReportList({
       </div>
 
       {filteredData.length === 0 && (
-        <div className="text-center py-20 bg-white rounded-[40px] border-2 border-dashed border-gray-100">
-           <AlertCircle className="w-12 h-12 text-gray-200 mx-auto mb-4" />
-           <p className="text-gray-400 font-bold">Không tìm thấy giáo viên nào.</p>
+        <div className="text-center py-20 bg-surface-section rounded-[32px] border-2 border-dashed border-border-default">
+           <AlertCircle className="w-12 h-12 text-text-tertiary mx-auto mb-4" />
+           <p className="text-text-secondary font-bold">Không tìm thấy giáo viên nào.</p>
         </div>
       )}
 

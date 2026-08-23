@@ -249,38 +249,40 @@ export default function ParentPortalPage() {
 
             <form onSubmit={handleVerify} className="space-y-4 text-xs sm:text-sm">
               <div>
-                <label className="font-bold text-slate-700 block mb-1.5">1. Chọn lớp của con</label>
-                <select
-                  value={selectedClassId}
-                  onChange={(e) => setSelectedClassId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-900 font-bold focus:ring-2 focus:ring-indigo-500/20"
-                >
-                  {classes.map(c => (
-                    <option key={c.id} value={c.id}>Lớp {c.name}</option>
-                  ))}
-                </select>
+                <label className="font-bold text-text-primary block mb-1.5">1. Chọn lớp của con</label>
+                <div className="relative">
+                  <select
+                    value={selectedClassId}
+                    onChange={(e) => setSelectedClassId(e.target.value)}
+                    className="w-full bg-surface-card border border-border-default rounded-xl px-3.5 py-2.5 text-text-primary font-bold focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none transition-all shadow-xs cursor-pointer"
+                  >
+                    {classes.map(c => (
+                      <option key={c.id} value={c.id} className="text-text-primary bg-surface-card">Lớp {c.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div>
-                <label className="font-bold text-slate-700 block mb-1.5">2. Mã học sinh, Mã định danh hoặc CCCD</label>
+                <label className="font-bold text-text-primary block mb-1.5">2. Mã học sinh, Mã định danh hoặc CCCD</label>
                 <input
                   type="text"
                   placeholder="VD: Mã định danh, 8A13_1 hoặc CCCD..."
                   value={studentIdInput}
                   onChange={(e) => setStudentIdInput(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/20"
+                  className="w-full bg-surface-card border border-border-default rounded-xl px-3.5 py-2.5 text-text-primary placeholder:text-text-disabled font-medium focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none transition-all shadow-xs"
                   required
                 />
               </div>
 
               <div>
-                <label className="font-bold text-slate-700 block mb-1.5">3. Mã PIN lớp (do GVCN cấp)</label>
+                <label className="font-bold text-text-primary block mb-1.5">3. Mã PIN lớp (do GVCN cấp)</label>
                 <input
                   type="password"
                   placeholder="Mã PIN bảo mật 6 số (mặc định 123456)..."
                   value={pinCodeInput}
                   onChange={(e) => setPinCodeInput(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/20"
+                  className="w-full bg-surface-card border border-border-default rounded-xl px-3.5 py-2.5 text-text-primary placeholder:text-text-disabled font-medium focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none transition-all shadow-xs"
                   required
                 />
               </div>

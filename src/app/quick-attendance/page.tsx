@@ -75,19 +75,24 @@ export default function QuickAttendancePage() {
     useEffect(() => {
         // Tải từ cache trước để hiển thị tức thì
         const cached = getLocalCache<Class[]>('classes_list');
-        if (cached) setClasses(cached);
+        if (cached && Array.isArray(cached)) setClasses(cached);
 
         // Luôn fetch mới để cập nhật dữ liệu ngầm
         getAllClasses().then(data => {
-            setClasses(data);
-            setLocalCache('classes_list', data);
+            if (data && Array.isArray(data)) {
+                setClasses(data);
+                setLocalCache('classes_list', data);
+            }
+        }).catch(err => {
+            console.error('Failed to load classes:', err);
         });
     }, []);
 
-    const filteredClasses = classes.filter(c => {
-        if (grade === -1) return myClassIds.includes(c.id);
+    const filteredClasses = (classes || []).filter(c => {
+        if (!c) return false;
+        if (grade === -1) return (myClassIds || []).includes(c.id);
         return c.grade === grade;
-    }).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    }).sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { numeric: true }));
 
     // Auto-select first class when filtered list changes
     useEffect(() => {
@@ -441,16 +446,16 @@ export default function QuickAttendancePage() {
                                     <select
                                         value={quickClassId}
                                         onChange={(e) => { setQuickClassId(e.target.value); setShowSheet(false); }}
-                                        className="w-full bg-white text-blue-700 text-xl font-bold py-4 pl-6 pr-12 rounded-xl appearance-none cursor-pointer focus:ring-4 focus:ring-yellow-400 outline-none shadow-lg group-hover:bg-blue-50 transition-colors"
+                                        className="w-full bg-surface-card text-text-primary text-lg sm:text-xl font-black py-4 pl-6 pr-12 rounded-2xl border-2 border-white/60 appearance-none cursor-pointer focus:ring-4 focus:ring-amber-400 focus:border-amber-400 outline-none shadow-dropdown group-hover:bg-surface-hover transition-all"
                                     >
                                         {filteredClasses.map(c => (
-                                            <option key={c.id} value={c.id}>
+                                            <option key={c.id} value={c.id} className="text-text-primary bg-surface-card font-bold py-2">
                                                 Lớp {c.name} - GV: {c.teacherName || 'Chưa cập nhật'}
                                             </option>
                                         ))}
-                                        {filteredClasses.length === 0 && <option value="">Không có dữ liệu lớp</option>}
+                                        {filteredClasses.length === 0 && <option value="" className="text-text-tertiary">Không có dữ liệu lớp</option>}
                                     </select>
-                                    <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" size={24} />
+                                    <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" size={24} />
                                 </div>
                             </div>
 

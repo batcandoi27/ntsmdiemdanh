@@ -200,8 +200,8 @@ export default function MonitorDashboardPage() {
                                             <span className="font-bold text-green-600">{item.attendanceCount.Present}</span>
                                         </div>
                                         <div className="flex items-center justify-between text-sm">
-                                            <span className="text-gray-500 font-medium">Vắng:</span>
-                                            <span className={cn("font-bold", item.attendanceCount.TotalAbsent > 0 ? "text-red-500" : "text-gray-300")}>
+                                            <span className="text-text-secondary font-medium">Vắng:</span>
+                                            <span className={cn("font-bold", item.attendanceCount.TotalAbsent > 0 ? "text-danger" : "text-text-tertiary")}>
                                                 {item.attendanceCount.TotalAbsent}
                                             </span>
                                         </div>

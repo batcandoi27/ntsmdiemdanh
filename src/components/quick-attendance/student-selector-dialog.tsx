@@ -14,6 +14,7 @@ import { Search, Loader2, Save, X, CheckCircle2, Edit3, Plus, ChevronDown, Chevr
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
 
 const triggerHapticFeedback = () => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -221,15 +222,14 @@ export function StudentSelectorDialog({
                         <Label className="text-blue-900 font-black text-[10px] uppercase">Môn học</Label>
                         <span className="text-[8px] text-blue-600 font-medium italic">Chọn để thêm vào note</span>
                     </div>
-                    <select 
-                        value={selectedSubject}
-                        onChange={(e) => setSelectedSubject(e.target.value)}
-                        className="flex-1 bg-white border border-blue-100 rounded-lg px-2 py-1.5 text-xs font-bold text-blue-800 outline-none focus:ring-2 focus:ring-blue-100"
-                    >
-                        {subjectOptions.map(opt => (
-                            <option key={opt} value={opt}>{opt}</option>
-                        ))}
-                    </select>
+                    <div className="flex-1">
+                        <Select 
+                            value={selectedSubject}
+                            onChange={(e) => setSelectedSubject(e.target.value)}
+                            options={subjectOptions.map(opt => ({ value: opt, label: opt }))}
+                            className="text-xs font-bold py-1 min-h-[36px]"
+                        />
+                    </div>
                 </div>
                 {targetStatus === 'K' && (
                     <div className="flex items-center justify-between p-2.5 bg-orange-50 border border-orange-100 rounded-xl mb-2 shadow-sm">
@@ -238,7 +238,7 @@ export function StudentSelectorDialog({
                             <span className="text-[9px] text-orange-700 font-medium italic">Chuyển sang cột Phép (P) để theo dõi</span>
                         </div>
                         <div className="flex items-center gap-2">
-                             <span className={cn("text-[10px] font-black transition-colors", !Object.values(notes).some(v => v && v.includes('Có bổ sung Phép')) ? "text-red-500" : "text-gray-300")}>K</span>
+                             <span className={cn("text-[10px] font-black transition-colors", !Object.values(notes).some(v => v && v.includes('Có bổ sung Phép')) ? "text-danger" : "text-text-tertiary")}>K</span>
                              <Switch 
                                 id="bo-sung-p-desktop"
                                 className="data-[state=checked]:bg-blue-500 data-[state=unchecked]:bg-red-500"
@@ -269,7 +269,7 @@ export function StudentSelectorDialog({
                                     }
                                 }}
                             />
-                            <span className={cn("text-[10px] font-black transition-colors", Object.values(notes).some(v => v && v.includes('Có bổ sung Phép')) ? "text-blue-600" : "text-gray-300")}>P</span>
+                            <span className={cn("text-[10px] font-black transition-colors", Object.values(notes).some(v => v && v.includes('Có bổ sung Phép')) ? "text-primary" : "text-text-tertiary")}>P</span>
                         </div>
                     </div>
                 )}
@@ -455,7 +455,7 @@ export function StudentSelectorDialog({
                                     });
                                 }}
                             />
-                            <Edit3 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within/input:text-blue-400 transition-colors" size={12} />
+                            <Edit3 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-tertiary group-focus-within/input:text-primary transition-colors" size={14} />
                         </div>
                     </div>
                 </div>

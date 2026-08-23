@@ -362,37 +362,37 @@ function AddAttendanceModal({ classes, onClose, onRefresh }: { classes: Class[],
 
                 <div className="p-5 space-y-4">
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1.5 uppercase tracking-wide">Chọn Lớp</label>
+                        <label className="block text-xs sm:text-sm font-bold text-text-primary mb-1.5 uppercase tracking-wide">Chọn Lớp</label>
                         <select
                             value={selectedClassId}
                             onChange={(e) => setSelectedClassId(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-blue-700 font-bold bg-white focus:ring-2 focus:ring-blue-500 outline-none hover:bg-blue-50 transition-colors"
+                            className="w-full px-3.5 py-2.5 bg-surface-card border border-border-default rounded-xl text-text-primary font-bold focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none shadow-xs cursor-pointer text-sm"
                         >
                             <option value="">-- Chọn 1 lớp --</option>
-                            {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            {classes.map(c => <option key={c.id} value={c.id} className="text-text-primary bg-surface-card">{c.name}</option>)}
                         </select>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1.5 uppercase tracking-wide">Ngày Điểm Danh</label>
+                        <label className="block text-xs sm:text-sm font-bold text-text-primary mb-1.5 uppercase tracking-wide">Ngày Điểm Danh</label>
                         <input
                             type="date"
                             value={date}
                             onChange={(e) => setDate(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold text-black"
+                            className="w-full px-3.5 py-2.5 bg-surface-card border border-border-default rounded-xl text-text-primary font-bold focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none shadow-xs text-sm"
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1.5 uppercase tracking-wide">Học Sinh</label>
+                        <label className="block text-xs sm:text-sm font-bold text-text-primary mb-1.5 uppercase tracking-wide">Học Sinh</label>
                         <select
                             value={selectedStudentCode}
                             onChange={(e) => setSelectedStudentCode(e.target.value)}
                             disabled={!selectedClassId || students.length === 0}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-blue-700 font-bold bg-white focus:ring-2 focus:ring-blue-500 outline-none hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:hover:bg-white"
+                            className="w-full px-3.5 py-2.5 bg-surface-card border border-border-default rounded-xl text-text-primary font-bold focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none shadow-xs cursor-pointer text-sm disabled:opacity-50 disabled:bg-surface-subtle"
                         >
                             <option value="">{selectedClassId ? "-- Chọn học sinh --" : "-- Chọn lớp trước --"}</option>
-                            {students.map((s, idx) => <option key={s.id} value={s.code}>{idx + 1}. {s.fullName}</option>)}
+                            {students.map((s, idx) => <option key={s.id} value={s.code} className="text-text-primary bg-surface-card">{idx + 1}. {s.fullName}</option>)}
                         </select>
                     </div>
 

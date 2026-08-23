@@ -169,7 +169,7 @@ export default function ImportPage() {
                 <div className="bg-slate-900 rounded-2xl shadow-lg p-6 text-white font-mono text-sm h-[500px] overflow-hidden flex flex-col">
                     <div className="flex items-center gap-2 mb-4 border-b border-slate-700 pb-2">
                         <Terminal size={18} className="text-green-400" />
-                        <span className="font-bold text-gray-300">System Logs</span>
+                        <span className="font-bold text-slate-200">System Logs</span>
                         <div className="ml-auto flex gap-2">
                             <div className="w-3 h-3 rounded-full bg-red-500"></div>
                             <div className="w-3 h-3 rounded-full bg-yellow-500"></div>

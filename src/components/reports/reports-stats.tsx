@@ -71,7 +71,7 @@ export function ReportsStats({ stats, loading }: ReportsStatsProps) {
                         </BarChart>
                     </ResponsiveContainer>
                 ) : (
-                    <div className="flex items-center justify-center h-full text-gray-300 text-[10px] font-bold uppercase tracking-widest">No Data</div>
+                    <div className="flex items-center justify-center h-full text-text-tertiary text-[10px] font-bold uppercase tracking-widest">Không có dữ liệu</div>
                 )}
             </div>
         </div>

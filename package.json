@@ -9,6 +9,7 @@
     "start": "next start -p 8888",
     "lint": "next lint",
     "bridge:health": "node -e \"import('./scripts/ai-loop/bridge-client.mjs').then(m => m.checkBridgeHealth()).then(console.log)\"",
+    "ui:lint": "node ./scripts/qa/check-ui-lint.mjs",
     "loop:consult": "node ./scripts/ai-loop/run-consult.mjs",
     "loop:review": "node ./scripts/ai-loop/run-review.mjs"
   },
