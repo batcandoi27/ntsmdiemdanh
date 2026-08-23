@@ -10,6 +10,7 @@ import {
     DEFAULT_EDIT_WINDOW,
     UserRole,
     AppUser,
+    BankInfo,
 } from '@/types/models';
 import { supabase } from '@/lib/supabase';
 import { supabaseAdmin } from '@/lib/supabase-admin';
@@ -243,14 +244,20 @@ export async function updateUser(uid: string, data: Partial<AppUser>): Promise<v
     console.log('[UserService] updateUser:', { uid, updateData });
     
     // 1. Cập nhật thông tin profile
+    const updatePayload: Record<string, any> = {
+        full_name: updateData.displayName,
+        role: updateData.role,
+        is_active: updateData.isActive,
+        student_code: updateData.studentCode
+    };
+
+    if (updateData.bankInfo !== undefined) {
+        updatePayload.bank_info = updateData.bankInfo;
+    }
+
     const { error: profileError } = await dbClient
         .from('profiles')
-        .update({
-            full_name: updateData.displayName,
-            role: updateData.role,
-            is_active: updateData.isActive,
-            student_code: updateData.studentCode
-        })
+        .update(updatePayload)
         .eq('id', uid);
     
     if (profileError) throw profileError;
@@ -424,4 +431,69 @@ export async function batchCreateAccounts(
     }
 
     onProgress("Hoàn tất quá trình tạo tài khoản hàng loạt.");
+}
+
+// ============================================
+// Bank Information Management (STK Ngân Hàng)
+// ============================================
+
+/**
+ * Lấy cấu hình STK nhận tiền cá nhân/quỹ lớp của giáo viên
+ */
+export async function getUserBankInfo(uid: string): Promise<BankInfo | null> {
+    const { data, error } = await dbClient
+        .from('profiles')
+        .select('bank_info')
+        .eq('id', uid)
+        .maybeSingle();
+
+    if (error || !data || !data.bank_info) return null;
+    return data.bank_info as BankInfo;
+}
+
+/**
+ * Cập nhật cấu hình STK nhận tiền cá nhân/quỹ lớp của giáo viên
+ */
+export async function updateUserBankInfo(uid: string, bankInfo: BankInfo): Promise<void> {
+    const { error } = await dbClient
+        .from('profiles')
+        .update({ bank_info: bankInfo })
+        .eq('id', uid);
+
+    if (error) {
+        console.error('Error updating user bank info:', error);
+        throw error;
+    }
+}
+
+/**
+ * Lấy cấu hình STK Chung Toàn Trường (Admin Setting)
+ */
+export async function getSchoolBankInfo(): Promise<BankInfo | null> {
+    const { data, error } = await dbClient
+        .from('settings')
+        .select('value')
+        .eq('key', 'school_bank_account')
+        .maybeSingle();
+
+    if (error || !data || !data.value) return null;
+    return data.value as BankInfo;
+}
+
+/**
+ * Cập nhật cấu hình STK Chung Toàn Trường (Admin Setting)
+ */
+export async function saveSchoolBankInfo(bankInfo: BankInfo): Promise<void> {
+    const { error } = await dbClient
+        .from('settings')
+        .upsert({
+            key: 'school_bank_account',
+            value: bankInfo,
+            updated_at: new Date().toISOString()
+        }, { onConflict: 'key' });
+
+    if (error) {
+        console.error('Error saving school bank info:', error);
+        throw error;
+    }
 }

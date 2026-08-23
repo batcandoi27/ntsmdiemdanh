@@ -40,16 +40,16 @@ export function SiteHeader() {
                 <div className="flex justify-between h-16">
 
                     {/* Logo Area */}
-                    <div className="flex items-center">
-                        <Link href="/" className="flex items-center gap-3 group">
-                            <div className="bg-primary/10 text-primary p-2 rounded-xl group-hover:bg-primary group-hover:text-white transition-all duration-300">
+                    <div className="flex items-center shrink-0">
+                        <Link href="/" className="flex items-center gap-3 group shrink-0">
+                            <div className="bg-primary/10 text-primary p-2 rounded-xl group-hover:bg-primary group-hover:text-white transition-all duration-300 shrink-0">
                                 <School size={28} />
                             </div>
-                            <div className="flex flex-col">
-                                <span className="text-xl font-bold text-gray-900 tracking-tight leading-none group-hover:text-primary transition-colors">
+                            <div className="flex flex-col whitespace-nowrap shrink-0">
+                                <span className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight leading-tight group-hover:text-primary transition-colors whitespace-nowrap">
                                     THCS TRẦN BỘI CƠ
                                 </span>
-                                <span className="text-xs text-gray-500 font-medium tracking-widest uppercase mt-0.5">
+                                <span className="text-[11px] text-gray-500 font-medium tracking-wider uppercase mt-0.5 whitespace-nowrap">
                                     Hệ Thống Điểm Danh
                                 </span>
                             </div>

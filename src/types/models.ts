@@ -26,6 +26,14 @@ export interface UserPermissions {
     canAccessAPI: boolean;
 }
 
+export interface BankInfo {
+    bankId: string;
+    bankName: string;
+    accountNumber: string;
+    accountName: string;
+    qrTemplate?: 'compact' | 'compact2' | 'qr_only' | 'print';
+}
+
 /**
  * AppUser – Supabase table: profiles
  */
@@ -41,6 +49,7 @@ export interface AppUser {
     permissions: UserPermissions;
     editWindowMinutes: number;      // class_monitor: 30, teacher: 1440, admin: -1
     isActive: boolean;
+    bankInfo?: BankInfo;            // Cấu hình STK nhận tiền cá nhân/quỹ lớp
     createdBy?: string;             // UID người tạo
     createdAt: string;              // ISO
     lastLoginAt?: string;           // ISO
@@ -285,6 +294,31 @@ export interface SubPeriod {
     endDate?: string;
 }
 
+export interface ColumnPaymentConfig {
+    enabled: boolean;
+    recipientType: 'school' | 'teacher' | 'custom';
+    defaultAmount?: number;
+    unit?: string;
+    customBankInfo?: BankInfo;
+    notePrefix?: string;
+}
+
+export interface PaymentTransaction {
+    id: string;
+    transactionId?: string;
+    orderCode?: string;
+    classId: string;
+    studentCode: string;
+    columnId: string;
+    periodKey?: string;
+    amount: number;
+    content?: string;
+    paymentMethod?: string;
+    status: 'success' | 'pending' | 'failed';
+    rawWebhookData?: Record<string, any>;
+    createdAt: string;
+}
+
 /**
  * Column - Định nghĩa một cột theo dõi
  */
@@ -309,6 +343,10 @@ export interface Column {
     // Visibility & Lifecycle
     archived: boolean; // Đã hoàn thành/hết hạn
     defaultVisibility?: boolean; // Default show/hide in Attendance
+
+    // Parent Portal & Payment Configuration
+    isSharedWithParents?: boolean; // Tùy chọn chia sẻ cho HS/PH xem ở /portal (Mặc định: false)
+    paymentConfig?: ColumnPaymentConfig; // Cấu hình thu tiền & sinh mã VietQR
 
     order: number; // Thứ tự hiển thị
     createdAt: string; // ISO string

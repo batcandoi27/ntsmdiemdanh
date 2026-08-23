@@ -1,0 +1,161 @@
+⚠️ ChatGPT Web Luna cannot access the local Codex computer in this turn. The accumulated context does not contain local tool results yet: it will see instructions and attachments, but not workspace contents. ChatGPT-native capabilities such as web search remain available when the product provides them. This installation is in Browser-only mode. Open MCP in the launcher and connect the Full harness to give Instant through Extra High access to local tools.{  
+"status": "REQUEST\_CHANGES",  
+"layers\_evaluated": {  
+"requirements": {  
+"status": "PARTIAL\_PASS",  
+"findings": \[  
+{  
+"severity": "HIGH",  
+"id": "REQ-001",  
+"title": "Chưa đủ bằng chứng để xác nhận yêu cầu 'áp dụng đồng bộ cho cả 5 biểu mẫu'",  
+"detail": "Yêu cầu nêu 5 biểu mẫu, nhưng code excerpt bị cắt giữa hàm createStandardSignature và không hiển thị các nhánh/generator thực tế của cả 5 loại tài liệu. Vì vậy không thể độc lập xác nhận mọi mẫu đều dùng cùng chuẩn header, signature, margin, footer, paragraph và table rules."  
+},  
+{  
+"severity": "MEDIUM",  
+"id": "REQ-002",  
+"title": "Yêu cầu '100% lỗi dính chữ' chưa có bằng chứng đầu ra theo từng biểu mẫu",  
+"detail": "Type-check, build và HTTP 200 chứng minh compile/response thành công, nhưng chưa chứng minh bố cục DOCX thực tế không còn text concatenation hoặc lỗi xuống dòng trong cả 5 biểu mẫu."  
+}  
+\]  
+},  
+"architecture": {  
+"status": "PASS\_WITH\_NOTES",  
+"findings": \[  
+{  
+"severity": "MEDIUM",  
+"id": "ARCH-001",  
+"title": "Thiết kế có hướng tái sử dụng tốt nhưng cần xác nhận mức độ áp dụng",  
+"detail": "THEME, NO\_BORDERS, STANDARD\_PAGE\_PROPERTIES, createStandardFooter, createAdministrativeHeader và createStandardSignature là các primitive hợp lý. Nên bảo đảm mọi generator chỉ gọi các primitive chung thay vì còn hard-code định dạng riêng lẻ."  
+},  
+{  
+"severity": "LOW",  
+"id": "ARCH-002",  
+"title": "Footer nhận documentTitle là hợp lý nhưng cần thống nhất naming",  
+"detail": "Nên dùng một nguồn metadata chuẩn cho title, school/unit và locale/date để tránh sai lệch giữa 5 biểu mẫu."  
+}  
+\]  
+},  
+"implementation": {  
+"status": "PARTIAL\_PASS",  
+"findings": \[  
+{  
+"severity": "HIGH",  
+"id": "IMP-001",  
+"title": "Chưa thể xác nhận toàn bộ implementation từ excerpt bị cắt",  
+"detail": "Không thấy phần hoàn chỉnh của createStandardSignature, cấu hình sections thực tế, cách gắn headers/footers, 5 template branches, table rows/data mapping và Packer response. Không nên APPROVED toàn diện khi review artifact chỉ hiển thị một phần implementation."  
+},  
+{  
+"severity": "MEDIUM",  
+"id": "IMP-002",  
+"title": "Cần kiểm tra tính chính xác của đơn vị Twip và layout sau khi render",  
+"detail": "Các giá trị 1134 và 1701 tương ứng xấp xỉ 20 mm và 30 mm, còn firstLine: 480 tương ứng xấp xỉ 0.85 cm. Tuy nhiên cần xác nhận cấu hình này được áp dụng tại Paragraph/Section thực tế và không bị template-specific override."  
+},  
+{  
+"severity": "MEDIUM",  
+"id": "IMP-003",  
+"title": "Page field cần kiểm thử trong trình đọc DOCX mục tiêu",  
+"detail": "CURRENT và TOTAL\_PAGES là field động; build OpenXML thành công không đồng nghĩa mọi viewer sẽ hiển thị/cập nhật tổng số trang ngay lập tức. Cần mở file bằng Microsoft Word mục tiêu và kiểm tra field rendering/update."  
+},  
+{  
+"severity": "LOW",  
+"id": "IMP-004",  
+"title": "Ký tự Unicode vẽ đường ngang là rủi ro portability nhỏ",  
+"detail": "Chuỗi '━━━━━━━━━━━━━━' phụ thuộc glyph hỗ trợ của font/rendering engine. Nếu mục tiêu là chuẩn hành chính và portability cao, border/bottom border hoặc paragraph border thường ổn định hơn."  
+}  
+\]  
+},  
+"appsec": {  
+"status": "PASS\_WITH\_REQUIRED\_INPUT\_REVIEW",  
+"findings": \[  
+{  
+"severity": "MEDIUM",  
+"id": "SEC-001",  
+"title": "Chưa thấy evidence về validation/sanitization dữ liệu đầu vào",  
+"detail": "DOCX export thường nhận tên học sinh, lớp, nội dung sự việc và dữ liệu tự do. Excerpt chưa cho thấy giới hạn kích thước, validation schema hoặc kiểm soát payload bất thường. Đây chưa phải bằng chứng có lỗ hổng, nhưng cần review route hoàn chỉnh trước khi sign-off."  
+},  
+{  
+"severity": "LOW",  
+"id": "SEC-002",  
+"title": "Cần kiểm tra authorization của endpoint",  
+"detail": "Không có thông tin xác thực/phân quyền trong excerpt. Cần xác nhận chỉ người dùng được phép mới có thể xuất dữ liệu học sinh hoặc biên bản có thể chứa thông tin cá nhân."  
+}  
+\]  
+},  
+"product\_ux": {  
+"status": "PARTIAL\_PASS",  
+"findings": \[  
+{  
+"severity": "MEDIUM",  
+"id": "UX-001",  
+"title": "Thiếu visual QA trên Word/PDF thực tế",  
+"detail": "Mục tiêu của task là 'chuyên nghiệp cho Giáo viên chủ nhiệm', nên HTTP 200 và binary size không đủ. Cần kiểm tra ít nhất: trang 1, trang giữa, trang cuối; bảng dài qua trang; header row repeat; cantSplit; footer; chữ ký; callout box; tiếng Việt có dấu; và in/preview với khổ giấy mục tiêu."  
+},  
+{  
+"severity": "LOW",  
+"id": "UX-002",  
+"title": "Footer title có thể gây nhiễu với tài liệu ngắn",  
+"detail": "Nên xác nhận title dài không va chạm với 'Trang X / Y', đặc biệt ở các biểu mẫu có tên dài."  
+}  
+\]  
+}  
+},  
+"metrics": {  
+"review\_layers": 5,  
+"layers\_pass\_or\_pass\_with\_notes": 2,  
+"layers\_partial\_pass": 3,  
+"critical\_findings": 0,  
+"high\_findings": 2,  
+"medium\_findings": 7,  
+"low\_findings": 4,  
+"provided\_type\_check": "PASS",  
+"provided\_build": "PASS",  
+"provided\_smoke\_test": "PASS",  
+"independent\_full\_source\_verification": "NOT\_AVAILABLE\_FROM\_PROVIDED\_EVIDENCE",  
+"release\_gate": "BLOCKED\_PENDING\_ARTIFACT\_AND\_RENDER\_EVIDENCE"  
+},  
+"findings": \[  
+{  
+"priority": "P1",  
+"id": "REQ-001/IMP-001",  
+"action": "Cung cấp toàn bộ nội dung route.ts hoặc diff đầy đủ, đặc biệt toàn bộ 5 generator/branch và phần tạo Document/sections."  
+},  
+{  
+"priority": "P1",  
+"id": "REQ-002/UX-001",  
+"action": "Cung cấp 5 file DOCX smoke-test hoặc bằng chứng render tương ứng. QA phải kiểm tra trực quan trong viewer mục tiêu, không chỉ kiểm tra MIME/HTTP/OpenXML binary."  
+},  
+{  
+"priority": "P1",  
+"id": "IMP-003",  
+"action": "Xác nhận CURRENT/TOTAL\_PAGES hiển thị đúng ở Microsoft Word mục tiêu và tổng số trang được cập nhật sau mở/in/refresh field nếu cần."  
+},  
+{  
+"priority": "P2",  
+"id": "SEC-001/SEC-002",  
+"action": "Review route hoàn chỉnh về authentication/authorization và validation/size limits của request/data export, đặc biệt vì dữ liệu học sinh và biên bản có thể là dữ liệu cá nhân."  
+},  
+{  
+"priority": "P2",  
+"id": "ARCH-001",  
+"action": "Chứng minh 5 biểu mẫu dùng primitive chung; tránh duplicate formatting constants hoặc template-specific drift."  
+},  
+{  
+"priority": "P3",  
+"id": "IMP-004",  
+"action": "Cân nhắc thay ký tự Unicode đường ngang bằng border/paragraph border nếu cần portability cao giữa Word, LibreOffice và các engine preview."  
+}  
+\],  
+"strategic\_advisory": {  
+"track": 2,  
+"assessment": "Hướng refactor là đúng: chuẩn hóa bằng theme tokens và helper factories giúp giảm lỗi định dạng lặp lại. Tuy nhiên đây là task có acceptance criteria thiên về artifact/rendering, nên compile-success không đủ để sign-off chất lượng sản phẩm.",  
+"recommendations": \[  
+"Tách document design system thành module riêng: theme, page layout, typography, administrative header, signature block, footer, table styles.",  
+"Tạo contract test cho 5 template: assert mỗi document có section margins, header/footer và các block bắt buộc.",  
+"Bổ sung golden-file/visual regression workflow: generate dữ liệu fixture cố định cho từng biểu mẫu, lưu DOCX hoặc render PDF/screenshot để phát hiện regression layout.",  
+"Dùng metadata-driven template registry để 5 biểu mẫu chia sẻ cấu hình title, footer label và block composition.",  
+"Xác định compatibility matrix tối thiểu: Microsoft Word desktop, Word Online nếu hỗ trợ và viewer được trường sử dụng; kiểm tra riêng tiếng Việt, bảng dài và page fields.",  
+"Thiết lập release gate cho DOCX: TypeScript PASS + build PASS + endpoint PASS + OpenXML valid + visual QA PASS cho cả 5 template + authorization/data validation review PASS."  
+\],  
+"approval\_path": "Có thể chuyển sang APPROVED sau khi các P1 được chứng minh bằng source/diff đầy đủ và bằng chứng render thực tế cho cả 5 biểu mẫu, đồng thời không phát hiện lỗi P1/P0 mới trong phần route chưa được cung cấp."  
+}  
+}

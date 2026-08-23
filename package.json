@@ -7,7 +7,10 @@
     "dev:fresh": "npx kill-port 8888 && next dev -p 8888",
     "build": "next build",
     "start": "next start -p 8888",
-    "lint": "next lint"
+    "lint": "next lint",
+    "bridge:health": "node -e \"import('./scripts/ai-loop/bridge-client.mjs').then(m => m.checkBridgeHealth()).then(console.log)\"",
+    "loop:consult": "node ./scripts/ai-loop/run-consult.mjs",
+    "loop:review": "node ./scripts/ai-loop/run-review.mjs"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",

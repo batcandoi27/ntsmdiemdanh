@@ -4,21 +4,23 @@ import React, { useState, useEffect } from 'react';
 import {
   Printer,
   FileText,
-  Download,
+  FileDown,
+  Sparkles,
   Eye,
   CheckCircle2,
-  Calendar,
+  BookOpen,
   Users,
   Award,
-  AlertTriangle,
-  School,
-  Sparkles
+  Calendar,
+  Layers,
+  HelpCircle
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { db } from '@/services/db';
 import {
   getHomeroomClassSettings,
-  getHomeroomPlans,
-  getHomeroomEvents
+  getHomeroomEvents,
+  getHomeroomPlans
 } from '@/services/homeroom-service';
 import {
   exportClassListDocx,
@@ -30,122 +32,111 @@ import {
 import { HomeroomClassSettings, HomeroomEvent, HomeroomPlan } from '@/types/homeroom';
 import { Student } from '@/types/models';
 import { cn } from '@/lib/utils';
+import { HomeroomTooltip } from '@/components/homeroom/homeroom-tooltip';
 import toast from 'react-hot-toast';
 
 interface TemplateOption {
   id: string;
   title: string;
+  code: string;
   category: string;
-  description: string;
-  badge?: string;
+  desc: string;
+  icon: any;
 }
 
-const templates: TemplateOption[] = [
+const TEMPLATES: TemplateOption[] = [
   {
     id: 'template_class_list',
-    title: '1. Danh sách học sinh & Ban cán sự lớp',
-    category: 'Đầu năm / Tổ chức',
-    description: 'Bao gồm toàn bộ danh sách lớp, ban cán sự, danh sách 4 tổ và thông tin phụ huynh.',
-    badge: 'Phổ biến'
+    title: 'Danh Sách Học Sinh & Ban Cán Sự Lớp',
+    code: 'BM-01/GVCN',
+    category: 'Hành chính đầu năm',
+    desc: 'Bao gồm sĩ số, họ tên, ngày sinh, giới tính, SĐT phụ huynh và ban cán sự 4 tổ.',
+    icon: Users
   },
   {
     id: 'template_handbook',
-    title: '2. Toàn bộ Sổ kế hoạch chủ nhiệm điện tử',
-    category: 'Sổ sách hành chính',
-    description: 'Bìa sổ, đặc điểm tình hình lớp, mục tiêu, chỉ tiêu và biện pháp thực hiện theo năm học.',
-    badge: 'Quan trọng'
+    title: 'Sổ Kế Hoạch & Quản Lý Chủ Nhiệm',
+    code: 'BM-02/GVCN',
+    category: 'Hồ sơ chủ nhiệm',
+    desc: 'Toàn bộ nội dung sổ chủ nhiệm: Đặc điểm tình hình, chỉ tiêu, mục tiêu và biện pháp thực hiện.',
+    icon: BookOpen
   },
   {
     id: 'template_student_report',
-    title: '3. Phiếu liên lạc & Báo cáo kết quả rèn luyện',
-    category: 'Gửi Phụ huynh',
-    description: 'Tổng kết chuyên cần, ghi nhận việc tốt, sự việc cần lưu ý và nhận xét của GVCN cho 1 học sinh.',
-    badge: 'Thường dùng'
+    title: 'Phiếu Thông Báo Tình Hình Rèn Luyện (Gửi PH)',
+    code: 'BM-03/GVCN',
+    category: 'Liên lạc phụ huynh',
+    desc: 'Thông báo kết quả chuyên cần, việc tốt, vi phạm và nhận xét của GVCN cho từng học sinh.',
+    icon: FileText
   },
   {
     id: 'template_incident',
-    title: '4. Biên bản sự việc & Bản cam kết rèn luyện',
-    category: 'Kỷ luật & Xử lý',
-    description: 'Ghi nhận diễn biến sự việc vi phạm, biện pháp xử lý và cam kết khắc phục của học sinh.',
+    title: 'Biên Bản Ghi Nhận Sự Việc & Bản Cam Kết',
+    code: 'BM-04/GVCN',
+    category: 'Kỷ luật & Nề nếp',
+    desc: 'Biên bản xử lý vi phạm nề nếp kèm bản cam kết rèn luyện có chữ ký học sinh.',
+    icon: Award
   },
   {
     id: 'template_parent_meeting',
-    title: '5. Biên bản họp Cha Mẹ Học Sinh & DS ký tên',
-    category: 'Họp Phụ huynh',
-    description: 'Biên bản cuộc họp phụ huynh đầu năm/cuối kỳ kèm danh sách ký tên xác nhận của cha mẹ học sinh.',
-    badge: 'Đầu năm'
+    title: 'Biên Bản Họp Cha Mẹ Học Sinh',
+    code: 'BM-05/GVCN',
+    category: 'Họp phụ huynh',
+    desc: 'Biên bản cuộc họp phụ huynh đầu năm / học kỳ kèm danh sách ký tên tham dự.',
+    icon: Layers
   }
 ];
 
 export default function HomeroomPrintCenterPage() {
   const [classId, setClassId] = useState<string>('');
+  const [className, setClassName] = useState<string>('');
+  const [teacherName, setTeacherName] = useState<string>('Giáo viên chủ nhiệm');
   const [students, setStudents] = useState<Student[]>([]);
   const [settings, setSettings] = useState<HomeroomClassSettings | null>(null);
-  const [events, setEvents] = useState<HomeroomEvent[]>([]);
   const [yearlyPlan, setYearlyPlan] = useState<HomeroomPlan | null>(null);
+  const [events, setEvents] = useState<HomeroomEvent[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Selected Template
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('template_class_list');
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
-  const [teacherName, setTeacherName] = useState('Giáo viên chủ nhiệm');
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem('homeroom_selected_class') || '';
-    setClassId(saved);
-
-    const handleClassChange = (e: any) => {
-      if (e.detail?.classId) {
-        setClassId(e.detail.classId);
-      }
-    };
-
-    window.addEventListener('homeroom:class_changed', handleClassChange);
-    return () => window.removeEventListener('homeroom:class_changed', handleClassChange);
-  }, []);
-
-  useEffect(() => {
-    if (!classId) return;
+    const activeId = localStorage.getItem('homeroom_active_class_id') || '';
+    setClassId(activeId);
 
     async function load() {
+      if (!activeId) return;
       setLoading(true);
       try {
-        // Students
-        const { data: studentClasses } = await supabase
-          .from('student_classes')
-          .select('student_id, students(*)')
-          .eq('class_id', classId);
+        const stList = await db.getStudentsByClass(activeId);
+        setStudents(stList || []);
+        if (stList && stList.length > 0) setSelectedStudentId(stList[0].id);
 
-        const list: Student[] = (studentClasses || [])
-          .map((sc: any) => sc.students)
-          .filter(Boolean);
-
-        setStudents(list);
-        if (list.length > 0) setSelectedStudentId(list[0].id);
-
-        // Settings
-        const st = await getHomeroomClassSettings(classId);
-        setSettings(st);
-
-        // Events
-        const evts = await getHomeroomEvents(classId);
-        setEvents(evts);
-
-        // Plans
-        const plans = await getHomeroomPlans(classId, '2025-2026', 'yearly');
-        if (plans && plans.length > 0) setYearlyPlan(plans[0]);
-
-        // Teacher Name
-        const { data: classData } = await supabase
+        const { data: clsData } = await supabase
           .from('classes')
-          .select('teacher_classes(is_homeroom, profiles(full_name))')
-          .eq('id', classId)
+          .select('name, teacher_classes(is_homeroom, profiles(full_name))')
+          .eq('id', activeId)
           .maybeSingle();
 
-        const homeroomTc: any = (classData?.teacher_classes || []).find((tc: any) => tc.is_homeroom);
-        const name = Array.isArray(homeroomTc?.profiles)
-          ? homeroomTc.profiles[0]?.full_name
-          : homeroomTc?.profiles?.full_name;
-        if (name) setTeacherName(name);
+        if (clsData) {
+          setClassName(clsData.name || '');
+          const homeroomTc: any = (clsData.teacher_classes || []).find((tc: any) => tc.is_homeroom);
+          const name = Array.isArray(homeroomTc?.profiles)
+            ? homeroomTc.profiles[0]?.full_name
+            : homeroomTc?.profiles?.full_name;
+          if (name) setTeacherName(name);
+        }
 
+        const st = await getHomeroomClassSettings(activeId);
+        setSettings(st);
+
+        const plans = await getHomeroomPlans(activeId, '2025-2026', 'yearly');
+        if (plans && plans.length > 0) setYearlyPlan(plans[0]);
+
+        const evts = await getHomeroomEvents(activeId);
+        setEvents(evts);
       } catch (err) {
         console.error('Error loading print center:', err);
       } finally {
@@ -156,249 +147,291 @@ export default function HomeroomPrintCenterPage() {
     load();
   }, [classId]);
 
-  // Xử lý xuất file DOCX theo mẫu đang chọn
-  const handleExportCurrent = async () => {
+  // Handle Export DOCX
+  const handleExportDocx = async () => {
     if (!settings) return;
+    setDownloading(true);
     try {
-      toast.loading('Đang khởi tạo file Word chuẩn...', { id: 'print-docx' });
-
       if (selectedTemplateId === 'template_class_list') {
-        await exportClassListDocx(classId, '2025-2026', teacherName, students, settings);
+        await exportClassListDocx(className || 'Lop', '2025-2026', teacherName, students, settings);
       } else if (selectedTemplateId === 'template_handbook') {
-        await exportHomeroomHandbookDocx(classId, '2025-2026', teacherName, students, settings, yearlyPlan);
+        await exportHomeroomHandbookDocx(className || 'Lop', '2025-2026', teacherName, students, settings, yearlyPlan);
       } else if (selectedTemplateId === 'template_student_report') {
-        const student = students.find(s => s.id === selectedStudentId) || students[0];
-        const studentEvents = events.filter(e => e.student_id === student.id);
-        await exportStudentReportDocx(
-          classId,
-          student,
-          { totalDays: 30, presentCount: 29, excusedAbsenceCount: 1, unexcusedAbsenceCount: 0, lateCount: 0, attendanceRate: 97 },
-          studentEvents,
-          teacherName
-        );
+        const st = students.find(s => s.id === selectedStudentId) || students[0];
+        await exportStudentReportDocx(className || 'Lop', st, { totalDays: 30, presentCount: 30, attendanceRate: 100 }, events, teacherName);
       } else if (selectedTemplateId === 'template_incident') {
-        const student = students.find(s => s.id === selectedStudentId) || students[0];
-        const sampleEvent: HomeroomEvent = events.find(e => e.student_id === student.id) || {
+        const st = students.find(s => s.id === selectedStudentId) || students[0];
+        const evt = events.find(e => e.student_id === st?.id) || {
           id: 'temp',
           class_id: classId,
-          student_id: student.id,
+          student_id: st?.id || '',
           date: '2026-08-20',
-          type: 'behavior',
-          category: 'Vi phạm nề nếp',
-          severity: 'attention',
+          type: 'violation',
+          category: 'Kỷ luật',
+          severity: 'minor',
           points_delta: -2,
-          description: 'Học sinh đi học muộn và chưa thuộc bài đầu giờ.',
-          source: 'gvcn',
-          action_taken: 'GVCN nhắc nhở và yêu cầu viết bản cam kết.',
-          status: 'open',
+          description: 'Nói chuyện riêng trong giờ học',
+          action_taken: 'Nhắc nhở và cam kết',
+          status: 'resolved',
           is_visible_to_parent: true,
-          created_by: 'gvcn',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          created_by: 'gvcn'
         };
-        await exportIncidentRecordDocx(classId, student, sampleEvent, teacherName);
+        await exportIncidentRecordDocx(className || 'Lop', st, evt as any, teacherName);
       } else if (selectedTemplateId === 'template_parent_meeting') {
-        await exportParentMeetingDocx(classId, '2025-2026', teacherName, students);
+        await exportParentMeetingDocx(className || 'Lop', '2025-2026', teacherName, students);
       }
-
-      toast.success('Đã tải file Word (.DOCX) thành công!', { id: 'print-docx' });
-    } catch (err) {
-      toast.error('Lỗi khi xuất file', { id: 'print-docx' });
+      toast.success('Đã xuất file Word (.DOCX) thành công!');
+    } catch (err: any) {
+      toast.error(err.message || 'Lỗi xuất file Word');
+    } finally {
+      setDownloading(false);
     }
   };
 
-  // In trực tiếp bằng trình duyệt
-  const handleBrowserPrint = () => {
+  // Direct Browser Print
+  const handlePrint = () => {
     window.print();
   };
 
-  const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
-  const selectedStudent = students.find(s => s.id === selectedStudentId);
+  const selectedTemplate = TEMPLATES.find(t => t.id === selectedTemplateId) || TEMPLATES[0];
+  const selectedStudent = students.find(s => s.id === selectedStudentId) || students[0];
 
   return (
     <div className="space-y-6">
-      {/* HEADER */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* 1. TOP HEADER & ACTIONS (Light Theme) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-200 shadow-sm print:hidden">
         <div>
-          <h1 className="text-2xl font-black text-white tracking-tight">
-            Trung Tâm In Ấn & Biểu Mẫu Hành Chính
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-400">
-            Lớp {classId} — Trích xuất dữ liệu lớp học thành các văn bản chuẩn THCS để in ấn hoặc xuất file Word
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-black text-slate-900 tracking-tight">
+              Trung Tâm In Ấn & Biểu Mẫu Hành Chính
+            </h2>
+            <HomeroomTooltip content="Tự động kết xuất 5 bộ biểu mẫu chuẩn THCS với Live Preview khổ giấy A4 và xuất file Word (.DOCX) native." />
+          </div>
+          <p className="text-xs text-slate-500 font-medium mt-0.5">
+            Lớp <span className="text-indigo-600 font-bold">{className ? `Lớp ${className}` : ''}</span> • GVCN: <span className="text-slate-700 font-bold">{teacherName}</span>
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <button
-            onClick={handleBrowserPrint}
-            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition-all"
+            onClick={handlePrint}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs border border-slate-200 transition-all shadow-sm"
           >
-            <Printer className="w-4 h-4 text-emerald-400" />
-            <span>In trực tiếp (Print)</span>
+            <Printer className="w-4 h-4 text-slate-600" />
+            <span>In Trực Tiếp (Ctrl + P)</span>
           </button>
 
           <button
-            onClick={handleExportCurrent}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold shadow-lg shadow-indigo-600/30 active:scale-95 transition-all"
+            onClick={handleExportDocx}
+            disabled={downloading}
+            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 active:scale-95 transition-all"
           >
-            <Download className="w-4 h-4" />
-            <span>Tải file Word (.DOCX)</span>
+            <FileDown className="w-4 h-4" />
+            <span>{downloading ? 'Đang xuất Word...' : 'Tải File Word (.DOCX)'}</span>
           </button>
         </div>
       </div>
 
-      {/* GRID: TEMPLATE SELECTOR (LEFT) + LIVE PREVIEW (RIGHT) */}
+      {/* 2. GRID 2 CỘT: DANH MỤC BIỂU MẪU & LIVE PREVIEW (A4) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* TEMPLATE LIST (4 COLS) */}
-        <div className="lg:col-span-5 space-y-3">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            Danh mục biểu mẫu chuẩn
-          </h2>
+        
+        {/* CỘT TRÁI (4 CỘT): DANH MỤC BIỂU MẪU */}
+        <div className="lg:col-span-4 space-y-3 print:hidden">
+          <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm space-y-2.5">
+            <h3 className="font-black text-slate-900 text-xs uppercase tracking-wider mb-2">
+              Danh Mục Biểu Mẫu Chuẩn THCS
+            </h3>
 
-          <div className="space-y-2.5">
-            {templates.map((tpl) => {
-              const isSelected = tpl.id === selectedTemplateId;
+            {TEMPLATES.map((tmpl) => {
+              const Icon = tmpl.icon;
+              const isSelected = selectedTemplateId === tmpl.id;
               return (
                 <button
-                  key={tpl.id}
-                  onClick={() => setSelectedTemplateId(tpl.id)}
+                  key={tmpl.id}
+                  onClick={() => setSelectedTemplateId(tmpl.id)}
                   className={cn(
-                    "w-full text-left p-4 rounded-3xl border transition-all space-y-1.5",
+                    "w-full text-left p-3.5 rounded-2xl border transition-all flex items-start gap-3",
                     isSelected
-                      ? "bg-gradient-to-r from-indigo-950/80 to-slate-900 border-indigo-500/50 shadow-lg shadow-indigo-500/10"
-                      : "bg-slate-950/60 border-slate-800/80 hover:border-slate-700"
+                      ? "bg-indigo-50/80 border-indigo-300 shadow-sm"
+                      : "bg-slate-50/50 border-slate-200 hover:bg-slate-100/80"
                   )}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                      {tpl.category}
-                    </span>
-                    {tpl.badge && (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                        {tpl.badge}
-                      </span>
-                    )}
+                  <div className={cn(
+                    "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5",
+                    isSelected ? "bg-indigo-600 text-white" : "bg-slate-200 text-slate-600"
+                  )}>
+                    <Icon className="w-4 h-4" />
                   </div>
-                  <h3 className={cn("text-sm font-black", isSelected ? "text-white" : "text-slate-200")}>
-                    {tpl.title}
-                  </h3>
-                  <p className="text-xs text-slate-400 line-clamp-2">{tpl.description}</p>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono text-indigo-600 font-bold">{tmpl.code}</span>
+                      <span className="text-[10px] text-slate-400">{tmpl.category}</span>
+                    </div>
+                    <h4 className="font-bold text-xs text-slate-900">{tmpl.title}</h4>
+                    <p className="text-[11px] text-slate-500 leading-snug">{tmpl.desc}</p>
+                  </div>
                 </button>
               );
             })}
           </div>
 
-          {/* CHỌN HỌC SINH NẾU LÀ BIỂU MẪU CÁ NHÂN */}
+          {/* Selector chọn học sinh cho phiếu cá nhân */}
           {(selectedTemplateId === 'template_student_report' || selectedTemplateId === 'template_incident') && (
-            <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2">
-              <label className="text-xs font-bold text-slate-300 block">
-                Chọn học sinh áp dụng biểu mẫu:
+            <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm space-y-2">
+              <label className="font-bold text-xs text-slate-800 block">
+                Chọn học sinh để xuất biểu mẫu:
               </label>
               <select
                 value={selectedStudentId}
                 onChange={(e) => setSelectedStudentId(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold focus:ring-2 focus:ring-indigo-500/20"
               >
-                {students.map(s => (
-                  <option key={s.id} value={s.id}>
-                    {(s as any).full_name || (s as any).name} ({s.code || s.id})
-                  </option>
+                {students.map(st => (
+                  <option key={st.id} value={st.id}>{(st as any).full_name || (st as any).name}</option>
                 ))}
               </select>
             </div>
           )}
         </div>
 
-        {/* LIVE PREVIEW CANVAS (7 COLS) */}
-        <div className="lg:col-span-7 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-              <Eye className="w-4 h-4 text-indigo-400" />
-              <span>Xem trước trực quan (Live Preview)</span>
-            </h2>
-            <span className="text-[11px] text-slate-500">Khổ giấy chuẩn A4</span>
-          </div>
-
-          {/* PREVIEW PAPER (LIGHT THEME LIKE WORD/A4) */}
-          <div className="bg-white text-slate-900 rounded-3xl p-8 sm:p-10 shadow-2xl border border-slate-200 min-h-[500px] text-xs sm:text-sm space-y-6 font-sans">
-            {/* PAPER HEADER */}
-            <div className="text-center space-y-1 border-b pb-4">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-600">Trường THCS Trần Bội Cơ</p>
-              <h3 className="text-lg font-black text-slate-900 uppercase">
-                {selectedTemplate?.title.replace(/^\d+\.\s*/, '')}
+        {/* CỘT PHẢI (8 CỘT): LIVE PREVIEW KHỔ A4 TRẮNG SÁNG */}
+        <div className="lg:col-span-8">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-lg p-6 sm:p-10 text-slate-900 min-h-[800px] space-y-6">
+            
+            {/* QUỐC HIỆU TIÊU NGỮ */}
+            <div className="text-center space-y-1 border-b border-slate-200 pb-4">
+              <h4 className="text-xs uppercase font-bold text-slate-600">ỦY BAN NHÂN DÂN QUẬN 5 — TRƯỜNG THCS TRẦN BỘI CƠ</h4>
+              <h3 className="text-base sm:text-lg font-black text-indigo-950 uppercase tracking-tight">
+                {selectedTemplate.title}
               </h3>
-              <p className="text-xs italic text-slate-600">
-                Lớp: <span className="font-bold">{classId}</span> — Năm học: 2025-2026 — GVCN: <span className="font-bold">{teacherName}</span>
+              <p className="text-xs text-slate-500 italic">
+                Lớp {className ? `Lớp ${className}` : ''} — Năm học 2025 - 2026 • Giáo viên chủ nhiệm: {teacherName}
               </p>
             </div>
 
-            {/* PREVIEW BODY */}
+            {/* PREVIEW CONTENT NỘI DUNG TỪNG BIỂU MẪU */}
             {selectedTemplateId === 'template_class_list' && (
-              <div className="space-y-4">
-                <div className="text-xs text-slate-700">
-                  <p className="font-bold text-slate-900 mb-1">I. BAN CÁN SỰ LỚP:</p>
-                  <p>• Lớp trưởng: <span className="font-bold">{settings?.class_structure?.monitor_name || 'Chưa phân công'}</span></p>
-                  <p>• Lớp phó Học tập: <span className="font-bold">{settings?.class_structure?.vice_academic_name || 'Chưa phân công'}</span></p>
+              <div className="space-y-4 text-xs">
+                <div>
+                  <h4 className="font-black text-indigo-900 uppercase tracking-wider mb-2">
+                    I. Ban Cán Sự Lớp & Tổ Trưởng:
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-slate-700">
+                    <p>• Lớp trưởng: <span className="font-bold">{settings?.class_structure?.monitor_name || '........................'}</span></p>
+                    <p>• Lớp phó Học tập: <span className="font-bold">{settings?.class_structure?.vice_academic_name || '........................'}</span></p>
+                    <p>• Lớp phó Kỷ luật: <span className="font-bold">{settings?.class_structure?.vice_discipline_name || '........................'}</span></p>
+                    <p>• Lớp phó Phong trào: <span className="font-bold">{settings?.class_structure?.vice_activity_name || '........................'}</span></p>
+                  </div>
                 </div>
 
                 <div>
-                  <p className="font-bold text-slate-900 mb-2">II. DANH SÁCH HỌC SINH ({students.length} HS):</p>
-                  <table className="w-full text-left border-collapse border border-slate-300 text-xs">
-                    <thead>
-                      <tr className="bg-slate-100 font-bold">
-                        <th className="border border-slate-300 p-1.5 text-center w-10">STT</th>
-                        <th className="border border-slate-300 p-1.5">Mã HS</th>
+                  <h4 className="font-black text-indigo-900 uppercase tracking-wider mb-2">
+                    II. Danh Sách Học Sinh Toàn Lớp (Sĩ số: {students.length}):
+                  </h4>
+                  <table className="w-full border-collapse border border-slate-300 text-left text-[11px]">
+                    <thead className="bg-slate-100 font-bold">
+                      <tr>
+                        <th className="border border-slate-300 p-1.5 text-center w-8">STT</th>
+                        <th className="border border-slate-300 p-1.5 w-20">Mã HS</th>
                         <th className="border border-slate-300 p-1.5">Họ và tên</th>
-                        <th className="border border-slate-300 p-1.5">Ngày sinh</th>
+                        <th className="border border-slate-300 p-1.5 text-center w-16">Giới tính</th>
+                        <th className="border border-slate-300 p-1.5 w-24">Ngày sinh</th>
+                        <th className="border border-slate-300 p-1.5">SĐT Phụ huynh</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {students.slice(0, 5).map((s, idx) => (
+                      {students.slice(0, 15).map((s, idx) => (
                         <tr key={s.id}>
                           <td className="border border-slate-300 p-1.5 text-center">{idx + 1}</td>
-                          <td className="border border-slate-300 p-1.5 font-mono">{s.code || '—'}</td>
-                          <td className="border border-slate-300 p-1.5 font-medium">{(s as any).full_name || (s as any).name}</td>
-                          <td className="border border-slate-300 p-1.5">{s.birthday || '—'}</td>
+                          <td className="border border-slate-300 p-1.5 font-mono">{s.code || ''}</td>
+                          <td className="border border-slate-300 p-1.5 font-bold">{(s as any).full_name || (s as any).name}</td>
+                          <td className="border border-slate-300 p-1.5 text-center">{(s as any).gender === 'female' || (s as any).gender === 'F' || (s as any).gender === 'Nữ' ? 'Nữ' : 'Nam'}</td>
+                          <td className="border border-slate-300 p-1.5">{s.birthday || ''}</td>
+                          <td className="border border-slate-300 p-1.5">{(s as any).parent_phone || (s as any).phone || ''}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                  {students.length > 5 && (
-                    <p className="text-[11px] italic text-slate-500 mt-1">...và {students.length - 5} học sinh khác</p>
+                  {students.length > 15 && (
+                    <p className="text-[10px] text-slate-400 italic text-center mt-2">
+                      (Đang hiển thị 15/{students.length} học sinh xem trước. Bản tải về Word sẽ bao gồm toàn bộ danh sách).
+                    </p>
                   )}
                 </div>
               </div>
             )}
 
             {selectedTemplateId === 'template_handbook' && (
-              <div className="space-y-3 text-xs text-slate-700">
-                <p><span className="font-bold">1. Thuận lợi:</span> Đa số học sinh chăm ngoan, cơ sở vật chất đầy đủ.</p>
-                <p><span className="font-bold">2. Khó khăn:</span> Cần tăng cường kiểm tra nề nếp và bài tập về nhà.</p>
-                <p><span className="font-bold">3. Chỉ tiêu:</span> 85% học lực Tốt/Khá, 95% hạnh kiểm Tốt.</p>
-                <p className="text-slate-500 italic pt-4">...Trọn bộ sổ chủ nhiệm số sẽ được xuất tự động đầy đủ khi tải file Word.</p>
+              <div className="space-y-4 text-xs">
+                <div>
+                  <h4 className="font-black text-indigo-900 uppercase tracking-wider mb-1">1. Thuận lợi:</h4>
+                  <p className="text-slate-700 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    {yearlyPlan?.content?.strengths || 'Đa số học sinh chăm ngoan, có ý thức kỷ luật tốt.'}
+                  </p>
+                </div>
+
+                <div>
+                  <h4 className="font-black text-indigo-900 uppercase tracking-wider mb-1">2. Khó khăn:</h4>
+                  <p className="text-slate-700 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    {yearlyPlan?.content?.challenges || 'Cần tăng cường theo dõi nề nếp và học lực.'}
+                  </p>
+                </div>
+
+                <div>
+                  <h4 className="font-black text-indigo-900 uppercase tracking-wider mb-1">3. Chỉ tiêu phấn đấu:</h4>
+                  <div className="grid grid-cols-2 gap-2 text-slate-700 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <p>• Học lực Tốt/Khá: <span className="font-bold">{yearlyPlan?.content?.targets?.academic_good_percent || 85}%</span></p>
+                    <p>• Hạnh kiểm Tốt: <span className="font-bold">{yearlyPlan?.content?.targets?.conduct_good_percent || 95}%</span></p>
+                  </div>
+                </div>
               </div>
             )}
 
             {selectedTemplateId === 'template_student_report' && (
-              <div className="space-y-4 text-xs text-slate-700">
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                  <p>Học sinh: <span className="font-bold text-slate-900">{(selectedStudent as any)?.full_name || (selectedStudent as any)?.name}</span> (Mã: {selectedStudent?.code || '—'})</p>
-                  <p>Chuyên cần: <span className="font-bold text-emerald-700">Có mặt 29/30 ngày (97%)</span> • Đi muộn: 0 lần</p>
+              <div className="space-y-4 text-xs">
+                <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-between">
+                  <div>
+                    <h4 className="font-black text-indigo-900 text-sm">
+                      {(selectedStudent as any)?.full_name || (selectedStudent as any)?.name}
+                    </h4>
+                    <p className="text-slate-500 font-medium">Lớp: {className} • Mã HS: {selectedStudent?.code || '—'}</p>
+                  </div>
+                  <span className="text-emerald-700 font-black text-base">Chuyên cần: 100%</span>
                 </div>
+
                 <div>
-                  <p className="font-bold text-slate-900 mb-1">Ghi nhận rèn luyện & Nhận xét:</p>
-                  <p className="italic">Em có ý thức tự giác cao, tích cực tham gia các hoạt động tập thể của lớp.</p>
+                  <h4 className="font-black text-indigo-900 uppercase tracking-wider mb-1">I. Tình hình chuyên cần:</h4>
+                  <p className="text-slate-700">• Tổng số ngày học: 30 ngày | Có mặt: 30 ngày | Đi muộn: 0 lần</p>
+                </div>
+
+                <div>
+                  <h4 className="font-black text-indigo-900 uppercase tracking-wider mb-1">II. Nhận xét của Giáo viên chủ nhiệm:</h4>
+                  <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 italic text-slate-700">
+                    "Em chăm ngoan, có ý thức rèn luyện tốt, hòa đồng và giúp đỡ bạn bè. Kính mong Quý phụ huynh tiếp tục theo dõi, đôn đốc con."
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* PAPER FOOTER */}
-            <div className="pt-6 border-t flex items-center justify-between text-xs text-slate-500">
-              <span>NTSM Điểm Danh • In ấn v1.0</span>
-              <span>Ký tên: {teacherName}</span>
+            {/* FOOTER CHỮ KÝ */}
+            <div className="flex justify-between items-end pt-8 text-xs text-slate-600 border-t border-slate-100">
+              <div>
+                <p className="italic">Người lập biểu</p>
+                <div className="h-12" />
+                <p className="font-bold text-slate-900">Ban Cán Sự Lớp</p>
+              </div>
+
+              <div className="text-right">
+                <p className="italic">TP. Hồ Chí Minh, ngày ...... tháng ...... năm 2026</p>
+                <p className="font-bold text-slate-900 uppercase mt-0.5">Giáo Viên Chủ Nhiệm</p>
+                <div className="h-12" />
+                <p className="font-bold text-slate-900">{teacherName}</p>
+              </div>
             </div>
+
           </div>
         </div>
+
       </div>
     </div>
   );

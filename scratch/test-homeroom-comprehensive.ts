@@ -11,7 +11,7 @@ import {
   deleteHomeroomEvent,
   verifyParentPortalAccess,
   getParentStudentOverview
-} from '../src/services/homeroom-service.js';
+} from '../src/services/homeroom-service';
 
 async function runComprehensiveTests() {
   console.log('================================================================');

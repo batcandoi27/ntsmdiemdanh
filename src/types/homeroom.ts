@@ -2,15 +2,18 @@
 // HOMEROOM MODULE TYPES (Phân hệ Giáo Viên Chủ Nhiệm)
 // ============================================
 
+import { Student, Column, BankInfo } from './models';
+
 export type HomeroomEventType = 
   | 'positive'    // Ghi nhận tích cực, việc tốt, thành tích
+  | 'violation'   // Vi phạm nề nếp, kỷ luật
   | 'attendance'  // Vấn đề chuyên cần, đi muộn, trốn tiết
   | 'academic'    // Học tập, bài tập, kiểm tra
   | 'behavior'    // Kỷ luật, tác phong, đồng phục, nề nếp
   | 'activity'    // Hoạt động đoàn đội, ngoại khóa, phong trào
   | 'other';      // Khác
 
-export type HomeroomEventSeverity = 'info' | 'attention' | 'urgent';
+export type HomeroomEventSeverity = 'minor' | 'medium' | 'serious' | 'info' | 'attention' | 'urgent';
 
 export type HomeroomEventStatus = 'open' | 'monitoring' | 'resolved' | 'closed';
 
@@ -42,7 +45,7 @@ export interface HomeroomEvent {
 // --------------------------------------------
 // Kế hoạch Can thiệp & Hỗ trợ học sinh cá nhân
 // --------------------------------------------
-export type InterventionStatus = 'planned' | 'in_progress' | 'successful' | 'needs_revision';
+export type InterventionStatus = 'planned' | 'in_progress' | 'successful' | 'improved' | 'needs_revision';
 
 export interface InterventionCoordination {
   type: 'parent' | 'gvbm' | 'school' | 'student';
@@ -55,24 +58,27 @@ export interface HomeroomIntervention {
   class_id: string;
   student_id: string;
   student_name?: string;
-  problem: string; // Vấn đề gặp phải
-  goal: string; // Mục tiêu rèn luyện
-  measures: string[]; // Các biện pháp áp dụng
-  coordinated_with: InterventionCoordination[]; // Phối hợp cùng ai
+  problem?: string; // Vấn đề gặp phải
+  issue_summary?: string;
+  goal?: string; // Mục tiêu rèn luyện
+  goals?: string;
+  measures: string[] | string; // Các biện pháp áp dụng
+  coordinated_with?: InterventionCoordination[]; // Phối hợp cùng ai
+  parent_cooperation?: string;
   start_date: string; // YYYY-MM-DD
   review_date?: string; // YYYY-MM-DD
   result?: string; // Đánh giá kết quả
   status: InterventionStatus;
   created_by: string;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 // --------------------------------------------
 // Sơ đồ chỗ ngồi & Cơ cấu lớp
 // --------------------------------------------
 export interface DeskSeat {
-  seat_key: string; // vd: "r1_c1_s1"
+  seat_key: string;
   student_id: string | null;
   student_name?: string;
   student_code?: string;
@@ -86,6 +92,8 @@ export interface SeatingChartConfig {
   seats: Record<string, string>; // seat_key -> student_id
   notes?: string;
 }
+
+export type SeatingChart = SeatingChartConfig;
 
 export interface ClassGroup {
   id: string;
@@ -133,38 +141,39 @@ export interface WeeklyChecklistItem {
 }
 
 export interface HomeroomPlan {
-  id: string;
+  id?: string;
   class_id: string;
   academic_year: string;
-  plan_type: HomeroomPlanType;
-  period_key: string; // 'week_01', 'month_09', 'full_year'
+  plan_type: HomeroomPlanType | string;
+  period_key?: string; // 'week_01', 'month_09', 'yearly'
   title?: string;
   content: {
-    focus_points?: string[]; // Trọng tâm công việc
-    measures?: string[]; // Biện pháp thực hiện
-    checklist?: WeeklyChecklistItem[]; // Cho kế hoạch tuần
-    strengths?: string; // Thuận lợi
-    challenges?: string; // Khó khăn
+    focus_points?: string[];
+    measures?: string[] | string;
+    checklist?: WeeklyChecklistItem[];
+    tasks?: { id: string; text: string; done: boolean }[];
+    strengths?: string;
+    challenges?: string;
     targets?: {
-      academic_good_percent?: number; // % Học lực Giỏi/Tốt
-      conduct_good_percent?: number; // % Hạnh kiểm Tốt
-      competitions?: string; // Danh hiệu thi đua đăng ký
+      academic_good_percent?: number;
+      conduct_good_percent?: number;
+      competitions?: string;
     };
     notes?: string;
-    review_summary?: string; // Đánh giá cuối tuần / cuối tháng / cuối kỳ
+    review_summary?: string;
   };
-  created_by: string;
-  created_at: string;
-  updated_at: string;
+  created_by?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 // --------------------------------------------
 // Nhật ký Phối hợp Phụ huynh & Phản hồi GVBM
 // --------------------------------------------
-export type ParentContactType = 'call' | 'meeting' | 'zalo' | 'portal_feedback' | 'gvbm_note';
+export type ParentContactType = 'call' | 'meeting' | 'zalo' | 'portal_feedback' | 'gvbm_note' | 'subject_teacher_feedback';
 
 export interface HomeroomParentContact {
-  id: string;
+  id?: string;
   class_id: string;
   student_id: string;
   student_name?: string;
@@ -172,15 +181,53 @@ export interface HomeroomParentContact {
   contact_date: string; // YYYY-MM-DD
   title?: string;
   content: string; // Nội dung trao đổi
+  agreed_solution?: string;
   parent_feedback?: string; // Ý kiến / Cam kết của phụ huynh
-  status: 'pending' | 'resolved';
-  created_by: string;
-  created_at: string;
+  status: 'pending' | 'resolved' | 'completed';
+  created_by?: string;
+  created_at?: string;
+}
+
+// --------------------------------------------
+// Hồ sơ giáo dục học sinh cá nhân
+// --------------------------------------------
+export interface StudentEducationalProfile {
+  student: Student;
+  attendanceStats: {
+    totalDays: number;
+    presentCount: number;
+    lateCount: number;
+    excusedCount?: number;
+    unexcusedCount?: number;
+    excusedAbsenceCount?: number;
+    unexcusedAbsenceCount?: number;
+    attendanceRate: number;
+  };
+  events: HomeroomEvent[];
+  interventions: HomeroomIntervention[];
+  parentContacts: HomeroomParentContact[];
 }
 
 // --------------------------------------------
 // Cổng Tra cứu Phụ huynh (Parent Portal)
 // --------------------------------------------
+export interface ParentMonitorItem {
+  column: Column;
+  records: Record<string, { completed?: boolean; value?: any; note?: string; updatedAt?: string }>;
+  bankInfo?: BankInfo;
+}
+
+export interface AttendanceHistoryItem {
+  id?: string;
+  date: string;
+  session?: string;
+  period?: string;
+  statusCode: string; // P, K, T, VP, KH, V
+  statusLabel: string;
+  color?: string;
+  note?: string;
+}
+
 export interface ParentStudentOverview {
   student: {
     id: string;
@@ -193,14 +240,23 @@ export interface ParentStudentOverview {
     homeroom_teacher_name?: string;
   };
   attendance: {
-    total_school_days: number;
-    present_days: number;
-    excused_absences: number;
-    unexcused_absences: number;
-    late_days: number;
-    attendance_rate: number; // %
+    p_count: number; // PHÉP (P) - Vắng có phép
+    k_count: number; // KHÔNG (K) - Vắng không phép
+    t_count: number; // TRỄ (T) - Đi muộn
+    vp_count: number; // VI PHẠM (VP) - Vi phạm
+    kh_count: number; // KHEN THƯỞNG (KH) - Khen thưởng
+    v_count: number; // Vắng khác
+    attendance_rate: number; // % Tỷ lệ chuyên cần
+    history?: AttendanceHistoryItem[];
+    // Legacy fields for backward compatibility
+    total_school_days?: number;
+    present_days?: number;
+    excused_absences?: number;
+    unexcused_absences?: number;
+    late_days?: number;
   };
   events: HomeroomEvent[];
+  sharedMonitorColumns?: ParentMonitorItem[];
   announcement?: string;
   timetable?: any;
 }

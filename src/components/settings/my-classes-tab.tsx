@@ -3,10 +3,13 @@
 import { useState, useEffect } from 'react';
 import { Class } from '@/types/models';
 import { db } from '@/services/db';
-import { Check, Search, Save, BookOpen } from 'lucide-react';
+import { assignClassesToUser } from '@/services/user-service';
+import { Check, Search, Save, BookOpen, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
+import toast from 'react-hot-toast';
+import { supabase } from '@/lib/supabase';
 
 export function MyClassesTab() {
     const { appUser } = useAuth();
@@ -20,9 +23,7 @@ export function MyClassesTab() {
     const getStorageKey = () => `myClasses_${appUser?.uid || 'guest'}`;
 
     useEffect(() => {
-        if (appUser) {
-            loadData();
-        }
+        loadData();
     }, [appUser]);
 
     const loadData = async () => {
@@ -35,16 +36,42 @@ export function MyClassesTab() {
             allClasses.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
             setClasses(allClasses);
 
-            // 2. Load saved preference
-            const saved = localStorage.getItem(getStorageKey());
-            if (saved) {
-                setMyClassIds(JSON.parse(saved));
-            } else if (appUser?.assignedClassIds && appUser.assignedClassIds.length > 0) {
-                // Tự động load từ profile Supabase nếu lần đầu chưa có
-                setMyClassIds(appUser.assignedClassIds);
+            // 2. Load saved preference from Supabase DB first, then fallback to localStorage
+            let loadedIds: string[] = [];
+
+            if (appUser?.uid) {
+                // Query trực tiếp từ bảng teacher_classes của user
+                const { data: assignments } = await supabase
+                    .from('teacher_classes')
+                    .select('class_id')
+                    .eq('teacher_id', appUser.uid);
+
+                if (assignments && assignments.length > 0) {
+                    loadedIds = assignments.map(a => a.class_id);
+                } else if (appUser.assignedClassIds && appUser.assignedClassIds.length > 0) {
+                    loadedIds = appUser.assignedClassIds;
+                }
+            }
+
+            // Fallback sang localStorage nếu DB chưa có
+            if (loadedIds.length === 0) {
+                const saved = localStorage.getItem(getStorageKey()) || localStorage.getItem('my-classes');
+                if (saved) {
+                    try {
+                        loadedIds = JSON.parse(saved);
+                    } catch (e) {
+                        console.error('Error parsing myClasses', e);
+                    }
+                }
+            }
+
+            setMyClassIds(loadedIds);
+            // Đồng bộ lại vào localStorage
+            if (loadedIds.length > 0) {
+                localStorage.setItem(getStorageKey(), JSON.stringify(loadedIds));
             }
         } catch (error) {
-            console.error(error);
+            console.error('Lỗi tải danh sách lớp:', error);
         } finally {
             setLoading(false);
         }
@@ -60,21 +87,26 @@ export function MyClassesTab() {
         });
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         setSaving(true);
         try {
+            // 1. Lưu vào localStorage cache
             localStorage.setItem(getStorageKey(), JSON.stringify(myClassIds));
-            // Trigger an event so other components can update if needed
+            localStorage.setItem('my-classes', JSON.stringify(myClassIds));
+
+            // 2. Lưu vào Supabase Database (teacher_classes) nếu có user
+            if (appUser?.uid) {
+                await assignClassesToUser(appUser.uid, myClassIds);
+            }
+
+            // 3. Kích hoạt event cập nhật toàn ứng dụng
             window.dispatchEvent(new Event('myClassesUpdated'));
 
-            // Show success feedback
-            setTimeout(() => {
-                setSaving(false);
-                router.refresh(); // Refresh to potentially update other parts of app
-                alert("Đã lưu danh sách lớp của bạn!");
-            }, 500);
-        } catch (error) {
-            console.error(error);
+            toast.success(`Đã lưu ${myClassIds.length} lớp học của bạn thành công!`);
+        } catch (error: any) {
+            console.error('Lỗi khi lưu lớp:', error);
+            toast.error('Có lỗi xảy ra khi lưu: ' + (error.message || 'Lỗi không xác định'));
+        } finally {
             setSaving(false);
         }
     };
@@ -84,7 +116,14 @@ export function MyClassesTab() {
         (c.teacherName && c.teacherName.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
-    if (loading) return <div className="p-8 text-center text-gray-500">Đang tải danh sách lớp...</div>;
+    if (loading) {
+        return (
+            <div className="p-12 text-center text-gray-500 flex flex-col items-center justify-center gap-3">
+                <Loader2 className="animate-spin text-blue-600" size={32} />
+                <p className="text-sm font-medium">Đang tải danh sách lớp...</p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
@@ -94,28 +133,33 @@ export function MyClassesTab() {
                         <BookOpen className="text-blue-600" size={24} />
                         Lớp Của Tôi
                     </h2>
-                    <p className="text-gray-500 text-sm">Chọn các lớp bạn giảng dạy để truy cập nhanh trong menu.</p>
+                    <p className="text-gray-500 text-sm">Chọn các lớp bạn giảng dạy hoặc phụ trách để truy cập nhanh trong toàn bộ hệ thống.</p>
                 </div>
 
                 <div className="flex items-center gap-2 w-full md:w-auto">
                     <button
                         onClick={() => setMyClassIds(classes.map(c => c.id))}
-                        className="text-xs font-medium text-blue-600 hover:text-blue-800 px-3 py-2 bg-blue-50 rounded-lg"
+                        className="text-xs font-medium text-blue-600 hover:text-blue-800 px-3 py-2 bg-blue-50 hover:bg-blue-100 rounded-lg transition-all"
                     >
-                        Chọn Tất Cả
+                        Chọn Tất Cả ({classes.length})
                     </button>
                     <button
                         onClick={() => setMyClassIds([])}
-                        className="text-xs font-medium text-gray-600 hover:text-gray-800 px-3 py-2 bg-gray-100 rounded-lg"
+                        className="text-xs font-medium text-gray-600 hover:text-gray-800 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all"
                     >
                         Bỏ Chọn
                     </button>
                     <button
                         onClick={handleSave}
                         disabled={saving}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-bold shadow-md hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50"
+                        className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl font-bold shadow-md hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50"
                     >
-                        {saving ? 'Đang lưu...' : (
+                        {saving ? (
+                            <>
+                                <Loader2 className="animate-spin" size={18} />
+                                Đang lưu...
+                            </>
+                        ) : (
                             <>
                                 <Save size={18} />
                                 Lưu Thay Đổi
@@ -138,7 +182,7 @@ export function MyClassesTab() {
                                     {cls.name}
                                 </span>
                             )) : (
-                                <span className="text-gray-500 text-xs italic">Chưa chọn lớp nào...</span>
+                                <span className="text-gray-500 text-xs italic">Chưa chọn lớp nào... Hãy bấm chọn các lớp bên dưới và bấm "Lưu Thay Đổi".</span>
                             )}
                         </div>
                     </div>
@@ -192,8 +236,6 @@ export function MyClassesTab() {
                     );
                 })}
             </div>
-
-
         </div>
     );
 }

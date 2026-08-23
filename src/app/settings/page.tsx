@@ -78,14 +78,16 @@ export default function SettingsPage() {
     };
 
     const loadMyClasses = () => {
-        const saved = localStorage.getItem(`myClasses_${appUser?.uid || 'guest'}`);
+        const saved = localStorage.getItem(`myClasses_${appUser?.uid || 'guest'}`) || localStorage.getItem('my-classes');
         if (saved) {
             try {
                 setMyClassIds(JSON.parse(saved));
             } catch (e) {
                 console.error('Error parsing myClasses', e);
-                setMyClassIds([]);
+                setMyClassIds(appUser?.assignedClassIds || []);
             }
+        } else if (appUser?.assignedClassIds && appUser.assignedClassIds.length > 0) {
+            setMyClassIds(appUser.assignedClassIds);
         } else {
             setMyClassIds([]);
         }

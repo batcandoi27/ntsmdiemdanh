@@ -4,15 +4,15 @@ import React, { useState, useEffect } from 'react';
 import {
   BookOpen,
   Save,
-  Printer,
-  Calendar,
-  CheckCircle2,
-  Award,
+  FileDown,
   Sparkles,
-  School,
-  FileText
+  Award,
+  ChevronDown,
+  CheckCircle2,
+  HelpCircle
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { db } from '@/services/db';
 import {
   getHomeroomClassSettings,
   getHomeroomPlans,
@@ -21,71 +21,63 @@ import {
 import { exportHomeroomHandbookDocx } from '@/services/homeroom-print-service';
 import { HomeroomPlan, HomeroomClassSettings } from '@/types/homeroom';
 import { Student } from '@/types/models';
+import { cn } from '@/lib/utils';
+import { HomeroomTooltip } from '@/components/homeroom/homeroom-tooltip';
+import { HANDBOOK_TEMPLATES } from '@/types/homeroom-presets';
 import toast from 'react-hot-toast';
 
 export default function HomeroomHandbookPage() {
   const [classId, setClassId] = useState<string>('');
+  const [className, setClassName] = useState<string>('');
+  const [teacherName, setTeacherName] = useState<string>('Giáo viên chủ nhiệm');
   const [students, setStudents] = useState<Student[]>([]);
   const [settings, setSettings] = useState<HomeroomClassSettings | null>(null);
   const [yearlyPlan, setYearlyPlan] = useState<HomeroomPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [teacherName, setTeacherName] = useState('Giáo viên chủ nhiệm');
 
+  // Form State
   const [formContent, setFormContent] = useState({
-    strengths: 'Đa số học sinh chăm ngoan, có ý thức kỷ luật tốt. Cơ sở vật chất phòng học khang trang, phụ huynh luôn đồng hành cùng nhà trường.',
-    challenges: 'Một số em có hoàn cảnh gia đình khó khăn, còn rụt rè trong phát biểu và chưa tự giác học bài ở nhà.',
+    strengths: '',
+    challenges: '',
     targets: {
       academic_good_percent: 85,
       conduct_good_percent: 95,
-      competitions: 'Tập thể Lớp Tiên Tiến Xuất Sắc'
+      competitions: 'Lớp Tiên Tiến Xuất Sắc'
     },
-    measures: [
-      '1. Phát huy vai trò tự quản của Ban cán sự lớp và Tổ trưởng.',
-      '2. Tổ chức phong trào Đôi bạn cùng tiến giúp đỡ nhau học tập.',
-      '3. Cập nhật thông tin chuyên cần hàng ngày và thông báo phụ huynh qua Cổng tra cứu.',
-      '4. Kịp thời biểu dương việc tốt và nhắc nhở học sinh vi phạm.'
-    ]
+    measures: ''
   });
 
   useEffect(() => {
-    const saved = localStorage.getItem('homeroom_selected_class') || '';
-    setClassId(saved);
-
-    const handleClassChange = (e: any) => {
-      if (e.detail?.classId) {
-        setClassId(e.detail.classId);
-      }
-    };
-
-    window.addEventListener('homeroom:class_changed', handleClassChange);
-    return () => window.removeEventListener('homeroom:class_changed', handleClassChange);
-  }, []);
-
-  useEffect(() => {
-    if (!classId) return;
+    const activeId = localStorage.getItem('homeroom_active_class_id') || '';
+    setClassId(activeId);
 
     async function load() {
+      if (!activeId) return;
       setLoading(true);
       try {
-        // 1. Students
-        const { data: studentClasses } = await supabase
-          .from('student_classes')
-          .select('student_id, students(*)')
-          .eq('class_id', classId);
+        const stList = await db.getStudentsByClass(activeId);
+        setStudents(stList || []);
 
-        const list: Student[] = (studentClasses || [])
-          .map((sc: any) => sc.students)
-          .filter(Boolean);
+        const { data: clsData } = await supabase
+          .from('classes')
+          .select('name, teacher_classes(is_homeroom, profiles(full_name))')
+          .eq('id', activeId)
+          .maybeSingle();
 
-        setStudents(list);
+        if (clsData) {
+          setClassName(clsData.name || '');
+          const homeroomTc: any = (clsData.teacher_classes || []).find((tc: any) => tc.is_homeroom);
+          const name = Array.isArray(homeroomTc?.profiles)
+            ? homeroomTc.profiles[0]?.full_name
+            : homeroomTc?.profiles?.full_name;
+          if (name) setTeacherName(name);
+        }
 
-        // 2. Settings
-        const st = await getHomeroomClassSettings(classId);
+        const st = await getHomeroomClassSettings(activeId);
         setSettings(st);
 
-        // 3. Plans
-        const plans = await getHomeroomPlans(classId, '2025-2026', 'yearly');
+        const plans = await getHomeroomPlans(activeId, '2025-2026', 'yearly');
         if (plans && plans.length > 0) {
           setYearlyPlan(plans[0]);
           if (plans[0].content) {
@@ -97,24 +89,12 @@ export default function HomeroomHandbookPage() {
                 conduct_good_percent: plans[0].content.targets?.conduct_good_percent ?? formContent.targets.conduct_good_percent,
                 competitions: plans[0].content.targets?.competitions ?? formContent.targets.competitions
               },
-              measures: plans[0].content.measures || formContent.measures
+              measures: Array.isArray(plans[0].content.measures)
+                ? plans[0].content.measures.join('\n')
+                : (plans[0].content.measures || formContent.measures)
             });
           }
         }
-
-        // 4. Teacher Name
-        const { data: classData } = await supabase
-          .from('classes')
-          .select('teacher_classes(is_homeroom, profiles(full_name))')
-          .eq('id', classId)
-          .maybeSingle();
-
-        const homeroomTc: any = (classData?.teacher_classes || []).find((tc: any) => tc.is_homeroom);
-        const name = Array.isArray(homeroomTc?.profiles)
-          ? homeroomTc.profiles[0]?.full_name
-          : homeroomTc?.profiles?.full_name;
-        if (name) setTeacherName(name);
-
       } catch (err) {
         console.error('Error loading handbook data:', err);
       } finally {
@@ -125,73 +105,86 @@ export default function HomeroomHandbookPage() {
     load();
   }, [classId]);
 
+  // Save Plan
   const handleSavePlan = async () => {
     setSaving(true);
     try {
       await saveHomeroomPlan({
-        id: yearlyPlan?.id,
         class_id: classId,
         academic_year: '2025-2026',
         plan_type: 'yearly',
-        period_key: 'full_year',
-        title: `Kế hoạch Chủ nhiệm Năm học 2025-2026 — Lớp ${classId}`,
+        period_key: 'yearly',
+        title: `Sổ kế hoạch chủ nhiệm lớp ${className || classId} năm học 2025-2026`,
         content: formContent
       });
-      toast.success('Đã lưu Sổ chủ nhiệm số!');
+      toast.success('Đã lưu Sổ chủ nhiệm số thành công!');
     } catch (err) {
-      toast.error('Lỗi khi lưu');
+      toast.error('Lỗi khi lưu sổ chủ nhiệm');
     } finally {
       setSaving(false);
     }
   };
 
+  // Export Word
   const handleExportDocx = async () => {
     if (!settings) return;
     try {
-      toast.loading('Đang đóng gói file Sổ chủ nhiệm Word...', { id: 'handbook-docx' });
       await exportHomeroomHandbookDocx(
-        classId,
+        className || 'Lớp học',
         '2025-2026',
         teacherName,
         students,
         settings,
         {
-          ...yearlyPlan,
-          content: formContent
-        } as any
+          id: yearlyPlan?.id || '',
+          class_id: classId,
+          academic_year: '2025-2026',
+          plan_type: 'yearly',
+          title: `Sổ chủ nhiệm lớp ${className}`,
+          content: formContent,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
       );
-      toast.success('Đã tải xuống Sổ chủ nhiệm Word (.DOCX)!', { id: 'handbook-docx' });
-    } catch (err) {
-      toast.error('Lỗi khi xuất file', { id: 'handbook-docx' });
+      toast.success('Đã xuất Sổ chủ nhiệm điện tử ra file Word!');
+    } catch (err: any) {
+      toast.error(err.message || 'Lỗi xuất file Word');
     }
   };
 
+  if (loading) {
+    return <div className="py-20 text-center text-slate-400 text-xs">Đang tải Sổ chủ nhiệm điện tử...</div>;
+  }
+
   return (
     <div className="space-y-6">
-      {/* HEADER */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* 1. TOP HEADER & ACTIONS (Light Theme) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
         <div>
-          <h1 className="text-2xl font-black text-white tracking-tight">
-            Sổ Kế Hoạch & Quản Lý Chủ Nhiệm Số
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-400">
-            Lớp {classId} — Năm học 2025-2026 • Tự động liên kết dữ liệu sĩ số, ban cán sự và xuất bản in
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-black text-slate-900 tracking-tight">
+              Sổ Kế Hoạch & Quản Lý Chủ Nhiệm Số
+            </h2>
+            <HomeroomTooltip content="Số hóa toàn diện sổ chủ nhiệm THCS theo quy định. Tự động liên kết sĩ số, ban cán sự và xuất file Word hoàn chỉnh." />
+          </div>
+          <p className="text-xs text-slate-500 font-medium mt-0.5">
+            Lớp <span className="text-indigo-600 font-bold">{className ? `Lớp ${className}` : ''}</span> • Năm học: 2025 - 2026 • GVCN: <span className="text-slate-700 font-bold">{teacherName}</span>
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             onClick={handleExportDocx}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition-all"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs border border-slate-200 transition-all shadow-sm"
           >
-            <Printer className="w-4 h-4 text-amber-400" />
-            <span>Xuất Sổ Word (.DOCX)</span>
+            <FileDown className="w-4 h-4 text-indigo-600" />
+            <span>Xuất Word (.DOCX)</span>
           </button>
 
           <button
             onClick={handleSavePlan}
             disabled={saving}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold shadow-lg shadow-indigo-600/30 active:scale-95 transition-all"
+            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 active:scale-95 transition-all"
           >
             <Save className="w-4 h-4" />
             <span>{saving ? 'Đang lưu...' : 'Lưu Sổ Chủ Nhiệm'}</span>
@@ -199,122 +192,150 @@ export default function HomeroomHandbookPage() {
         </div>
       </div>
 
-      {/* SỔ CHỦ NHIỆM CONTENT CONTAINER */}
-      <div className="max-w-4xl mx-auto rounded-3xl bg-slate-950/70 border border-slate-800/80 p-6 sm:p-10 backdrop-blur-md space-y-8 shadow-2xl">
-        {/* BÌA TRONG */}
-        <div className="text-center border-b border-slate-800 pb-8 space-y-2">
-          <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Trường THCS Trần Bội Cơ</p>
-          <h2 className="text-2xl sm:text-3xl font-black text-indigo-400 tracking-tight">
-            SỔ KẾ HOẠCH CHỦ NHIỆM LỚP {classId}
-          </h2>
-          <p className="text-sm text-slate-300 font-medium">Năm học 2025 — 2026</p>
-          <p className="text-xs text-slate-400 pt-2">
-            Giáo viên chủ nhiệm: <span className="font-bold text-white">{teacherName}</span> • Sĩ số: <span className="font-bold text-white">{students.length} học sinh</span>
-          </p>
+      {/* 2. FORM PHẦN I: ĐẶC ĐIỂM TÌNH HÌNH LỚP */}
+      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+          <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+            <BookOpen className="w-4 h-4" />
+          </div>
+          <h3 className="font-black text-slate-900 text-sm uppercase tracking-wider">
+            Phần I: Đặc Điểm Tình Hình Lớp
+          </h3>
         </div>
 
-        {/* PHẦN I: ĐẶC ĐIỂM TÌNH HÌNH */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 text-indigo-300 font-black text-sm uppercase tracking-wider">
-            <School className="w-4 h-4" />
-            <span>Phần I: Đặc điểm tình hình lớp</span>
+        {/* 1. Thuận lợi */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="font-bold text-xs text-slate-700">1. Thuận lợi:</label>
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-slate-400 font-bold mr-1">Mẫu gợi ý:</span>
+              {HANDBOOK_TEMPLATES.strengths.map((stText, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setFormContent(prev => ({ ...prev, strengths: stText }))}
+                  className="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-[10px] font-bold text-slate-600 transition-colors"
+                >
+                  Mẫu {idx + 1}
+                </button>
+              ))}
+            </div>
+          </div>
+          <textarea
+            rows={3}
+            value={formContent.strengths}
+            onChange={(e) => setFormContent({ ...formContent, strengths: e.target.value })}
+            placeholder="Nêu các điểm thuận lợi về ý thức học sinh, sự quan tâm của phụ huynh..."
+            className="w-full bg-slate-50 border border-slate-300 rounded-2xl p-3.5 text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
+          />
+        </div>
+
+        {/* 2. Khó khăn */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="font-bold text-xs text-slate-700">2. Khó khăn:</label>
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-slate-400 font-bold mr-1">Mẫu gợi ý:</span>
+              {HANDBOOK_TEMPLATES.challenges.map((chText, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setFormContent(prev => ({ ...prev, challenges: chText }))}
+                  className="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-[10px] font-bold text-slate-600 transition-colors"
+                >
+                  Mẫu {idx + 1}
+                </button>
+              ))}
+            </div>
+          </div>
+          <textarea
+            rows={3}
+            value={formContent.challenges}
+            onChange={(e) => setFormContent({ ...formContent, challenges: e.target.value })}
+            placeholder="Nêu các khó khăn về học lực, nề nếp, hoàn cảnh học sinh..."
+            className="w-full bg-slate-50 border border-slate-300 rounded-2xl p-3.5 text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
+          />
+        </div>
+      </div>
+
+      {/* 3. FORM PHẦN II: MỤC TIÊU & CHỈ TIÊU PHẤN ĐẤU */}
+      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+          <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+            <Award className="w-4 h-4" />
+          </div>
+          <h3 className="font-black text-slate-900 text-sm uppercase tracking-wider">
+            Phần II: Mục Tiêu & Chỉ Tiêu Phấn Đấu
+          </h3>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label className="font-bold text-xs text-slate-700 block mb-1">Chỉ tiêu Học lực Tốt/Khá (%)</label>
+            <input
+              type="number"
+              value={formContent.targets.academic_good_percent}
+              onChange={(e) => setFormContent({
+                ...formContent,
+                targets: { ...formContent.targets, academic_good_percent: parseInt(e.target.value) || 0 }
+              })}
+              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold"
+            />
           </div>
 
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs font-bold text-slate-400 block mb-1">1. Thuận lợi:</label>
-              <textarea
-                rows={3}
-                value={formContent.strengths}
-                onChange={(e) => setFormContent({ ...formContent, strengths: e.target.value })}
-                className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-3 text-xs sm:text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500/50"
-              />
-            </div>
+          <div>
+            <label className="font-bold text-xs text-slate-700 block mb-1">Chỉ tiêu Hạnh kiểm Tốt (%)</label>
+            <input
+              type="number"
+              value={formContent.targets.conduct_good_percent}
+              onChange={(e) => setFormContent({
+                ...formContent,
+                targets: { ...formContent.targets, conduct_good_percent: parseInt(e.target.value) || 0 }
+              })}
+              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold"
+            />
+          </div>
 
-            <div>
-              <label className="text-xs font-bold text-slate-400 block mb-1">2. Khó khăn:</label>
-              <textarea
-                rows={3}
-                value={formContent.challenges}
-                onChange={(e) => setFormContent({ ...formContent, challenges: e.target.value })}
-                className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-3 text-xs sm:text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500/50"
-              />
-            </div>
+          <div>
+            <label className="font-bold text-xs text-slate-700 block mb-1">Danh hiệu thi đua đăng ký</label>
+            <input
+              type="text"
+              value={formContent.targets.competitions}
+              onChange={(e) => setFormContent({
+                ...formContent,
+                targets: { ...formContent.targets, competitions: e.target.value }
+              })}
+              placeholder="VD: Tập thể Lớp Xuất Sắc"
+              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold"
+            />
           </div>
         </div>
 
-        {/* PHẦN II: MỤC TIÊU & CHỈ TIÊU */}
-        <div className="space-y-4 pt-4 border-t border-slate-800">
-          <div className="flex items-center gap-2 text-indigo-300 font-black text-sm uppercase tracking-wider">
-            <Award className="w-4 h-4 text-amber-400" />
-            <span>Phần II: Mục tiêu & Chỉ tiêu phấn đấu</span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
-              <label className="text-xs font-bold text-slate-400 block">Chỉ tiêu Học lực Tốt/Khá (%)</label>
-              <input
-                type="number"
-                value={formContent.targets?.academic_good_percent || 85}
-                onChange={(e) => setFormContent({
-                  ...formContent,
-                  targets: { ...formContent.targets, academic_good_percent: parseInt(e.target.value) || 0 }
-                })}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-emerald-400"
-              />
-            </div>
-
-            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
-              <label className="text-xs font-bold text-slate-400 block">Chỉ tiêu Hạnh kiểm Tốt (%)</label>
-              <input
-                type="number"
-                value={formContent.targets?.conduct_good_percent || 95}
-                onChange={(e) => setFormContent({
-                  ...formContent,
-                  targets: { ...formContent.targets, conduct_good_percent: parseInt(e.target.value) || 0 }
-                })}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-blue-400"
-              />
-            </div>
-
-            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
-              <label className="text-xs font-bold text-slate-400 block">Danh hiệu thi đua</label>
-              <input
-                type="text"
-                value={formContent.targets?.competitions || ''}
-                onChange={(e) => setFormContent({
-                  ...formContent,
-                  targets: { ...formContent.targets, competitions: e.target.value }
-                })}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-amber-400"
-              />
+        {/* 3. Biện pháp thực hiện */}
+        <div className="space-y-2 pt-2">
+          <div className="flex items-center justify-between">
+            <label className="font-bold text-xs text-slate-700">Các biện pháp thực hiện chính:</label>
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-slate-400 font-bold mr-1">Mẫu gợi ý:</span>
+              {HANDBOOK_TEMPLATES.measures.map((msText, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setFormContent(prev => ({ ...prev, measures: msText }))}
+                  className="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-[10px] font-bold text-slate-600 transition-colors"
+                >
+                  Mẫu {idx + 1}
+                </button>
+              ))}
             </div>
           </div>
-        </div>
-
-        {/* PHẦN III: BIỆN PHÁP GIÁO DỤC CHỦ YẾU */}
-        <div className="space-y-4 pt-4 border-t border-slate-800">
-          <div className="flex items-center gap-2 text-indigo-300 font-black text-sm uppercase tracking-wider">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span>Phần III: Biện pháp thực hiện chủ yếu</span>
-          </div>
-
-          <div className="space-y-2">
-            {formContent.measures.map((m, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={m}
-                  onChange={(e) => {
-                    const updated = [...formContent.measures];
-                    updated[idx] = e.target.value;
-                    setFormContent({ ...formContent, measures: updated });
-                  }}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs sm:text-sm text-slate-200"
-                />
-              </div>
-            ))}
-          </div>
+          <textarea
+            rows={4}
+            value={formContent.measures}
+            onChange={(e) => setFormContent({ ...formContent, measures: e.target.value })}
+            placeholder="Nêu các giải pháp nâng cao chất lượng học tập, rèn luyện nề nếp..."
+            className="w-full bg-slate-50 border border-slate-300 rounded-2xl p-3.5 text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
+          />
         </div>
       </div>
     </div>

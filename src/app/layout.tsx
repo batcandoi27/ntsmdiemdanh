@@ -15,6 +15,7 @@ import { LoadingOverlay } from '@/components/ui/loading-overlay';
 import { ChatProvider } from '@/context/chat-context';
 import { ChatContainer } from '@/components/chat/chat-container';
 import { Toaster } from 'react-hot-toast';
+import { ExtensionErrorGuard } from '@/components/extension-error-guard';
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -51,6 +52,7 @@ export default function RootLayout({
           </AuthProvider>
           <LoadingOverlay />
           <Toaster position="top-right" />
+          <ExtensionErrorGuard />
         </LoadingProvider>
         <Analytics />
       </body>

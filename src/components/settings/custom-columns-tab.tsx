@@ -4,10 +4,13 @@ import { useState, useEffect } from 'react';
 import { Column, ColumnFrequency, PeriodConfig, SubPeriod, Student, Class } from '@/types/models';
 import { getCustomColumns, createColumn, updateColumn, deleteColumn } from '@/services/column-service';
 import { getStudentsAction } from '@/app/actions/student-actions';
-import { Plus, Trash2, Edit2, Loader2, X, Save, Calendar, Clock, CheckSquare, Users } from 'lucide-react';
+import { Plus, Trash2, Edit2, Loader2, X, Save, Calendar, Clock, CheckSquare, Users, User, Building2, QrCode, Eye, EyeOff, CreditCard } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getBookTheme } from '@/lib/book-themes';
 import { Modal } from '@/components/ui/modal';
 import { useAuth } from '@/context/auth-context';
+import { BankSettingsModal } from '@/components/settings/bank-settings-modal';
+import toast from 'react-hot-toast';
 
 interface Props {
     classIds: string[];
@@ -26,6 +29,7 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
     const [students, setStudents] = useState<Student[]>([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
+    const [showBankModal, setShowBankModal] = useState(false);
     const [editingColumn, setEditingColumn] = useState<Column | null>(null);
     const [saving, setSaving] = useState(false);
 
@@ -35,6 +39,12 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
     const [formSuggestions, setFormSuggestions] = useState<string[]>([]);
     const [formNewSuggestion, setFormNewSuggestion] = useState('');
     const [formSelectedClassIds, setFormSelectedClassIds] = useState<string[]>([]);
+
+    // Parent Sharing & Payment Config State
+    const [formIsSharedWithParents, setFormIsSharedWithParents] = useState(false);
+    const [formPaymentEnabled, setFormPaymentEnabled] = useState(false);
+    const [formRecipientType, setFormRecipientType] = useState<'school' | 'teacher' | 'custom'>('school');
+    const [formDefaultAmount, setFormDefaultAmount] = useState<number>(0);
 
     // Period Config
     const [formPeriodType, setFormPeriodType] = useState<'month' | 'semester' | 'custom'>('month');
@@ -92,6 +102,10 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
         setFormScope('all');
         setFormStudentIds([]);
         setFormSelectedClassIds(classIds);
+        setFormIsSharedWithParents(false);
+        setFormPaymentEnabled(false);
+        setFormRecipientType('school');
+        setFormDefaultAmount(0);
         setEditingColumn(null);
     };
 
@@ -118,6 +132,10 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
         setFormScope(column.applicableScope || 'all');
         setFormStudentIds(column.applicableStudentIds || []);
         setFormSelectedClassIds([column.classId]); // Editing single column
+        setFormIsSharedWithParents(column.isSharedWithParents || false);
+        setFormPaymentEnabled(column.paymentConfig?.enabled || false);
+        setFormRecipientType(column.paymentConfig?.recipientType || 'school');
+        setFormDefaultAmount(column.paymentConfig?.defaultAmount || 0);
 
         setShowModal(true);
     };
@@ -241,6 +259,13 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
                 name: formName,
                 suggestions: formSuggestions,
                 applicableScope: formScope,
+                isSharedWithParents: formIsSharedWithParents,
+                paymentConfig: {
+                    enabled: formPaymentEnabled,
+                    recipientType: formRecipientType,
+                    defaultAmount: formDefaultAmount,
+                    unit: 'VNĐ'
+                }
             };
 
             if (periodConfig) commonData.periodConfig = periodConfig;
@@ -292,9 +317,10 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
             await loadData();
             setShowModal(false);
             resetForm();
+            toast.success(editingColumn ? 'Đã cập nhật cấu hình cột thành công!' : 'Đã tạo cột mới thành công!');
         } catch (error) {
             console.error('Error saving column:', error);
-            alert('Có lỗi xảy ra khi lưu: ' + (error as Error).message);
+            toast.error('Có lỗi xảy ra khi lưu: ' + (error as Error).message);
         } finally {
             setSaving(false);
         }
@@ -355,20 +381,30 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
 
             <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="font-bold text-gray-800 text-lg">Cột Tuỳ Chỉnh</h3>
+                    <h3 className="font-bold text-gray-800 text-lg">Cột Tuỳ Chỉnh & Thu Phí</h3>
                     <p className="text-sm text-gray-500">
                         {classIds.length > 1
                             ? `Quản lý cột cho ${classIds.length} lớp đã chọn.`
                             : 'Quản lý các cột theo dõi điểm danh, thu tiền, hoặc hoạt động khác.'}
                     </p>
                 </div>
-                <button
-                    onClick={openCreateModal}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm active:scale-95"
-                >
-                    <Plus size={18} />
-                    Thêm cột mới
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setShowBankModal(true)}
+                        className="flex items-center gap-2 px-3.5 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg font-bold hover:bg-indigo-100 transition-colors shadow-sm active:scale-95 text-xs sm:text-sm"
+                        title="Cài đặt STK ngân hàng nhận tiền qua mã VietQR"
+                    >
+                        <Building2 size={16} />
+                        <span>Cài đặt STK (VietQR)</span>
+                    </button>
+                    <button
+                        onClick={openCreateModal}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm active:scale-95 text-xs sm:text-sm"
+                    >
+                        <Plus size={18} />
+                        Thêm cột mới
+                    </button>
+                </div>
             </div>
 
             {columns.length === 0 ? (
@@ -383,18 +419,22 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
                 </div>
             ) : (
                 <div className="grid gap-4 md:grid-cols-2">
-                    {columns.map(column => (
-                        <div
-                            key={column.id}
-                            className={cn(
-                                "bg-white rounded-xl border p-4 flex flex-col justify-between transition-all hover:shadow-md",
-                                column.archived ? "border-gray-200 opacity-60 bg-gray-50" : "border-gray-200"
-                            )}
-                        >
-                            <div className="flex justify-between items-start mb-3">
-                                <div>
-                                    <h3 className="font-bold text-gray-800 text-lg">{column.name}</h3>
-                                    <div className="flex items-center gap-2 mt-1">
+                    {columns.map((column, colIdx) => {
+                        const theme = getBookTheme(colIdx, column.id || column.name);
+                        return (
+                            <div
+                                key={column.id}
+                                className={cn(
+                                    "rounded-2xl border p-4 flex flex-col justify-between transition-all hover:shadow-md",
+                                    column.archived
+                                        ? "border-gray-200 opacity-60 bg-gray-50"
+                                        : cn(theme.bgGradient, theme.borderColor, theme.borderLeftAccent)
+                                )}
+                            >
+                                <div className="flex justify-between items-start mb-3">
+                                    <div>
+                                        <h3 className={cn("font-black text-lg", theme.titleColor)}>{column.name}</h3>
+                                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
                                         <span className={cn(
                                             "text-xs px-2 py-0.5 rounded-full font-medium border",
                                             column.frequency === 'daily' ? "bg-green-50 text-green-700 border-green-200" :
@@ -403,6 +443,31 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
                                         )}>
                                             {getFrequencyLabel(column.frequency)}
                                         </span>
+
+                                        {/* Badge chia sẻ Phụ huynh */}
+                                        {column.isSharedWithParents ? (
+                                            <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                                                <Eye size={12} />
+                                                <span>Hiện ở Portal PH</span>
+                                            </span>
+                                        ) : (
+                                            <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-slate-100 text-slate-500 border border-slate-200 flex items-center gap-1">
+                                                <EyeOff size={12} />
+                                                <span>Riêng tư</span>
+                                            </span>
+                                        )}
+
+                                        {/* Badge Thu tiền VietQR */}
+                                        {column.paymentConfig?.enabled && (
+                                            <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1">
+                                                <CreditCard size={12} />
+                                                <span>
+                                                    VietQR ({column.paymentConfig.recipientType === 'teacher' ? 'GV' : 'Trường'})
+                                                    {column.paymentConfig.defaultAmount ? ` • ${column.paymentConfig.defaultAmount.toLocaleString('vi-VN')}đ` : ''}
+                                                </span>
+                                            </span>
+                                        )}
+
                                         {column.archived && (
                                             <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded border border-gray-200">
                                                 Lưu trữ
@@ -445,7 +510,8 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
                                 </div>
                             </div>
                         </div>
-                    ))}
+                    );
+                })}
                 </div>
             )}
 
@@ -660,6 +726,108 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
                         </div>
                     </div>
 
+                    {/* 4. Parent Sharing & VietQR Payment Configuration */}
+                    <div className="space-y-4 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                                    <Eye className="w-4 h-4 text-indigo-600" />
+                                    <span>Chia sẻ cho Phụ huynh tra cứu tại /portal</span>
+                                </h4>
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                    {formIsSharedWithParents
+                                        ? '🟢 Phụ huynh tra cứu con sẽ xem được cột này (Chỉ đọc).'
+                                        : '🔒 Cột này đang ở chế độ Riêng tư (Phụ huynh không thấy).'}
+                                </p>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={formIsSharedWithParents}
+                                    onChange={e => setFormIsSharedWithParents(e.target.checked)}
+                                    className="sr-only peer"
+                                />
+                                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                            </label>
+                        </div>
+
+                        {/* Cấu hình Thu tiền & VietQR */}
+                        <div className="pt-3 border-t border-indigo-100/80 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h5 className="font-bold text-xs text-slate-700 flex items-center gap-1.5">
+                                        <CreditCard className="w-3.5 h-3.5 text-indigo-600" />
+                                        <span>Bật tính năng Thu tiền & Tạo mã VietQR</span>
+                                    </h5>
+                                    <p className="text-[11px] text-slate-500">
+                                        Hiển thị nút Quét mã QR thanh toán Napas247 cho Phụ huynh tại /portal
+                                    </p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={formPaymentEnabled}
+                                        onChange={e => setFormPaymentEnabled(e.target.checked)}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                                </label>
+                            </div>
+
+                            {formPaymentEnabled && (
+                                <div className="space-y-3 bg-white p-3.5 rounded-xl border border-indigo-100 text-xs">
+                                    {/* Chọn nơi nhận tiền */}
+                                    <div>
+                                        <label className="font-bold text-slate-700 block mb-1">Tài khoản nhận tiền</label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setFormRecipientType('school')}
+                                                className={`py-2 px-3 rounded-lg font-bold border transition-all text-left flex items-center gap-2 ${
+                                                    formRecipientType === 'school'
+                                                        ? 'bg-indigo-50 border-indigo-500 text-indigo-700'
+                                                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                                                }`}
+                                            >
+                                                <Building2 className="w-4 h-4 shrink-0 text-indigo-600" />
+                                                <span>🏫 Toàn trường (Admin)</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setFormRecipientType('teacher')}
+                                                className={`py-2 px-3 rounded-lg font-bold border transition-all text-left flex items-center gap-2 ${
+                                                    formRecipientType === 'teacher'
+                                                        ? 'bg-indigo-50 border-indigo-500 text-indigo-700'
+                                                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                                                }`}
+                                            >
+                                                <User className="w-4 h-4 shrink-0 text-indigo-600" />
+                                                <span>🧑‍🏫 Cá nhân / Quỹ lớp</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Số tiền mặc định */}
+                                    <div>
+                                        <label className="font-bold text-slate-700 block mb-1">
+                                            Số tiền mặc định cần đóng (VNĐ)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            value={formDefaultAmount || ''}
+                                            onChange={e => setFormDefaultAmount(Number(e.target.value) || 0)}
+                                            placeholder="VD: 50000, 100000, 200000..."
+                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg font-bold text-slate-900 bg-slate-50 focus:ring-2 focus:ring-indigo-500/20"
+                                        />
+                                        <p className="text-[11px] text-slate-500 mt-1">
+                                            * Nếu để 0 hoặc trống, hệ thống sẽ lấy số tiền ghi trong ô dữ liệu của từng học sinh.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
                     {/* Actions */}
                     <div className="flex gap-3 pt-4 border-t sticky bottom-0 bg-white pb-1">
                         <button
@@ -679,6 +847,14 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
                     </div>
                 </div>
             </Modal>
+
+            {/* Bank Settings Modal */}
+            <BankSettingsModal
+                isOpen={showBankModal}
+                onClose={() => setShowBankModal(false)}
+                userId={appUser?.uid}
+                isSchoolAdmin={appUser?.role === 'admin' || appUser?.role === 'principal'}
+            />
         </div>
     );
 }

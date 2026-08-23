@@ -1,0 +1,26 @@
+{
+  "contract_version": "1.0",
+  "task_id": "TASK-DOCX-EXPORT-001",
+  "task_name": "Chuẩn hóa định dạng xuất file Word (.docx) chuyên nghiệp cho Giáo viên chủ nhiệm",
+  "iteration": 1,
+  "status": "READY_FOR_REVIEW",
+  "role_executor": "Antigravity (Gemini)",
+  "role_reviewer": "ChatGPT Web (Senior Architect)",
+  "changes_summary": [
+    "Khắc phục 100% lỗi dính chữ do ký tự '\\n' trong docx-js bằng cách tách Paragraph độc lập hoặc dùng break: 1.",
+    "Chuẩn hóa Header hành chính và Khối Chữ Ký bằng Bảng 2 cột không viền (Borderless Table) chuẩn Quốc hiệu & Đơn vị.",
+    "Thêm Callout Info Box làm nổi bật thông tin GVCN, Lớp và Sĩ số học sinh với viền màu chủ đạo 3pt.",
+    "Căn đều 2 bên (AlignmentType.JUSTIFIED), thụt đầu dòng 0.85cm (firstLine: 480), giãn dòng 1.3.",
+    "Bảng dữ liệu có tableHeader: true, cantSplit: true và tiêu đề nền đậm.",
+    "Thiết lập lề in chuẩn đóng gáy sách (Trái: 30mm, Trên/Dưới/Phải: 20mm) kèm Footer tự động đánh số 'Trang X / Y'.",
+    "Áp dụng đồng bộ cho cả 5 biểu mẫu: Sổ chủ nhiệm, Danh sách học sinh, Phiếu báo rèn luyện, Biên bản sự việc, Biên bản họp PH."
+  ],
+  "modified_files": [
+    "src/app/api/homeroom/export-docx/route.ts"
+  ],
+  "verification_evidence": {
+    "type_check": "PASS (Zero TypeScript errors)",
+    "build_status": "PASS (npm run build succeeded, code 0)",
+    "live_smoke_test": "HTTP 200 - application/vnd.openxmlformats-officedocument.wordprocessingml.document (11,028 bytes valid OpenXML binary)"
+  }
+}

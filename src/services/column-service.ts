@@ -6,6 +6,9 @@
 import { Column, ColumnFrequency } from '@/types/models';
 import { createFixedColumnsForClass, isFixedColumn } from '@/lib/defaults';
 import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase-admin';
+
+const dbClient = (typeof window === 'undefined' && supabaseAdmin) ? supabaseAdmin : supabase;
 
 // ============================================
 // Helper: Supabase row ↔ TypeScript Column
@@ -26,12 +29,25 @@ interface ColumnRow {
     applicable_student_ids: string[] | null;
     archived: boolean;
     default_visibility: boolean;
+    is_shared_with_parents?: boolean;
+    payment_config?: Record<string, unknown> | null;
     order: number;
     created_at: string;
     updated_at: string;
 }
 
 function rowToColumn(row: ColumnRow): Column {
+    let paymentConfig: Column['paymentConfig'] = undefined;
+    if (row.payment_config) {
+        const raw = row.payment_config as any;
+        paymentConfig = {
+            enabled: !!raw.enabled,
+            recipientType: (raw.recipientType || raw.recipient_type || 'school') as 'school' | 'teacher',
+            defaultAmount: Number(raw.defaultAmount ?? raw.default_amount ?? 0),
+            unit: raw.unit || 'VNĐ',
+        };
+    }
+
     return {
         id: row.id,
         classId: row.class_id,
@@ -47,6 +63,8 @@ function rowToColumn(row: ColumnRow): Column {
         applicableStudentIds: row.applicable_student_ids ?? undefined,
         archived: row.archived,
         defaultVisibility: row.default_visibility,
+        isSharedWithParents: row.is_shared_with_parents ?? false,
+        paymentConfig,
         order: row.order,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
@@ -69,6 +87,8 @@ function columnToRow(col: Column): Record<string, unknown> {
         applicable_student_ids: col.applicableStudentIds ?? null,
         archived: col.archived,
         default_visibility: col.defaultVisibility ?? true,
+        is_shared_with_parents: col.isSharedWithParents ?? false,
+        payment_config: col.paymentConfig ?? null,
         order: col.order,
         created_at: col.createdAt,
         updated_at: col.updatedAt,
@@ -80,10 +100,30 @@ function columnToRow(col: Column): Record<string, unknown> {
 // ============================================
 
 /**
+ * Lấy các cột sổ theo dõi được bật chia sẻ cho Phụ huynh tại /portal
+ */
+export async function getSharedColumnsForClass(classId: string): Promise<Column[]> {
+    const { data, error } = await dbClient
+        .from('columns')
+        .select('*')
+        .eq('class_id', classId)
+        .eq('is_shared_with_parents', true)
+        .eq('archived', false)
+        .order('order', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching shared columns for class:', error);
+        return [];
+    }
+
+    return (data || []).map(r => rowToColumn(r as ColumnRow));
+}
+
+/**
  * Get all columns for a class
  */
 export async function getColumns(classId: string, userId?: string): Promise<Column[]> {
-    let q = supabase
+    let q = dbClient
         .from('columns')
         .select('*')
         .eq('class_id', classId);
@@ -114,7 +154,7 @@ export async function getColumnsByFrequency(classId: string, frequency: ColumnFr
  * Get a single column by ID
  */
 export async function getColumn(columnId: string): Promise<Column | null> {
-    const { data, error } = await supabase
+    const { data, error } = await dbClient
         .from('columns')
         .select('*')
         .eq('id', columnId)
@@ -153,7 +193,7 @@ export async function createColumn(column: Omit<Column, 'createdAt' | 'updatedAt
         updatedAt: now,
     };
 
-    const { error } = await supabase
+    const { error } = await dbClient
         .from('columns')
         .upsert(columnToRow(fullColumn));
 
@@ -174,21 +214,25 @@ export async function updateColumn(columnId: string, updates: Partial<Column>): 
         throw new Error('Column not found');
     }
 
-    // Fixed columns can only update suggestions
+    // Fixed columns can update suggestions, sharing and payment config
     if (isFixedColumn(columnId)) {
-        const { error } = await supabase
+        const fixedUpdate: Record<string, unknown> = {
+            suggestions: updates.suggestions ?? existing.suggestions,
+            updated_at: new Date().toISOString(),
+        };
+        if (updates.isSharedWithParents !== undefined) fixedUpdate.is_shared_with_parents = updates.isSharedWithParents;
+        if (updates.paymentConfig !== undefined) fixedUpdate.payment_config = updates.paymentConfig;
+
+        const { error } = await dbClient
             .from('columns')
-            .update({
-                suggestions: updates.suggestions ?? existing.suggestions,
-                updated_at: new Date().toISOString(),
-            })
+            .update(fixedUpdate)
             .eq('id', columnId);
 
         if (error) throw new Error('Lỗi cập nhật cột: ' + error.message);
         return;
     }
 
-    // Custom columns can update more fields
+    // Custom columns can update all fields
     const updateData: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (updates.name !== undefined) updateData.name = updates.name;
     if (updates.suggestions !== undefined) updateData.suggestions = updates.suggestions;
@@ -200,8 +244,10 @@ export async function updateColumn(columnId: string, updates: Partial<Column>): 
     if (updates.subPeriods !== undefined) updateData.sub_periods = updates.subPeriods;
     if (updates.applicableScope !== undefined) updateData.applicable_scope = updates.applicableScope;
     if (updates.applicableStudentIds !== undefined) updateData.applicable_student_ids = updates.applicableStudentIds;
+    if (updates.isSharedWithParents !== undefined) updateData.is_shared_with_parents = updates.isSharedWithParents;
+    if (updates.paymentConfig !== undefined) updateData.payment_config = updates.paymentConfig;
 
-    const { error } = await supabase
+    const { error } = await dbClient
         .from('columns')
         .update(updateData)
         .eq('id', columnId);
@@ -217,7 +263,7 @@ export async function deleteColumn(columnId: string): Promise<void> {
         throw new Error('Cannot delete fixed columns');
     }
 
-    const { error } = await supabase
+    const { error } = await dbClient
         .from('columns')
         .delete()
         .eq('id', columnId);
@@ -263,7 +309,7 @@ export async function initializeFixedColumns(classId: string): Promise<void> {
     }
 
     if (newRows.length > 0) {
-        const { error } = await supabase
+        const { error } = await dbClient
             .from('columns')
             .upsert(newRows);
 
