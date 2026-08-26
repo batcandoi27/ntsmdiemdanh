@@ -1,0 +1,25 @@
+⚠️ ChatGPT Web Luna cannot access the local Codex computer in this turn. The accumulated context does not contain local tool results yet: it will see instructions and attachments, but not workspace contents. ChatGPT-native capabilities such as web search remain available when the product provides them. This installation is in Browser-only mode. Open MCP in the launcher and connect the Full harness to give Instant through Extra High access to local tools.{  
+"status": "REQUEST\_CHANGES",  
+"phase": "Phase 1 - Core Foundation & Trust Loop",  
+"layers\_evaluated": {  
+"architecture\_and\_domain": "STRONG. The proposed Student 360 timeline, explainable risk radar, leave state machine, quick capture, meeting generator, and parent portal form a coherent domain model and a credible GVCN 360 trust loop.",  
+"code\_quality\_and\_typing": "PASSING ON REPORTED EVIDENCE. The reported TypeScript/ESLint sweep has 0 errors and 0 warnings, and production compilation succeeds. However, source-level review is not evidenced, so typing and maintainability cannot be independently certified from the supplied results alone.",  
+"security\_and\_isolation": "REQUEST CHANGES. QR auto-login is described as token-based, but the evidence does not establish token entropy, expiry, one-time/revocation semantics, server-side validation, replay resistance, rate limiting, authorization against classId/stCode, or tenant/student isolation. These are release-critical for a parent portal.",  
+"integration\_and\_atomic\_sync": "CONDITIONAL. The PENDING -> APPROVED -> APPLIED transition and attendance synchronization are reported as successful, but the evidence does not demonstrate transactional behavior under retries, concurrent approvals, partial failures, duplicate requests, or rollback. Atomicity therefore remains unproven.",  
+"empirical\_tests": "5/5 reported functional scenarios pass, and build/lint pass. This is encouraging but insufficient for an independent QA gate because the evidence does not include negative, adversarial, concurrency, authorization/isolation, idempotency, or failure-recovery tests."  
+},  
+"metrics": {  
+"build\_success": true,  
+"routes\_compiled": 34,  
+"test\_cases\_passed": "5/5"  
+},  
+"findings": \[  
+"F1 \[BLOCKER\] QR authentication security boundary is insufficiently evidenced. Add tests for forged/tampered tokens, expired tokens, replayed tokens, cross-student/class access, malformed tokens, brute-force/rate-limit behavior, and token revocation.",  
+"F2 \[BLOCKER\] Parent authorization/isolation is not independently demonstrated. Prove that a valid parent token cannot access another student's timeline, attendance, leave records, contacts, or class data by changing URL parameters such as classId or stCode.",  
+"F3 \[BLOCKER\] Leave approval atomicity is asserted but not demonstrated under failure and concurrency. Verify transaction boundaries, idempotency, duplicate approval, simultaneous approval, and rollback when attendance synchronization fails.",  
+"F4 \[HIGH\] The risk radar needs boundary-condition coverage. Test missing data, conflicting signals, duplicate events, date/time-zone boundaries, and deterministic scoring so risk classification cannot silently regress.",  
+"F5 \[HIGH\] The reported 5/5 tests appear primarily happy-path/integration scenarios. Add automated regression coverage for authorization, negative cases, persistence failures, and state-machine invariants before treating Phase 1 as production-ready.",  
+"F6 \[MEDIUM\] The supplied evidence does not independently establish that all 34 compiled routes have correct authorization and tenant/class isolation; build success alone only proves compilation."  
+\],  
+"strategic\_advisory": "Do not approve Phase 1 yet. The product architecture and reported functional results are strong enough to proceed to a focused hardening pass, but the stated Trust Loop depends critically on security isolation and genuinely atomic leave-to-attendance synchronization. Close F1-F3 with reproducible automated tests and implementation-level evidence, then rerun the full regression/build sweep. If those gates pass, Phase 1 should be a strong candidate for APPROVED."  
+}

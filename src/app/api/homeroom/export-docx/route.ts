@@ -179,21 +179,56 @@ function createSectionHeading(title: string) {
   });
 }
 
+function createHeaderCell(text: string, widthPercent: number) {
+  return new TableCell({
+    width: { size: widthPercent, type: WidthType.PERCENTAGE },
+    shading: { fill: THEME.primary, type: ShadingType.CLEAR },
+    margins: { top: 80, bottom: 80, left: 60, right: 60 },
+    children: [
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text, bold: true, color: 'FFFFFF', font: THEME.font, size: 20 })]
+      })
+    ]
+  });
+}
+
+function createDataCell(text: string, widthPercent: number, align: any = AlignmentType.CENTER, isIndex = false, isBold = false) {
+  return new TableCell({
+    width: { size: widthPercent, type: WidthType.PERCENTAGE },
+    margins: { top: 60, bottom: 60, left: 60, right: 60 },
+    children: [
+      new Paragraph({
+        alignment: align,
+        children: [new TextRun({ text, font: THEME.font, bold: isBold, size: 20 })]
+      })
+    ]
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const {
       templateId = 'template_handbook',
-      className = '6A4',
+      className: rawClassName = '6A4',
       academicYear = '2025 - 2026',
       teacherName = 'Huỳnh Thị Tuyền',
-      students = Array(39).fill({}),
+      students: rawStudents = Array(39).fill({}),
       settings = {},
       yearlyPlan = {},
       student = {},
       event = {},
       attendanceStats = {}
     } = body;
+
+    const className = String(rawClassName || '6A4').replace(/^Lớp\s*/i, '');
+    const students = [...(rawStudents || [])].sort((a: any, b: any) => {
+      const codeA = a.code || '';
+      const codeB = b.code || '';
+      if (codeA && codeB) return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: 'base' });
+      return (a.order || 0) - (b.order || 0);
+    });
 
     let doc: Document;
 
@@ -669,7 +704,7 @@ export async function POST(req: NextRequest) {
     // ─────────────────────────────────────────────────────────────
     // TEMPLATE 5: BIÊN BẢN HỌP CHA MẸ HỌC SINH (PARENT MEETING)
     // ─────────────────────────────────────────────────────────────
-    } else {
+    } else if (templateId === 'template_parent_meeting') {
       const mainTitleParagraph = new Paragraph({
         alignment: AlignmentType.CENTER,
         spacing: { before: 280, after: 120 },
@@ -745,6 +780,281 @@ export async function POST(req: NextRequest) {
             pAgenda2,
             new Paragraph({ spacing: { before: 360 } }),
             createStandardSignature(teacherName, 'TP. Hồ Chí Minh, ngày ...... tháng ...... năm 2026', 'THƯ KÝ CUỘC HỌP', 'CHỦ TỌA (GVCN)'),
+          ]
+        }]
+      });
+
+    // ─────────────────────────────────────────────────────────────
+    // TEMPLATE 6: BẢNG TỔNG HỢP THI ĐUA NỀ NẾP & CHUYÊN CẦN THÁNG
+    // ─────────────────────────────────────────────────────────────
+    } else if (templateId === 'template_competition_summary') {
+      const monthYear = body.monthYear || '2026-08';
+      const events: any[] = body.events || [];
+
+      const mainTitleParagraph = new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 280, after: 120 },
+        children: [
+          new TextRun({ text: 'BẢNG TỔNG HỢP THI ĐUA NỀ NẾP & CHUYÊN CẦN', bold: true, size: 28, font: THEME.font, color: THEME.primary }),
+          new TextRun({ text: `LỚP: ${className.toUpperCase()}  —  THÁNG ${monthYear}`, bold: true, size: 22, font: THEME.font, color: THEME.secondary, break: 1 }),
+        ]
+      });
+
+      const tableRows = [
+        new TableRow({
+          tableHeader: true,
+          children: [
+            createHeaderCell('STT', 8),
+            createHeaderCell('Mã HS', 14),
+            createHeaderCell('Họ và Tên Học Sinh', 36),
+            createHeaderCell('Việc tốt (+)', 14),
+            createHeaderCell('Vi phạm (-)', 14),
+            createHeaderCell('Điểm thi đua', 14),
+          ]
+        })
+      ];
+
+      students.forEach((st: any, idx: number) => {
+        const stEvents = events.filter((e: any) => e.student_id === st.id);
+        const positives = stEvents.filter((e: any) => e.type === 'positive').length;
+        const violations = stEvents.filter((e: any) => e.type === 'violation').length;
+        const score = stEvents.reduce((acc: number, e: any) => acc + (e.points_delta || 0), 100);
+
+        tableRows.push(
+          new TableRow({
+            children: [
+              createDataCell(String(idx + 1), 8, AlignmentType.CENTER, true),
+              createDataCell(st.code || `HS${String(idx + 1).padStart(2, '0')}`, 14, AlignmentType.CENTER),
+              createDataCell(st.fullName || st.name || st.full_name || '', 36, AlignmentType.LEFT, false, true),
+              createDataCell(`+${positives}`, 14, AlignmentType.CENTER),
+              createDataCell(`-${violations}`, 14, AlignmentType.CENTER),
+              createDataCell(`${score} đ`, 14, AlignmentType.CENTER, false, true),
+            ]
+          })
+        );
+      });
+
+      const compTable = new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: tableRows
+      });
+
+      doc = new Document({
+        sections: [{
+          properties: STANDARD_PAGE_PROPERTIES,
+          footers: { default: createStandardFooter('Bảng Tổng Hợp Thi Đua') },
+          children: [
+            createAdministrativeHeader(),
+            mainTitleParagraph,
+            compTable,
+            new Paragraph({ spacing: { before: 360 } }),
+            createStandardSignature(teacherName, 'TP. Hồ Chí Minh, ngày ...... tháng ...... năm 2026', 'LỚP TRƯỞNG', 'GIÁO VIÊN CHỦ NHIỆM'),
+          ]
+        }]
+      });
+
+    // ─────────────────────────────────────────────────────────────
+    // TEMPLATE 7: BÁO CÁO TỔNG KẾT ĐÁNH GIÁ SỔ CHỦ NHIỆM SỐ THÁNG
+    // ─────────────────────────────────────────────────────────────
+    } else if (templateId === 'template_monthly_synthesis') {
+      const monthYear = body.monthYear || '2026-08';
+      const rep = body.synthesisReport || {};
+
+      const mainTitleParagraph = new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 280, after: 120 },
+        children: [
+          new TextRun({ text: 'BÁO CÁO TỔNG KẾT CÔNG TÁC CHỦ NHIỆM THÁNG', bold: true, size: 28, font: THEME.font, color: THEME.primary }),
+          new TextRun({ text: `LỚP: ${className.toUpperCase()}  —  THÁNG ${monthYear}`, bold: true, size: 22, font: THEME.font, color: THEME.secondary, break: 1 }),
+        ]
+      });
+
+      const summaryBox = new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: {
+          top: { style: BorderStyle.SINGLE, size: 4, color: THEME.borderColor },
+          bottom: { style: BorderStyle.SINGLE, size: 4, color: THEME.borderColor },
+          right: { style: BorderStyle.SINGLE, size: 4, color: THEME.borderColor },
+          left: { style: BorderStyle.SINGLE, size: 24, color: THEME.primary },
+        },
+        rows: [
+          new TableRow({
+            children: [
+              new TableCell({
+                shading: { fill: THEME.accentBg, type: ShadingType.CLEAR },
+                margins: { top: 120, bottom: 120, left: 180, right: 180 },
+                children: [
+                  new Paragraph({
+                    children: [
+                      new TextRun({ text: '1. Sĩ số lớp: ', bold: true, size: 22, font: THEME.font, color: THEME.primary }),
+                      new TextRun({ text: `${rep.total_students || students.length} học sinh`, font: THEME.font, break: 1 }),
+                      new TextRun({ text: '2. Tỷ lệ chuyên cần tháng: ', bold: true, size: 22, font: THEME.font, color: THEME.primary }),
+                      new TextRun({ text: `${rep.attendance_rate || 98}%`, bold: true, font: THEME.font, break: 1 }),
+                      new TextRun({ text: '3. Tổng số lượt khen thưởng / việc tốt: ', bold: true, size: 22, font: THEME.font, color: THEME.primary }),
+                      new TextRun({ text: `+${rep.total_positive_events || 0} lượt`, font: THEME.font, break: 1 }),
+                      new TextRun({ text: '4. Tổng số vi phạm nề nếp: ', bold: true, size: 22, font: THEME.font, color: THEME.primary }),
+                      new TextRun({ text: `${rep.total_violations || 0} lượt`, font: THEME.font }),
+                    ]
+                  })
+                ]
+              })
+            ]
+          })
+        ]
+      });
+
+      const sectionGroups = createSectionHeading('PHÂN LOẠI 4 NHÓM HỌC SINH');
+      const groupParagraphs: any[] = [];
+
+      (rep.student_groups || []).forEach((grp: any) => {
+        groupParagraphs.push(
+          new Paragraph({
+            spacing: { before: 100, after: 40 },
+            children: [
+              new TextRun({ text: `• ${grp.group_name} (${grp.students?.length || 0} học sinh):`, bold: true, font: THEME.font, color: THEME.primary }),
+              new TextRun({
+                text: (grp.students || []).map((s: any) => `${s.student_name} (${s.reason})`).join('; ') || ' Không có.',
+                font: THEME.font,
+                break: 1
+              })
+            ]
+          })
+        );
+      });
+
+      doc = new Document({
+        sections: [{
+          properties: STANDARD_PAGE_PROPERTIES,
+          footers: { default: createStandardFooter('Báo Cáo Tổng Kết Chủ Nhiệm') },
+          children: [
+            createAdministrativeHeader(),
+            mainTitleParagraph,
+            summaryBox,
+            sectionGroups,
+            ...groupParagraphs,
+            new Paragraph({ spacing: { before: 360 } }),
+            createStandardSignature(teacherName, 'TP. Hồ Chí Minh, ngày ...... tháng ...... năm 2026', 'BAN GIÁM HIỆU DUYỆT', 'GIÁO VIÊN CHỦ NHIỆM'),
+          ]
+        }]
+      });
+
+    // ─────────────────────────────────────────────────────────────
+    // TEMPLATE 8: KỊCH BẢN & BIÊN BẢN TIẾT SINH HOẠT LỚP THỨ 7 (BEAUTIFIER)
+    // ─────────────────────────────────────────────────────────────
+    } else if (templateId === 'template_weekly_meeting') {
+      const draft = body.draft || {};
+      const week = draft.week || 1;
+      const summary = draft.summary || { total_students: students.length, attendance_rate: 100, late_count: 0, unexcused_count: 0 };
+      const praises: any[] = draft.praises || [];
+      const warnings: any[] = draft.warnings || [];
+
+      const mainTitleParagraph = new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 280, after: 120 },
+        children: [
+          new TextRun({ text: `KỊCH BẢN & BIÊN BẢN TIẾT SINH HOẠT LỚP ${className.toUpperCase()}`, bold: true, size: 28, font: THEME.font, color: THEME.primary }),
+          new TextRun({ text: `TUẦN: ${week}  —  NĂM HỌC: ${academicYear}`, bold: true, size: 22, font: THEME.font, color: THEME.secondary, break: 1 }),
+        ]
+      });
+
+      const metaBox = new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: {
+          top: { style: BorderStyle.SINGLE, size: 4, color: THEME.borderColor },
+          bottom: { style: BorderStyle.SINGLE, size: 4, color: THEME.borderColor },
+          right: { style: BorderStyle.SINGLE, size: 4, color: THEME.borderColor },
+          left: { style: BorderStyle.SINGLE, size: 24, color: THEME.primary },
+        },
+        rows: [
+          new TableRow({
+            children: [
+              new TableCell({
+                shading: { fill: THEME.accentBg, type: ShadingType.CLEAR },
+                margins: { top: 120, bottom: 120, left: 180, right: 180 },
+                children: [
+                  new Paragraph({
+                    children: [
+                      new TextRun({ text: '• Sĩ số lớp: ', bold: true, font: THEME.font, color: THEME.primary }),
+                      new TextRun({ text: `${summary.total_students || students.length} học sinh        `, font: THEME.font }),
+                      new TextRun({ text: '• Tỷ lệ chuyên cần tuần: ', bold: true, font: THEME.font, color: THEME.primary }),
+                      new TextRun({ text: `${summary.attendance_rate || 100}%`, bold: true, font: THEME.font, break: 1 }),
+                      new TextRun({ text: '• Số lượt đi muộn: ', bold: true, font: THEME.font, color: THEME.primary }),
+                      new TextRun({ text: `${summary.late_count || 0} lượt        `, font: THEME.font }),
+                      new TextRun({ text: '• Số lượt vắng KP: ', bold: true, font: THEME.font, color: THEME.primary }),
+                      new TextRun({ text: `${summary.unexcused_count || 0} lượt`, font: THEME.font }),
+                    ]
+                  })
+                ]
+              })
+            ]
+          })
+        ]
+      });
+
+      const sec1 = createSectionHeading('I. ĐÁNH GIÁ TÌNH HÌNH TUẦN QUA');
+      const pSec1 = new Paragraph({
+        alignment: AlignmentType.JUSTIFIED,
+        spacing: { before: 80, after: 80, line: 300 },
+        children: [
+          new TextRun({ text: '1. Chuyên cần & Nề nếp: ', bold: true, font: THEME.font }),
+          new TextRun({ text: `Tập thể lớp chấp hành nghiêm túc thời gian biểu, tỷ lệ chuyên cần đạt ${summary.attendance_rate || 100}%. Ban cán sự lớp duy trì tốt việc kiểm tra truy bài 15 phút đầu giờ.\n`, font: THEME.font }),
+          new TextRun({ text: '2. Học tập & Bộ môn: ', bold: true, font: THEME.font }),
+          new TextRun({ text: 'Các tổ duy trì tốt nề nếp chuẩn bị bài tập về nhà và giữ gìn trật tự trong các tiết học bộ môn.', font: THEME.font })
+        ]
+      });
+
+      const sec2 = createSectionHeading('II. TUYÊN DƯƠNG & KHEN THƯỞNG ⭐');
+      const praiseRuns = praises.length > 0
+        ? praises.map(p => new TextRun({ text: `• ${p.student_name}: ${p.reason}\n`, font: THEME.font, bold: true, color: '047857' }))
+        : [new TextRun({ text: '• Toàn thể lớp duy trì tốt nề nếp kỷ luật và thi đua học tập xuất sắc.', font: THEME.font })];
+      const pSec2 = new Paragraph({ spacing: { before: 80, after: 80 }, children: praiseRuns });
+
+      const sec3 = createSectionHeading('III. NHẮC NHỞ & CẦN CẢI THIỆN ⚠️');
+      const warnRuns = warnings.length > 0
+        ? warnings.map(w => new TextRun({ text: `• ${w.student_name}: ${w.reason}\n`, font: THEME.font, bold: true, color: 'B91C1C' }))
+        : [new TextRun({ text: '• Không có học sinh vi phạm nghiêm trọng trong tuần. Tiếp tục phát huy tinh thần tự giác.', font: THEME.font })];
+      const pSec3 = new Paragraph({ spacing: { before: 80, after: 80 }, children: warnRuns });
+
+      const sec4 = createSectionHeading('IV. PHƯƠNG HƯỚNG & KẾ HOẠCH TUẦN TỚI 🚀');
+      const pSec4 = new Paragraph({
+        alignment: AlignmentType.JUSTIFIED,
+        spacing: { before: 80, after: 80, line: 300 },
+        children: [
+          new TextRun({ text: '1. Ổn định sĩ số, 100% học sinh đi học đúng giờ trước 6h45 / 12h45.\n', font: THEME.font }),
+          new TextRun({ text: '2. Ban cán sự lớp tăng cường kiểm tra vệ sinh lớp và truy bài đầu giờ.\n', font: THEME.font }),
+          new TextRun({ text: '3. Phân công đôi bạn cùng tiến giúp đỡ các bạn còn yếu trong học tập.\n', font: THEME.font }),
+          new TextRun({ text: '4. Tích cực tham gia các phong trào thi đua tuần của nhà trường.', font: THEME.font })
+        ]
+      });
+
+      doc = new Document({
+        sections: [{
+          properties: STANDARD_PAGE_PROPERTIES,
+          footers: { default: createStandardFooter('Kịch Bản Sinh Hoạt Lớp') },
+          children: [
+            createAdministrativeHeader(),
+            mainTitleParagraph,
+            metaBox,
+            sec1,
+            pSec1,
+            sec2,
+            pSec2,
+            sec3,
+            pSec3,
+            sec4,
+            pSec4,
+            new Paragraph({ spacing: { before: 360 } }),
+            createStandardSignature(teacherName, 'TP. Hồ Chí Minh, ngày ...... tháng ...... năm 2026', 'LỚP TRƯỞNG', 'GIÁO VIÊN CHỦ NHIỆM'),
+          ]
+        }]
+      });
+    } else {
+      doc = new Document({
+        sections: [{
+          properties: STANDARD_PAGE_PROPERTIES,
+          children: [
+            createAdministrativeHeader(),
+            new Paragraph({ text: 'Biểu mẫu hành chính giáo dục' })
           ]
         }]
       });

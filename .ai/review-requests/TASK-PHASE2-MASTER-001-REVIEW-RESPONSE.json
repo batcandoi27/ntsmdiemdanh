@@ -1,0 +1,55 @@
+⚠️ ChatGPT Web Luna cannot access the local Codex computer in this turn. The accumulated context does not contain local tool results yet: it will see instructions and attachments, but not workspace contents. ChatGPT-native capabilities such as web search remain available when the product provides them. This installation is in Browser-only mode. Open MCP in the launcher and connect the Full harness to give Instant through Extra High access to local tools.{  
+"status": "REQUEST\_CHANGES",  
+"phase": "Phase 2 - Cooperation & Workflow Engine",  
+"layers\_evaluated": {  
+"architecture\_and\_domain": "Thiết kế thể hiện phân tách hợp lý giữa cooperation feed, delegation/review pipeline và payment reconciliation. Trạng thái pending\_review trước khi GVCN phê duyệt là phù hợp với nguyên tắc kiểm soát nghiệp vụ. Tuy nhiên, bằng chứng được cung cấp chưa đủ để xác nhận toàn bộ invariant domain, đặc biệt là quyền sở hữu lớp, quyền duyệt, tính nhất quán khi chuyển feedback thành event và tính nguyên tử của cập nhật điểm.",  
+"code\_quality\_and\_typing": "Kết quả lint TypeScript/ESLint 0 errors và 0 warnings cùng production build thành công là bằng chứng tốt cho chất lượng compile-time và tính tích hợp của code. Tuy nhiên, chưa có source-level evidence hoặc test report để xác nhận typing tại boundary API, validation input và xử lý exception/transaction ở các workflow quan trọng.",  
+"security\_and\_idempotency": "Idempotency của SePay webhook đã được kiểm chứng qua một case duplicate cụ thể, nhưng chưa đủ để kết luận lớp bảo mật đã đạt production gate. Cần chứng minh xác thực webhook/signature hoặc cơ chế trust tương đương, authorization theo vai trò cho cooperation/organization, validation chống payload giả mạo hoặc malformed, và race-condition safety khi cùng một giao dịch được gửi đồng thời. Idempotency key cũng cần được enforce bằng unique constraint/storage atomicity thay vì chỉ dựa vào application-level check.",  
+"integration\_and\_workflow": "Ba workflow chính đã được kiểm chứng end-to-end ở mức happy-path: feedback -> event, cadre log -> approval -> official record, payment webhook -> reconciliation. Điểm còn thiếu là các negative-path và concurrency-path: unauthorized approval, duplicate conversion, approval/rejection retry, malformed payment syntax, unknown student/class/fee, amount mismatch, webhook retry đồng thời và lỗi giữa các bước cập nhật.",  
+"empirical\_tests": "3/3 nhóm test happy-path đã pass, lint pass và build pass với 34/34 routes. Đây là bằng chứng tích cực nhưng chưa đủ làm QA release gate vì mỗi nhóm hiện chỉ thể hiện một scenario đại diện. Đặc biệt security, authorization, idempotency under concurrency và failure recovery chưa được thể hiện trong evidence."  
+},  
+"metrics": {  
+"build\_success": true,  
+"routes\_compiled": 34,  
+"test\_cases\_passed": "3/3 groups"  
+},  
+"findings": \[  
+{  
+"severity": "HIGH",  
+"area": "Webhook security",  
+"finding": "Chưa có evidence xác nhận webhook được xác thực nguồn gửi hoặc chống request giả mạo.",  
+"required\_action": "Bổ sung verification mechanism phù hợp với SePay integration, reject request không hợp lệ trước khi reconciliation, và test forged/invalid webhook."  
+},  
+{  
+"severity": "HIGH",  
+"area": "Authorization",  
+"finding": "Chưa có evidence chứng minh GVBM, lớp trưởng/lớp phó/tổ trưởng và GVCN bị giới hạn đúng phạm vi quyền.",  
+"required\_action": "Bổ sung authorization matrix và negative tests cho từng role, bao gồm cross-class access và unauthorized approval."  
+},  
+{  
+"severity": "HIGH",  
+"area": "Idempotency/concurrency",  
+"finding": "Một duplicate webhook tuần tự đã pass chưa chứng minh idempotency an toàn khi hai webhook giống nhau đến đồng thời.",  
+"required\_action": "Enforce uniqueness atomically tại persistence layer và bổ sung concurrent duplicate test; bảo đảm reconciliation chỉ xảy ra một lần."  
+},  
+{  
+"severity": "MEDIUM",  
+"area": "Workflow invariants",  
+"finding": "Chưa có evidence cho repeated 1-click conversion, repeated approval và retry sau partial failure.",  
+"required\_action": "Bổ sung state-transition tests bảo đảm action đã hoàn tất không thể tạo event/record/score adjustment lần hai."  
+},  
+{  
+"severity": "MEDIUM",  
+"area": "Input validation",  
+"finding": "Chưa có evidence cho syntax payment sai, mã lớp/học sinh/khoản thu không tồn tại, kỳ thu không hợp lệ và amount mismatch.",  
+"required\_action": "Bổ sung negative-path tests và xác định rõ trạng thái rejected/unmatched/manual\_review, tuyệt đối không tự động gạch nợ khi dữ liệu không đủ chắc chắn."  
+},  
+{  
+"severity": "MEDIUM",  
+"area": "Transactional consistency",  
+"finding": "Chưa chứng minh việc cập nhật monitor, debt/payment record và score/event là atomic hoặc có cơ chế recovery khi một bước thất bại.",  
+"required\_action": "Kiểm tra transaction boundary, unique constraints và retry/recovery semantics cho các workflow có nhiều write operations."  
+}  
+\],  
+"strategic\_advisory": "Phase 2 có nền tảng tốt và happy-path đã được chứng minh rõ ràng, nhưng chưa nên đóng QA gate ở trạng thái APPROVED chỉ dựa trên 3 scenario hiện tại. Ưu tiên trước release: (1) webhook authentication và input validation, (2) RBAC/tenant-or-class authorization, (3) database-enforced idempotency với concurrent requests, và (4) negative/failure-path tests cho toàn bộ state transitions. Sau khi các finding HIGH được chứng minh bằng automated tests và evidence persistence/transaction phù hợp, có thể re-review để chuyển sang APPROVED. Build/lint hiện tại được xem là đạt và không cần thay đổi chỉ vì các finding trên."  
+}

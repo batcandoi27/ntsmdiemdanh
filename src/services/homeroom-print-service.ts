@@ -113,3 +113,88 @@ export async function exportParentMeetingDocx(
     meetingTitle
   }, `Bien-ban-hop-phu-huynh-${className}-${academicYear}.docx`);
 }
+
+// 6. Xuất bảng tổng hợp thi đua nề nếp tháng
+export async function exportCompetitionSummaryDocx(
+  className: string,
+  monthYear: string,
+  teacherName: string,
+  students: Student[],
+  events: HomeroomEvent[]
+) {
+  return downloadDocxFromServer({
+    templateId: 'template_competition_summary',
+    className,
+    monthYear,
+    teacherName,
+    students,
+    events
+  }, `Bang-tong-hop-thi-dua-thang-${monthYear}-${className}.docx`);
+}
+
+// 7. Xuất báo cáo tổng kết sổ chủ nhiệm số tháng
+export async function exportMonthlySynthesisDocx(
+  className: string,
+  monthYear: string,
+  teacherName: string,
+  synthesisReport: any
+) {
+  return downloadDocxFromServer({
+    templateId: 'template_monthly_synthesis',
+    className,
+    monthYear,
+    teacherName,
+    synthesisReport
+  }, `Bao-cao-tong-ket-chu-nhiem-${monthYear}-${className}.docx`);
+}
+
+// 8. Xuất Kịch bản & Biên bản Sinh hoạt lớp thứ 7 (.DOCX Chuẩn Đẹp Sư Phạm)
+export async function exportWeeklyMeetingDocx(
+  className: string,
+  academicYear: string,
+  teacherName: string,
+  draft: any
+) {
+  return downloadDocxFromServer({
+    templateId: 'template_weekly_meeting',
+    className,
+    academicYear,
+    teacherName,
+    draft
+  }, `Kich-ban-sinh-hoat-lop-${className}-Tuan-${draft?.week || 1}.docx`);
+}
+
+// Helper tải PPTX từ server
+async function downloadPptxFromServer(payload: any, filename: string) {
+  const response = await fetch('/api/homeroom/export-pptx', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.error || 'Lỗi khi tạo slide PowerPoint từ máy chủ');
+  }
+
+  const blob = await response.blob();
+  saveAs(blob, filename);
+}
+
+// 9. Xuất Slide Trình Chiếu Sinh Hoạt Lớp Thứ 7 (.PPTX 16:9)
+export async function exportWeeklyMeetingPptx(
+  className: string,
+  academicYear: string,
+  teacherName: string,
+  draft: any
+) {
+  return downloadPptxFromServer({
+    className,
+    academicYear,
+    teacherName,
+    draft
+  }, `Slide-sinh-hoat-lop-${className}-Tuan-${draft?.week || 1}.pptx`);
+}
+

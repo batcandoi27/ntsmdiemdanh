@@ -257,7 +257,12 @@ export class SupabaseAdapter implements DbAdapter {
         }
 
         const list: Student[] = (data || []).map(d => transformDbToStudent(d))
-            .sort((a, b) => (a.order || 0) - (b.order || 0));
+            .sort((a, b) => {
+                if (a.code && b.code) {
+                    return a.code.localeCompare(b.code, undefined, { numeric: true, sensitivity: 'base' });
+                }
+                return (a.order || 0) - (b.order || 0);
+            });
 
         setCache(CACHE_KEY, list, 300000);
         return list;

@@ -17,7 +17,7 @@ export type HomeroomEventSeverity = 'minor' | 'medium' | 'serious' | 'info' | 'a
 
 export type HomeroomEventStatus = 'open' | 'monitoring' | 'resolved' | 'closed';
 
-export type HomeroomEventSource = 'gvcn' | 'gvbm' | 'parent' | 'student' | 'school';
+export type HomeroomEventSource = 'gvcn' | 'gvbm' | 'parent' | 'student' | 'cadre' | 'school';
 
 export interface HomeroomEvent {
   id: string;
@@ -198,11 +198,18 @@ export interface StudentEducationalProfile {
     totalDays: number;
     presentCount: number;
     lateCount: number;
-    excusedCount?: number;
-    unexcusedCount?: number;
-    excusedAbsenceCount?: number;
-    unexcusedAbsenceCount?: number;
+    excusedCount: number;
+    unexcusedCount: number;
+    excusedAbsenceCount: number;
+    unexcusedAbsenceCount: number;
+    p_count?: number;
+    k_count?: number;
+    t_count?: number;
+    vp_count?: number;
+    kh_count?: number;
+    v_count?: number;
     attendanceRate: number;
+    history?: AttendanceHistoryItem[];
   };
   events: HomeroomEvent[];
   interventions: HomeroomIntervention[];
@@ -260,4 +267,212 @@ export interface ParentStudentOverview {
   sharedMonitorColumns?: ParentMonitorItem[];
   announcement?: string;
   timetable?: any;
+  leaveRequests?: LeaveRequest[];
+  todayPulse?: {
+    is_present_today: boolean;
+    status_label: string;
+    status_color: string;
+    has_pending_leave: boolean;
+    recent_praise?: string;
+    action_required?: string;
+  };
 }
+
+// --------------------------------------------
+// Đơn Xin Nghỉ Phép Trực Tuyến (Leave Request)
+// --------------------------------------------
+export type LeaveRequestStatus = 'pending' | 'approved' | 'rejected' | 'applied';
+
+export interface LeaveRequest {
+  id: string;
+  class_id: string;
+  student_id: string;
+  student_name?: string;
+  student_code?: string;
+  start_date: string; // YYYY-MM-DD
+  end_date: string;   // YYYY-MM-DD
+  session?: 'morning' | 'afternoon' | 'all_day'; // Sáng / Chiều / Cả ngày
+  reason: string;
+  attachment_url?: string;
+  parent_name?: string;
+  parent_phone?: string;
+  status: LeaveRequestStatus;
+  gvcn_note?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+// --------------------------------------------
+// Radar Cảnh Báo Sớm Học Sinh Nguy Cơ (Risk Radar)
+// --------------------------------------------
+export type RiskLevel = 'high' | 'medium' | 'low' | 'stable';
+
+export interface RiskRadarStudent {
+  student_id: string;
+  student_name: string;
+  student_code: string;
+  gender?: string;
+  risk_level: RiskLevel;
+  risk_score: number; // 0 - 100
+  factors: string[];  // ['3 buổi vắng không phép', '2 lần đi muộn', 'GVBM Toán phản ánh']
+  trend: 'increasing' | 'decreasing' | 'stable';
+  suggested_action: string;
+  last_event_date?: string;
+}
+
+// --------------------------------------------
+// Dòng Thời Gian Học Sinh 360 (Student 360 Event)
+// --------------------------------------------
+export type Student360Category = 
+  | 'attendance' 
+  | 'conduct' 
+  | 'achievement' 
+  | 'subject_teacher' 
+  | 'parent_contact' 
+  | 'leave_request';
+
+export interface Student360Event {
+  id: string;
+  timestamp: string;
+  date: string;
+  category: Student360Category;
+  title: string;
+  description: string;
+  badge_label: string;
+  badge_color: string;
+  icon_name: string;
+  meta?: Record<string, any>;
+}
+
+// --------------------------------------------
+// Kịch Bản & Biên Bản Sinh Hoạt Lớp Thứ 7
+// --------------------------------------------
+export interface WeeklyMeetingDraft {
+  week_number: number;
+  academic_year: string;
+  class_id: string;
+  class_name: string;
+  teacher_name: string;
+  date_range: string;
+  summary: {
+    total_students: number;
+    attendance_rate: number;
+    total_violations: number;
+    total_achievements: number;
+    excused_count: number;
+    unexcused_count: number;
+    late_count: number;
+  };
+  top_achieving_students: Array<{ name: string; reason: string }>;
+  students_needing_attention: Array<{ name: string; reason: string }>;
+  group_rankings: Array<{ group_name: string; score: number; rank: number }>;
+  key_focus_next_week: string[];
+  full_script_markdown: string;
+  created_at: string;
+}
+
+// --------------------------------------------
+// Phối Hợp Giáo Viên Bộ Môn (Subject Teacher Feedback)
+// --------------------------------------------
+export interface SubjectTeacherFeedback {
+  id: string;
+  class_id: string;
+  subject_name: string;
+  teacher_name: string;
+  period_number: number;
+  date: string;
+  lesson_evaluation: 'good' | 'average' | 'poor';
+  praised_students: Array<{ student_id: string; student_name: string; note: string }>;
+  reminded_students: Array<{ student_id: string; student_name: string; note: string }>;
+  general_comment?: string;
+  status: 'unread' | 'acknowledged' | 'converted_to_event';
+  created_at: string;
+}
+
+// --------------------------------------------
+// Nhật Ký Nề Nếp Ban Cán Sự Lớp (Cadre Log Entry)
+// --------------------------------------------
+export type CadreRole = 
+  | 'monitor' 
+  | 'vice_monitor' 
+  | 'group_leader_1' 
+  | 'group_leader_2' 
+  | 'group_leader_3' 
+  | 'group_leader_4';
+
+export interface CadreLogEntry {
+  id: string;
+  class_id: string;
+  cadre_role: CadreRole;
+  cadre_name: string;
+  target_student_id: string;
+  target_student_name: string;
+  date: string;
+  type: 'positive' | 'violation';
+  category: string;
+  description: string;
+  points_delta: number;
+  status: 'pending_review' | 'approved' | 'rejected';
+  gvcn_review_note?: string;
+  created_at: string;
+}
+
+// --------------------------------------------
+// Đối Soát Thu Phí Tự Động (Payment Transaction Record)
+// --------------------------------------------
+export interface PaymentTransactionRecord {
+  id: string;
+  provider: 'sepay' | 'vietqr' | 'manual';
+  provider_transaction_id: string; // Khóa Idempotency chống trùng
+  class_id: string;
+  student_id: string;
+  column_id: string;
+  period_key?: string;
+  amount: number;
+  transfer_content: string;
+  transaction_time: string;
+  status: 'success' | 'duplicate_ignored' | 'unmatched';
+  created_at: string;
+}
+
+// --------------------------------------------
+// PHASE 3: BÁO CÁO TỔNG HỢP THÁNG & ĐỀ XUẤT CAN THIỆP CÁ NHÂN HÓA
+// --------------------------------------------
+export interface MonthlySynthesisStudentGroup {
+  group_type: 'praise' | 'attendance_warning' | 'discipline_intervention' | 'stable';
+  group_name: string;
+  students: {
+    student_id: string;
+    student_name: string;
+    reason: string;
+    points_delta?: number;
+    absent_count?: number;
+    violation_count?: number;
+  }[];
+}
+
+export interface MonthlySynthesisReport {
+  class_id: string;
+  month_year: string; // YYYY-MM
+  total_students: number;
+  attendance_rate: number;
+  total_positive_events: number;
+  total_violations: number;
+  student_groups: MonthlySynthesisStudentGroup[];
+  recommended_interventions: {
+    student_id: string;
+    student_name: string;
+    category: string;
+    suggested_action: string;
+    coordination_target: 'parent' | 'gvbm' | 'cadre';
+  }[];
+}
+
+export interface ReportCardEvaluationPreset {
+  level: 'good' | 'fair' | 'pass' | 'need_improvement';
+  title: string;
+  conduct_comments: string[];
+  academic_comments: string[];
+}
+
+

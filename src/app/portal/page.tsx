@@ -20,11 +20,22 @@ import {
   CreditCard,
   QrCode,
   Receipt,
-  Check
+  Check,
+  FileText,
+  Plus,
+  HeartPulse,
+  CheckCircle
 } from 'lucide-react';
 import { db } from '@/services/db';
-import { verifyParentPortalAccess, getParentStudentOverview, createHomeroomParentContact } from '@/services/homeroom-service';
-import { ParentStudentOverview } from '@/types/homeroom';
+import {
+  verifyParentPortalAccess,
+  getParentStudentOverview,
+  createHomeroomParentContact,
+  verifyParentPortalToken,
+  submitLeaveRequest,
+  getLeaveRequests
+} from '@/services/homeroom-service';
+import { ParentStudentOverview, LeaveRequest } from '@/types/homeroom';
 import { Class, Student } from '@/types/models';
 import { cn } from '@/lib/utils';
 import { getBookTheme } from '@/lib/book-themes';
@@ -46,7 +57,18 @@ export default function ParentPortalPage() {
   // Đã xác thực thành công
   const [authenticatedStudent, setAuthenticatedStudent] = useState<Student | null>(null);
   const [overview, setOverview] = useState<ParentStudentOverview | null>(null);
-  const [activeTab, setActiveTab] = useState<'attendance' | 'events' | 'monitor' | 'message'>('attendance');
+  const [activeTab, setActiveTab] = useState<'attendance' | 'events' | 'monitor' | 'leaves' | 'message'>('attendance');
+
+  // Đơn xin nghỉ phép state
+  const [studentLeaves, setStudentLeaves] = useState<LeaveRequest[]>([]);
+  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+  const [leaveStartDate, setLeaveStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [leaveEndDate, setLeaveEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [leaveSession, setLeaveSession] = useState<'all_day' | 'morning' | 'afternoon'>('all_day');
+  const [leaveReason, setLeaveReason] = useState('Em bị sốt/ốm, xin nghỉ học để dưỡng bệnh');
+  const [parentNameInput, setParentNameInput] = useState('Phụ huynh');
+  const [parentPhoneInput, setParentPhoneInput] = useState('');
+  const [submittingLeave, setSubmittingLeave] = useState(false);
 
   // Modal VietQR
   const [paymentModalData, setPaymentModalData] = useState<{
@@ -63,13 +85,46 @@ export default function ParentPortalPage() {
   const [messageContent, setMessageContent] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
 
+  const loadStudentData = async (stId: string, clsId: string) => {
+    try {
+      const [data, leaves] = await Promise.all([
+        getParentStudentOverview(stId, clsId),
+        getLeaveRequests(clsId)
+      ]);
+      setOverview(data);
+      setStudentLeaves(leaves.filter(l => l.student_id === stId));
+    } catch (err) {
+      console.error('Error loading student portal data:', err);
+    }
+  };
+
   useEffect(() => {
     async function loadClassesAndRestoreSession() {
       try {
         const list = await db.getClasses();
         setClasses(list || []);
 
-        // Khôi phục phiên đăng nhập đã lưu
+        // 1. Kiểm tra Deep-link Token từ URL (?token=...)
+        if (typeof window !== 'undefined') {
+          const params = new URLSearchParams(window.location.search);
+          const token = params.get('token');
+          if (token) {
+            setLoading(true);
+            const tokenRes = await verifyParentPortalToken(token);
+            if (tokenRes.success && tokenRes.student && tokenRes.classId) {
+              setSelectedClassId(tokenRes.classId);
+              setAuthenticatedStudent(tokenRes.student);
+              await loadStudentData(tokenRes.student.id, tokenRes.classId);
+              const studentDisplayName = tokenRes.student.fullName || (tokenRes.student as any).name || 'học sinh';
+              toast.success(`Đã tự động xác thực cho em ${studentDisplayName}!`);
+              setLoading(false);
+              setInitialChecking(false);
+              return;
+            }
+          }
+        }
+
+        // 2. Khôi phục phiên đăng nhập đã lưu
         const savedRaw = localStorage.getItem(PORTAL_AUTH_KEY) || sessionStorage.getItem(PORTAL_AUTH_KEY);
         if (savedRaw) {
           try {
@@ -84,8 +139,7 @@ export default function ParentPortalPage() {
               const res = await verifyParentPortalAccess(saved.classId, saved.studentIdInput, saved.pinCodeInput);
               if (res.success && res.student) {
                 setAuthenticatedStudent(res.student);
-                const data = await getParentStudentOverview(res.student.id, saved.classId);
-                setOverview(data);
+                await loadStudentData(res.student.id, saved.classId);
               } else {
                 localStorage.removeItem(PORTAL_AUTH_KEY);
                 sessionStorage.removeItem(PORTAL_AUTH_KEY);
@@ -148,6 +202,38 @@ export default function ParentPortalPage() {
       setErrorMsg(err.message || 'Lỗi tra cứu thông tin');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Xử lý gửi đơn xin nghỉ phép
+  const handleSubmitLeaveRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!overview || !leaveReason.trim()) return;
+
+    setSubmittingLeave(true);
+    try {
+      const res = await submitLeaveRequest({
+        class_id: overview.student.class_id,
+        student_id: overview.student.id,
+        start_date: leaveStartDate,
+        end_date: leaveEndDate,
+        session: leaveSession,
+        reason: leaveReason.trim(),
+        parent_name: parentNameInput.trim() || 'Phụ huynh',
+        parent_phone: parentPhoneInput.trim()
+      });
+
+      if (res.success && res.data) {
+        toast.success('⚡ Đã nộp đơn xin nghỉ phép trực tuyến thành công! GVCN đã nhận được thông báo.');
+        setStudentLeaves(prev => [res.data!, ...prev]);
+        setIsLeaveModalOpen(false);
+      } else {
+        toast.error(res.error || 'Lỗi khi nộp đơn');
+      }
+    } catch (err: any) {
+      toast.error('Lỗi khi nộp đơn xin nghỉ phép');
+    } finally {
+      setSubmittingLeave(false);
     }
   };
 
@@ -249,40 +335,40 @@ export default function ParentPortalPage() {
 
             <form onSubmit={handleVerify} className="space-y-4 text-xs sm:text-sm">
               <div>
-                <label className="font-bold text-text-primary block mb-1.5">1. Chọn lớp của con</label>
+                <label className="font-bold text-slate-900 block mb-1.5">1. Chọn lớp của con</label>
                 <div className="relative">
                   <select
                     value={selectedClassId}
                     onChange={(e) => setSelectedClassId(e.target.value)}
-                    className="w-full bg-surface-card border border-border-default rounded-xl px-3.5 py-2.5 text-text-primary font-bold focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none transition-all shadow-xs cursor-pointer"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-900 font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-xs cursor-pointer"
                   >
                     {classes.map(c => (
-                      <option key={c.id} value={c.id} className="text-text-primary bg-surface-card">Lớp {c.name}</option>
+                      <option key={c.id} value={c.id} className="text-slate-900 bg-white">Lớp {c.name}</option>
                     ))}
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="font-bold text-text-primary block mb-1.5">2. Mã học sinh, Mã định danh hoặc CCCD</label>
+                <label className="font-bold text-slate-900 block mb-1.5">2. Mã học sinh, Mã định danh hoặc CCCD</label>
                 <input
                   type="text"
                   placeholder="VD: Mã định danh, 8A13_1 hoặc CCCD..."
                   value={studentIdInput}
                   onChange={(e) => setStudentIdInput(e.target.value)}
-                  className="w-full bg-surface-card border border-border-default rounded-xl px-3.5 py-2.5 text-text-primary placeholder:text-text-disabled font-medium focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none transition-all shadow-xs"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-900 placeholder:text-slate-400 font-medium focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-xs"
                   required
                 />
               </div>
 
               <div>
-                <label className="font-bold text-text-primary block mb-1.5">3. Mã PIN lớp (do GVCN cấp)</label>
+                <label className="font-bold text-slate-900 block mb-1.5">3. Mã PIN lớp (do GVCN cấp)</label>
                 <input
                   type="password"
                   placeholder="Mã PIN bảo mật 6 số (mặc định 123456)..."
                   value={pinCodeInput}
                   onChange={(e) => setPinCodeInput(e.target.value)}
-                  className="w-full bg-surface-card border border-border-default rounded-xl px-3.5 py-2.5 text-text-primary placeholder:text-text-disabled font-medium focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus outline-none transition-all shadow-xs"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-900 placeholder:text-slate-400 font-medium focus:ring-2 focus:ring-indigo-500 outline-none transition-all shadow-xs"
                   required
                 />
               </div>
@@ -320,7 +406,7 @@ export default function ParentPortalPage() {
             </div>
           </div>
         ) : (
-          /* MÀN HÌNH HIỂN THỊ KẾT QUẢ CHO PHỤ HUYNH (Light Theme) */
+          /* MÀN HÌNH HIỂN THỊ KẾT QUẢ CHO PHỤ HUYNH */
           <div className="space-y-6">
             
             {/* THÔNG TIN HỌC SINH CARD */}
@@ -344,6 +430,39 @@ export default function ParentPortalPage() {
                 <span className="text-xs text-slate-500 block">Tỷ lệ chuyên cần</span>
                 <span className="text-2xl font-black text-emerald-600">{overview.attendance.attendance_rate}%</span>
               </div>
+            </div>
+
+            {/* TODAY PULSE CARD (NHỊP SỐNG HÔM NAY CỦA HỌC SINH) */}
+            <div className="p-5 rounded-3xl bg-gradient-to-r from-emerald-500/10 via-indigo-500/10 to-purple-500/10 border border-indigo-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-600/20 shrink-0">
+                  <HeartPulse className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                      Hôm Nay Của Em ({new Date().toLocaleDateString('vi-VN')})
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                      Đang học tại trường
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    {studentLeaves.some(l => l.status === 'pending') 
+                      ? '⚠️ Có 1 đơn xin nghỉ phép đang chờ GVCN duyệt.'
+                      : 'Em đi học chuyên cần và duy trì nề nếp tốt!'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Nút nộp đơn xin nghỉ phép trực tuyến */}
+              <button
+                onClick={() => setIsLeaveModalOpen(true)}
+                className="px-4 py-2 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 active:scale-95 transition-all flex items-center justify-center gap-1.5 shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Nộp Đơn Nghỉ Phép</span>
+              </button>
             </div>
 
             {/* THÔNG BÁO TỪ GVCN (NẾU CÓ) */}
@@ -382,6 +501,18 @@ export default function ParentPortalPage() {
                 2. Nề nếp & Khen thưởng ({overview.events.length})
               </button>
               <button
+                onClick={() => setActiveTab('leaves')}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5",
+                  activeTab === 'leaves'
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900 border border-slate-200"
+                )}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>3. Đơn Xin Nghỉ Phép ({studentLeaves.length})</span>
+              </button>
+              <button
                 onClick={() => setActiveTab('monitor')}
                 className={cn(
                   "px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5",
@@ -391,7 +522,7 @@ export default function ParentPortalPage() {
                 )}
               >
                 <CreditCard className="w-3.5 h-3.5" />
-                <span>3. Sổ Theo Dõi & Thu Phí ({overview.sharedMonitorColumns?.length || 0})</span>
+                <span>4. Sổ Theo Dõi & Thu Phí ({overview.sharedMonitorColumns?.length || 0})</span>
               </button>
               <button
                 onClick={() => setActiveTab('message')}
@@ -402,7 +533,7 @@ export default function ParentPortalPage() {
                     : "bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900 border border-slate-200"
                 )}
               >
-                4. Gửi lời nhắn cho GVCN
+                5. Gửi lời nhắn cho GVCN
               </button>
             </div>
 
@@ -546,7 +677,78 @@ export default function ParentPortalPage() {
               </div>
             )}
 
-            {/* TAB 3: SỔ THEO DÕI & THU PHÍ (VIETQR) */}
+            {/* TAB 3: ĐƠN XIN NGHỈ PHÉP TRỰC TUYẾN */}
+            {activeTab === 'leaves' && (
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-5 rounded-3xl bg-white border border-slate-200 shadow-sm">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900">Danh Sách Đơn Xin Nghỉ Phép Trực Tuyến</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Đơn được gửi trực tiếp đến GVCN. Khi được duyệt, hệ thống tự động ghi nhận Phép (P) trên bảng điểm danh.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsLeaveModalOpen(true)}
+                    className="px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 active:scale-95 transition-all flex items-center gap-1.5 shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Nộp Đơn Nghỉ Phép Mới</span>
+                  </button>
+                </div>
+
+                {studentLeaves.length === 0 ? (
+                  <div className="py-12 text-center text-slate-400 rounded-3xl bg-white border border-slate-200 text-xs shadow-sm space-y-2">
+                    <FileText className="w-8 h-8 text-slate-300 mx-auto" />
+                    <div>Chưa có đơn xin nghỉ phép nào được nộp.</div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {studentLeaves.map((req) => (
+                      <div
+                        key={req.id}
+                        className={cn(
+                          "p-4 rounded-2xl border shadow-sm space-y-2 transition-all",
+                          req.status === 'approved'
+                            ? "bg-emerald-50/50 border-emerald-200"
+                            : req.status === 'rejected'
+                            ? "bg-rose-50/50 border-rose-200"
+                            : "bg-white border-amber-200"
+                        )}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                            <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>
+                              {req.start_date === req.end_date ? `Nghỉ ngày ${req.start_date}` : `Nghỉ từ ${req.start_date} đến ${req.end_date}`}
+                            </span>
+                          </span>
+                          <span className={cn(
+                            "px-2.5 py-0.5 rounded-full text-[11px] font-black",
+                            req.status === 'approved'
+                              ? "bg-emerald-100 text-emerald-800"
+                              : req.status === 'rejected'
+                              ? "bg-rose-100 text-rose-800"
+                              : "bg-amber-100 text-amber-800 animate-pulse"
+                          )}>
+                            {req.status === 'approved' ? '✓ Đã duyệt (Điểm danh Phép P)' : req.status === 'rejected' ? '✕ Từ chối' : '⏳ Đang chờ GVCN duyệt'}
+                          </span>
+                        </div>
+
+                        <p className="text-xs text-slate-700 font-medium">Lý do: <span className="text-slate-900">{req.reason}</span></p>
+
+                        {req.gvcn_note && (
+                          <div className="text-[11px] text-indigo-700 bg-indigo-50/80 p-2 rounded-xl border border-indigo-100">
+                            <strong>Ý kiến GVCN:</strong> {req.gvcn_note}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 4: SỔ THEO DÕI & THU PHÍ (VIETQR) */}
             {activeTab === 'monitor' && (
               <div className="space-y-4">
                 {(!overview.sharedMonitorColumns || overview.sharedMonitorColumns.length === 0) ? (
@@ -704,7 +906,7 @@ export default function ParentPortalPage() {
               </div>
             )}
 
-            {/* TAB 4: GỬI LỜI NHẮN */}
+            {/* TAB 5: GỬI LỜI NHẮN */}
             {activeTab === 'message' && (
               <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
                 <div>
@@ -741,6 +943,154 @@ export default function ParentPortalPage() {
         )}
       </main>
 
+      {/* MODAL NỘP ĐƠN XIN NGHỈ PHÉP TRỰC TUYẾN */}
+      {isLeaveModalOpen && overview && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="p-5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <FileText className="w-5 h-5" />
+                <div>
+                  <h3 className="font-black text-sm sm:text-base">Đơn Xin Nghỉ Phép Trực Tuyến</h3>
+                  <p className="text-[11px] text-indigo-100 font-medium">Gửi tới GVCN lớp {overview.student.class_name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsLeaveModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitLeaveRequest} className="p-5 space-y-4 text-xs sm:text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-800 block mb-1">Từ ngày:</label>
+                  <input
+                    type="date"
+                    value={leaveStartDate}
+                    onChange={(e) => setLeaveStartDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-800 font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-800 block mb-1">Đến ngày:</label>
+                  <input
+                    type="date"
+                    value={leaveEndDate}
+                    onChange={(e) => setLeaveEndDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-800 font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* CHỌN BUỔI XIN NGHỈ (SÁNG / CHIỀU / CẢ NGÀY) */}
+              <div>
+                <label className="font-bold text-slate-800 block mb-1">Buổi xin nghỉ:</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'all_day', label: 'Cả ngày' },
+                    { id: 'morning', label: 'Buổi sáng' },
+                    { id: 'afternoon', label: 'Buổi chiều' }
+                  ].map((s) => {
+                    const isSelected = leaveSession === s.id;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => setLeaveSession(s.id as any)}
+                        className={cn(
+                          "py-2 px-2 text-center rounded-xl text-xs font-bold transition-all border",
+                          isSelected
+                            ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                            : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                        )}
+                      >
+                        {s.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-800 block mb-1">Lý do xin nghỉ:</label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {[
+                    'Em bị ốm/sốt',
+                    'Gia đình có việc bận',
+                    'Đi khám bệnh theo lịch',
+                    'Tham gia thi đấu/sự kiện'
+                  ].map((r, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setLeaveReason(r)}
+                      className="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 border border-slate-200 transition-colors"
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  rows={2}
+                  value={leaveReason}
+                  onChange={(e) => setLeaveReason(e.target.value)}
+                  placeholder="Nhập lý do chi tiết..."
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs sm:text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-800 block mb-1">Họ tên Phụ huynh:</label>
+                  <input
+                    type="text"
+                    value={parentNameInput}
+                    onChange={(e) => setParentNameInput(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-800 block mb-1">Số điện thoại liên hệ:</label>
+                  <input
+                    type="tel"
+                    placeholder="090..."
+                    value={parentPhoneInput}
+                    onChange={(e) => setParentPhoneInput(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsLeaveModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingLeave}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 active:scale-95 transition-all flex items-center gap-1.5"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{submittingLeave ? 'Đang nộp...' : 'Nộp Đơn Trực Tuyến'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* MODAL VIETQR THANH TOÁN */}
       {paymentModalData && overview && (
         <VietQRPaymentModal
@@ -765,3 +1115,4 @@ export default function ParentPortalPage() {
     </div>
   );
 }
+
