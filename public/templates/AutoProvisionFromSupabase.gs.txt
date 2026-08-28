@@ -1,0 +1,58 @@
+/**
+ * =========================================================================
+ * SCRIPT NHÂN BẢN TỰ ĐỘNG THEO DANH SÁCH LỚP THỰC TẾ TRÊN SUPABASE (v2.2)
+ * Tác giả: Antigravity AI Dev Loop Engine
+ * =========================================================================
+ */
+const PROVISION_CONFIG = {
+  APP_API_URL: "https://your-app-domain.vercel.app/api/admin/classes-list",
+  ADMIN_API_KEY: "TBC_MASTER_ADMIN_KEY_2026",
+  TEMPLATE_SHEET_ID: "YOUR_MASTER_TEMPLATE_SHEET_ID", // ID file mẫu đã có Universal Code.gs
+  TARGET_FOLDER_ID: "YOUR_GOOGLE_DRIVE_FOLDER_ID"      // ID thư mục Google Drive chứa các lớp
+};
+
+function autoProvisionAllClassesFromSupabase() {
+  // 1. Gọi API lấy danh sách lớp thực tế từ Supabase (không hardcode số lượng)
+  const options = {
+    method: "get",
+    headers: { "Authorization": `Bearer ${PROVISION_CONFIG.ADMIN_API_KEY}` },
+    muteHttpExceptions: true
+  };
+
+  const response = UrlFetchApp.fetch(PROVISION_CONFIG.APP_API_URL, options);
+  if (response.getResponseCode() !== 200) {
+    Logger.log("Lỗi tải danh sách lớp từ Supabase: " + response.getContentText());
+    return;
+  }
+
+  const classList = JSON.parse(response.getContentText()).data;
+  Logger.log(`Đã tải về ${classList.length} lớp học từ cơ sở dữ liệu Supabase.`);
+
+  const templateFile = DriveApp.getFileById(PROVISION_CONFIG.TEMPLATE_SHEET_ID);
+  const targetFolder = DriveApp.getFolderById(PROVISION_CONFIG.TARGET_FOLDER_ID);
+  const results = [];
+
+  // 2. Tự động nhân bản file Sheet cho từng lớp
+  classList.forEach(cls => {
+    const className = cls.name || cls.id;
+    const newFileName = `[Nộp Bài & Điểm Danh] Lớp ${className} - Năm Học 2025-2026`;
+    const copiedFile = templateFile.makeCopy(newFileName, targetFolder);
+    const newSheet = SpreadsheetApp.openById(copiedFile.getId());
+    
+    // Ghi mã lớp vào ô _CONFIG!A2
+    let cfgSheet = newSheet.getSheetByName("_CONFIG");
+    if (!cfgSheet) cfgSheet = newSheet.insertSheet("_CONFIG");
+    cfgSheet.getRange("A1:C1").setValues([["CLASS_ID", "CLASS_NAME", "SUPABASE_UUID"]]);
+    cfgSheet.getRange("A2:C2").setValues([[className, `Lớp ${className}`, cls.id || ""]]);
+    cfgSheet.hideSheet();
+
+    results.push({
+      class_name: className,
+      file_id: copiedFile.getId(),
+      sheet_url: copiedFile.getUrl()
+    });
+    Logger.log(`✓ Đã tạo file Google Sheet cho lớp: ${className}`);
+  });
+
+  Logger.log(`🎉 HOÀN THÀNH TỰ ĐỘNG TẠO ${results.length} FILE LỚP HỌC!`);
+}

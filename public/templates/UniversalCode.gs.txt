@@ -1,0 +1,96 @@
+/**
+ * =========================================================================
+ * UNIVERSAL GOOGLE APPS SCRIPT WEBHOOK — DÙNG CHUNG CHO MỌI LỚP HỌC
+ * Tác giả: Antigravity AI Dev Loop Engine (v2.2)
+ * Hướng dẫn: Mở Google Sheets > Extensions > Apps Script > Dán đoạn mã này
+ *            và Triển khai dưới dạng Ứng dụng Web (Web App).
+ * =========================================================================
+ */
+const GLOBAL_CONFIG = {
+  ENDPOINT_URL: "https://your-app-domain.vercel.app/api/webhooks/google-sheets",
+  GLOBAL_SECRET_TOKEN: "TBC_MASTER_WEBHOOK_SECRET_2026", // Khóa bảo mật chung
+  FALLBACK_CLASS_ID: "8A13"
+};
+
+function getAutoDetectedClassId() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // 1. Ưu tiên đọc từ Tab _CONFIG (nếu có)
+  const configSheet = ss.getSheetByName("_CONFIG") || ss.getSheetByName("Cấu Hình");
+  if (configSheet) {
+    const val = String(configSheet.getRange("A2").getValue()).trim();
+    if (val) return val;
+  }
+  
+  // 2. Tự động trích xuất mã lớp từ Tên Sheet (VD: "Bài tập Toán 8A13", "Lớp 6A2 - 2026")
+  const title = ss.getName();
+  const match = title.match(/([6-9][A-Z][0-9]{1,2}|[6-9]\/[0-9]{1,2}|[6-9]A[0-9]{1,2})/i);
+  if (match) return match[1].toUpperCase().replace("/", "A");
+  
+  return GLOBAL_CONFIG.FALLBACK_CLASS_ID;
+}
+
+function onFormSubmitTrigger(e) {
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    const rowData = sheet.getRange(lastRow, 1, 1, lastCol).getValues()[0];
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+
+    const detectedClassId = getAutoDetectedClassId();
+
+    const payload = {
+      class_id: detectedClassId,
+      secret_token: GLOBAL_CONFIG.GLOBAL_SECRET_TOKEN,
+      timestamp: new Date().toISOString(),
+      student_code: "",
+      quest_code: "",
+      score: 10,
+      max_score: 10,
+      proof_image_urls: [],
+      action_anchor: "",
+      temporal_anchor: "",
+      physical_anchor_text: "",
+      personal_reflection: "",
+      raw_responses: {}
+    };
+
+    headers.forEach((header, index) => {
+      const val = rowData[index];
+      const hLower = String(header).toLowerCase();
+      
+      if (hLower.includes("mã học sinh") || hLower.includes("mã hs") || hLower.includes("student_code") || hLower.includes("stt")) {
+        payload.student_code = String(val).trim().toLowerCase();
+      } else if (hLower.includes("mã nhiệm vụ") || hLower.includes("nhiệm vụ") || hLower.includes("quest") || hLower.includes("bài tập")) {
+        payload.quest_code = String(val).trim();
+      } else if (hLower.includes("điểm") || hLower.includes("score")) {
+        payload.score = Number(val) || 10;
+      } else if (hLower.includes("ảnh") || hLower.includes("minh chứng") || hLower.includes("drive.google.com") || hLower.includes("video")) {
+        if (val) payload.proof_image_urls.push(String(val));
+      } else if (hLower.includes("hành động") || hLower.includes("việc đã làm")) {
+        payload.action_anchor = String(val).trim();
+      } else if (hLower.includes("thời gian") || hLower.includes("lúc mấy giờ")) {
+        payload.temporal_anchor = String(val).trim();
+      } else if (hLower.includes("bí danh") || hLower.includes("tên thú cưng") || hLower.includes("vật chứng")) {
+        payload.physical_anchor_text = String(val).trim();
+      } else if (hLower.includes("cảm xúc") || hLower.includes("cảm nhận") || hLower.includes("suy nghĩ")) {
+        payload.personal_reflection = String(val).trim();
+      }
+      payload.raw_responses[header] = val;
+    });
+
+    // Gửi Webhook sang Next.js App
+    const options = {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+
+    const response = UrlFetchApp.fetch(GLOBAL_CONFIG.ENDPOINT_URL, options);
+    Logger.log(`[Webhook 60-Classes] Sent for Class ${detectedClassId}: ${response.getContentText()}`);
+  } catch (err) {
+    Logger.log("[Webhook Error]: " + err.toString());
+  }
+}
