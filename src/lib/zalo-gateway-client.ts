@@ -24,8 +24,8 @@ export class ZaloGatewayClient {
 
     constructor(customConfig?: Partial<ZaloGatewayConfig>) {
         this.config = {
-            baseUrl: customConfig?.baseUrl || process.env.ZALO_GATEWAY_URL || 'http://127.0.0.1:3871',
-            bridgeToken: customConfig?.bridgeToken || process.env.ZALO_BRIDGE_TOKEN || 'DEFAULT_TOKEN',
+            baseUrl: customConfig?.baseUrl || process.env.ZALO_GATEWAY_URL || process.env.NEXT_PUBLIC_ZALO_GATEWAY_URL || 'https://zalo.thaycoai.io.vn',
+            bridgeToken: customConfig?.bridgeToken || process.env.ZALO_GATEWAY_TOKEN || process.env.ZALO_BRIDGE_TOKEN || 'DEFAULT_TOKEN',
             queueDelayMs: customConfig?.queueDelayMs || 1500
         };
     }

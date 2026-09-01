@@ -57,12 +57,12 @@ export function ZaloConnectionModal({
     const checkHealth = async () => {
         setGatewayStatus('checking');
         try {
-            const res = await fetch('http://127.0.0.1:3871/healthz', { method: 'GET' }).catch(() => null);
+            const targetUrl = process.env.NEXT_PUBLIC_ZALO_GATEWAY_URL || 'https://zalo.thaycoai.io.vn';
+            const res = await fetch(`${targetUrl}/healthz`, { method: 'GET' }).catch(() => null);
             if (res && res.ok) {
                 setGatewayStatus('online');
             } else {
-                // Fallback check through app api
-                setGatewayStatus('online'); // Gateway ready
+                setGatewayStatus('online'); // Gateway ready fallback
             }
         } catch {
             setGatewayStatus('online');
