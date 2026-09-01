@@ -8,6 +8,7 @@ import { getClassAndStudents } from "@/app/actions/common";
 import { Class, Student } from "@/types/models";
 import { AttendanceSheet } from "@/components/attendance-sheet";
 import { useAuth } from "@/context/auth-context";
+import { usePrivacy } from "@/context/privacy-context";
 import { ReportMessageModal } from "./report-message-modal";
 
 const getGradeColor = (className: string) => {
@@ -50,6 +51,7 @@ interface ReportsGridViewProps {
 
 export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, absences, classes, visibleColumns, onRefresh }: ReportsGridViewProps) {
     const { appUser } = useAuth();
+    const { maskStudentName } = usePrivacy();
     const [editCell, setEditCell] = useState<{ classId: string, studentCode: string, studentName: string, date: string, currentStatus: string, rect: { top: number, left: number } } | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [showAddModalForClass, setShowAddModalForClass] = useState<string | null>(null);
@@ -299,7 +301,7 @@ export function ReportsGridView({ dateRange, classSizes = {}, selectedClasses, a
                                                                base === 'KH' ? "text-orange-600" : "text-black";
                                                     })()
                                                 )}>
-                                                    <span className="truncate">{student.name}</span>
+                                                    <span className="truncate">{maskStudentName(student.name)}</span>
                                                     {(() => {
                                                         // Tính SC: Nghỉ cả sáng và chiều TRONG CÙNG 1 NGÀY
                                                         let hasFullDayAbsence = false;

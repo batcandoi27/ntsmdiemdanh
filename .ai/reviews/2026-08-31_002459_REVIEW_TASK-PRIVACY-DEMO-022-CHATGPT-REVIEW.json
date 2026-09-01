@@ -1,0 +1,11 @@
+{
+  "taskId": "TASK-PRIVACY-DEMO-022",
+  "reviewedAt": "2026-08-30T17:24:59.026Z",
+  "reviewer": "ChatGPT Web Independent Senior Architect (OpenAI Luna)",
+  "verdict": "APPROVED",
+  "track1_blockers": [],
+  "track2_advisory": [
+    "Bảo đảm hiển thị Live Preview mẫu để người dùng an tâm trước khi bấm quay phim.",
+    "Tích hợp nút tắt nhanh trên Header và Badge nổi."
+  ]
+}

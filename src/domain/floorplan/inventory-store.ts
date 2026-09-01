@@ -46,7 +46,7 @@ export const FURNITURE_DEFINITIONS: Record<FurnitureDefinitionId, FurnitureDefin
     priceCoins: 140,
     requiredLevel: 1,
     availableColors: ['#3b82f6', '#6366f1', '#06b6d4', '#10b981', '#64748b', '#f59e0b'],
-    baseBuff: 'Tăng 10% điểm XP học tập'
+    baseBuff: 'Góc học tập sáng sủa, tạo cảm hứng sáng tạo'
   },
   wood_desk: {
     id: 'wood_desk',
@@ -59,7 +59,7 @@ export const FURNITURE_DEFINITIONS: Record<FurnitureDefinitionId, FurnitureDefin
     priceCoins: 130,
     requiredLevel: 1,
     availableColors: ['#78350f', '#92400e', '#b45309', '#451a03', '#1e293b', '#10b981'],
-    baseBuff: 'Tăng sự tập trung khi học bài'
+    baseBuff: 'Không gian tĩnh lặng, thoáng đãng khi tự học'
   },
   gaming_sofa: {
     id: 'gaming_sofa',
@@ -72,7 +72,7 @@ export const FURNITURE_DEFINITIONS: Record<FurnitureDefinitionId, FurnitureDefin
     priceCoins: 240,
     requiredLevel: 3,
     availableColors: ['#ef4444', '#8b5cf6', '#06b6d4', '#eab308', '#22c55e', '#ec4899'],
-    baseBuff: 'Thoải mái tinh thần sau giờ học'
+    baseBuff: 'Thư giãn thoải mái sau giờ sinh hoạt lớp'
   },
   magic_bookshelf: {
     id: 'magic_bookshelf',
@@ -85,7 +85,7 @@ export const FURNITURE_DEFINITIONS: Record<FurnitureDefinitionId, FurnitureDefin
     priceCoins: 180,
     requiredLevel: 2,
     availableColors: ['#854d0e', '#1e293b', '#4c1d95', '#065f46', '#7f1d1d', '#312e81'],
-    baseBuff: 'Mở khóa bí quyết làm bài tập nhanh'
+    baseBuff: 'Trưng bày sách vở và tài liệu ngăn nắp'
   },
   magic_carpet: {
     id: 'magic_carpet',

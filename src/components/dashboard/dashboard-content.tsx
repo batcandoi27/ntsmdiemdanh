@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { BookOpen, UserCheck, BarChart3, Settings, Zap, School } from "lucide-react";
+import { BookOpen, UserCheck, BarChart3, Settings, Zap, School, HeartHandshake, Gamepad2, Users } from "lucide-react";
 import { useViewMode } from "@/context/view-mode-context";
 import { useAuth } from "@/context/auth-context";
 
@@ -13,6 +13,8 @@ export default function DashboardContent() {
     const isMobile = viewDevice === 'mobile';
     const isAdmin = appUser?.role === 'admin' || appUser?.role === 'principal';
 
+    let cardCounter = 1;
+
     return (
         <div className={cn(
             "grid gap-4 sm:gap-6 w-full max-w-4xl transition-all",
@@ -21,6 +23,7 @@ export default function DashboardContent() {
             {/* 1. Quản Trị và Điều Hành (Chỉ Admin/BGH) */}
             {isAdmin && (
                 <DashboardCard
+                    orderNumber={cardCounter++}
                     href="/admin/dashboard"
                     icon={<BarChart3 className={cn("w-8 h-8 sm:w-10 sm:h-10 text-white")} />}
                     title="Quản Trị và Điều Hành"
@@ -32,20 +35,48 @@ export default function DashboardContent() {
                 />
             )}
 
-            {/* 2. Giáo Viên Chủ Nhiệm (Phân hệ GVCN) */}
+            {/* 2. Cổng Phụ Huynh Trực Tuyến */}
             <DashboardCard
-                href="/homeroom"
-                icon={<School className={cn("w-8 h-8 sm:w-10 sm:h-10 text-white")} />}
-                title="Giáo Viên Chủ Nhiệm"
-                description="Trợ lý Lớp, Nề nếp & In ấn"
+                orderNumber={cardCounter++}
+                href="/portal"
+                icon={<HeartHandshake className={cn("w-8 h-8 sm:w-10 sm:h-10 text-white")} />}
+                title="Cổng Phụ Huynh"
+                description="Tra cứu điểm danh, Đơn nghỉ & Sơ Yếu Lý Lịch"
                 color="bg-indigo-600"
                 hoverColor="group-hover:text-indigo-700"
                 borderColor="border-b-indigo-700"
                 compact={isMobile}
             />
 
-            {/* 3. Điểm Danh HS (Tất cả) */}
+            {/* 3. Cổng Học Sinh & Metaverse */}
             <DashboardCard
+                orderNumber={cardCounter++}
+                href="/student"
+                icon={<Gamepad2 className={cn("w-8 h-8 sm:w-10 sm:h-10 text-white")} />}
+                title="Cổng Học Sinh"
+                description="Bản đồ học tập, Thú cưng ảo & Nhiệm vụ"
+                color="bg-emerald-600"
+                hoverColor="group-hover:text-emerald-700"
+                borderColor="border-b-emerald-700"
+                compact={isMobile}
+            />
+
+            {/* 4. Giáo Viên Chủ Nhiệm (Phân hệ GVCN & SYLL) */}
+            <DashboardCard
+                orderNumber={cardCounter++}
+                href="/homeroom"
+                icon={<Users className={cn("w-8 h-8 sm:w-10 sm:h-10 text-white")} />}
+                title="Giáo Viên Chủ Nhiệm"
+                description="Hồ sơ SYLL, Sơ đồ lớp & In ấn 86 trang"
+                color="bg-blue-600"
+                hoverColor="group-hover:text-blue-700"
+                borderColor="border-b-blue-700"
+                compact={isMobile}
+            />
+
+            {/* 5. Điểm Danh HS (Tất cả) */}
+            <DashboardCard
+                orderNumber={cardCounter++}
                 href="/quick-attendance"
                 icon={<Zap className={cn("w-8 h-8 sm:w-10 sm:h-10 text-white")} />}
                 title="Điểm Danh HS"
@@ -56,8 +87,9 @@ export default function DashboardContent() {
                 compact={isMobile}
             />
 
-            {/* 4. Quản Lý Lớp (Tất cả) */}
+            {/* 6. Quản Lý Lớp (Tất cả) */}
             <DashboardCard
+                orderNumber={cardCounter++}
                 href="/classes"
                 icon={<School className={cn("w-8 h-8 sm:w-10 sm:h-10 text-white")} />}
                 title="Quản Lý Lớp"
@@ -68,8 +100,9 @@ export default function DashboardContent() {
                 compact={isMobile}
             />
 
-            {/* 4. Báo Cáo HS (Tất cả) */}
+            {/* 7. Báo Cáo HS (Tất cả) */}
             <DashboardCard
+                orderNumber={cardCounter++}
                 href="/reports"
                 icon={<BarChart3 className={cn("w-8 h-8 sm:w-10 sm:h-10 text-white")} />}
                 title="Báo Cáo HS"
@@ -80,9 +113,10 @@ export default function DashboardContent() {
                 compact={isMobile}
             />
 
-            {/* 5. Hồ Sơ Giáo Viên (Chỉ Admin/BGH) */}
+            {/* 8. Hồ Sơ Giáo Viên (Chỉ Admin/BGH) */}
             {isAdmin && (
                 <DashboardCard
+                    orderNumber={cardCounter++}
                     href="/admin/teachers"
                     icon={<UserCheck className={cn("w-8 h-8 sm:w-10 sm:h-10 text-white")} />}
                     title="Hồ Sơ Giáo Viên"
@@ -94,8 +128,9 @@ export default function DashboardContent() {
                 />
             )}
 
-            {/* 6. Hội Họp / Sự Kiện (Tất cả) */}
+            {/* 9. Hội Họp / Sự Kiện (Tất cả) */}
             <DashboardCard
+                orderNumber={cardCounter++}
                 href={isAdmin ? "/admin/events" : "/teacher/dashboard"}
                 icon={<BookOpen className={cn("w-8 h-8 sm:w-10 sm:h-10 text-white")} />}
                 title="Hội Họp / Sự Kiện"
@@ -106,8 +141,9 @@ export default function DashboardContent() {
                 compact={isMobile}
             />
 
-            {/* 7. Cài Đặt (Tất cả) */}
+            {/* 10. Cài Đặt (Tất cả) */}
             <DashboardCard
+                orderNumber={cardCounter++}
                 href="/settings"
                 icon={<Settings className={cn("w-8 h-8 sm:w-10 sm:h-10 text-white")} />}
                 title="Cài Đặt"
@@ -122,6 +158,7 @@ export default function DashboardContent() {
 }
 
 function DashboardCard({
+    orderNumber,
     href,
     icon,
     title,
@@ -131,6 +168,7 @@ function DashboardCard({
     borderColor,
     compact
 }: {
+    orderNumber?: number;
     href: string;
     icon: React.ReactNode;
     title: string;
@@ -150,6 +188,23 @@ function DashboardCard({
                 borderColor || "border-b-border-default"
             )}
         >
+            {/* ICON SỐ THỨ TỰ TRONG VÒNG TRÒN GÓC TRÊN BÊN PHẢI (MỖI VÒNG 1 MÀU TƯƠNG ỨNG VỚI MÀU SHADOW/THẺ) */}
+            {orderNumber !== undefined && (
+                <div className={cn(
+                    "absolute top-3.5 right-3.5 w-7 h-7 rounded-full font-black text-xs flex items-center justify-center text-white border-2 border-white/40 shadow-md transition-all duration-200 group-hover:scale-110 group-hover:rotate-6 z-10",
+                    color === 'bg-sky-500' && "bg-sky-500 shadow-sky-500/40",
+                    color === 'bg-indigo-600' && "bg-indigo-600 shadow-indigo-600/40",
+                    color === 'bg-emerald-600' && "bg-emerald-600 shadow-emerald-600/40",
+                    color === 'bg-blue-600' && "bg-blue-600 shadow-blue-600/40",
+                    color === 'bg-amber-500' && "bg-amber-500 shadow-amber-500/40",
+                    color === 'bg-purple-600' && "bg-purple-600 shadow-purple-600/40",
+                    color === 'bg-orange-500' && "bg-orange-500 shadow-orange-500/40",
+                    color === 'bg-slate-600' && "bg-slate-600 shadow-slate-600/40"
+                )}>
+                    {orderNumber}
+                </div>
+            )}
+
             <div className={cn(
                 "rounded-xl shadow-xs transition-transform group-hover:scale-105 shrink-0 flex items-center justify-center border border-white/20",
                 color,
@@ -157,7 +212,7 @@ function DashboardCard({
             )}>
                 {icon}
             </div>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 pr-6">
                 <h3 className={cn(
                     "font-black text-text-primary mb-1 transition-colors truncate tracking-tight",
                     hoverColor,

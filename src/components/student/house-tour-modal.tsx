@@ -86,11 +86,11 @@ export const HouseTourModal: React.FC<HouseTourModalProps> = ({
                 </span>
                 {isOwner && (
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 font-black shadow-sm">
-                    Căn Cứ Của Bạn
+                    Góc Tự Học Của Bạn
                   </span>
                 )}
               </div>
-              <p className="text-xs text-indigo-300 font-bold mt-0.5">{data.anonymousName}</p>
+              <p className="text-xs text-indigo-300 font-bold mt-0.5">{data.anonymousName} • Góc Học Tập Sáng Tạo</p>
             </div>
           </div>
 

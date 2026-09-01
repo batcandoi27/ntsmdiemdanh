@@ -4,11 +4,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, Users, BarChart3, Settings, UserCircle, BookOpen } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
+import { useFeatureFlags } from '@/context/feature-flags-context';
 import { cn } from '@/lib/utils';
 
 export function BottomNav() {
     const pathname = usePathname();
     const { appUser } = useAuth();
+    const { flags } = useFeatureFlags();
 
     if (!appUser) return null;
 
@@ -29,19 +31,19 @@ export function BottomNav() {
             name: 'Điểm Danh',
             href: '/quick-attendance',
             icon: Home,
-            show: true,
+            show: flags.quickAttendance ?? true,
         },
         {
             name: 'Sổ Theo Dõi',
             href: '/monitor',
             icon: BookOpen,
-            show: ['admin', 'principal', 'supervisor', 'teacher'].includes(appUser.role),
+            show: (flags.monitor ?? true) && ['admin', 'principal', 'supervisor', 'teacher'].includes(appUser.role),
         },
         {
             name: 'Báo Cáo',
             href: '/reports',
             icon: BarChart3,
-            show: ['admin', 'principal', 'supervisor', 'teacher'].includes(appUser.role),
+            show: (flags.reports ?? true) && ['admin', 'principal', 'supervisor', 'teacher'].includes(appUser.role),
         },
     ];
 

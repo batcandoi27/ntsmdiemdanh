@@ -225,15 +225,15 @@ export const SvgPet: React.FC<SvgPetProps> = ({
         )}
       </svg>
 
-      {/* Hiệu ứng trạng thái: Ngủ đông hoặc Đói bụng */}
+      {/* Hiệu ứng trạng thái: Luôn tích cực, đồng hành cùng học sinh */}
       {isHibernating && (
-        <span className="absolute bottom-0 text-xs px-2 py-0.5 rounded-full bg-blue-900/90 text-blue-200 border border-blue-400 font-semibold shadow">
-          ❄️ Ngủ Đông
+        <span className="absolute bottom-0 text-[10px] px-2 py-0.5 rounded-full bg-indigo-900/90 text-indigo-200 border border-indigo-400/50 font-semibold shadow backdrop-blur-xs flex items-center gap-1">
+          💖 Đang Nghỉ Ngơi
         </span>
       )}
       {!isHibernating && isSluggish && (
-        <span className="absolute bottom-0 text-xs px-2 py-0.5 rounded-full bg-amber-900/90 text-amber-200 border border-amber-400 font-semibold shadow">
-          🍖 Đói Bụng ({vitality}%)
+        <span className="absolute bottom-0 text-[10px] px-2 py-0.5 rounded-full bg-purple-900/90 text-purple-200 border border-purple-400/50 font-semibold shadow backdrop-blur-xs flex items-center gap-1">
+          🌱 Sẵn Sàng Cùng Bạn
         </span>
       )}
     </div>

@@ -1,0 +1,235 @@
+{
+  "capturedAt": "2026-08-30T16:38:52.723Z",
+  "capturedAtGmt7": "23:38:52 30/8/2026",
+  "uncommittedFilesCount": 57,
+  "files": [
+    {
+      "status": "M",
+      "file": "cautruc_cong_hocsinh.md"
+    },
+    {
+      "status": "M",
+      "file": "src/app/actions/settings.ts"
+    },
+    {
+      "status": "M",
+      "file": "src/app/admin/dashboard/page.tsx"
+    },
+    {
+      "status": "M",
+      "file": "src/app/homeroom/print-center/page.tsx"
+    },
+    {
+      "status": "M",
+      "file": "src/app/homeroom/students/page.tsx"
+    },
+    {
+      "status": "M",
+      "file": "src/app/portal/page.tsx"
+    },
+    {
+      "status": "M",
+      "file": "src/app/student/coop/page.tsx"
+    },
+    {
+      "status": "M",
+      "file": "src/app/student/page.tsx"
+    },
+    {
+      "status": "M",
+      "file": "src/app/student/pet/page.tsx"
+    },
+    {
+      "status": "M",
+      "file": "src/app/student/records/page.tsx"
+    },
+    {
+      "status": "M",
+      "file": "src/app/teacher/dashboard/page.tsx"
+    },
+    {
+      "status": "M",
+      "file": "src/components/dashboard/dashboard-content.tsx"
+    },
+    {
+      "status": "M",
+      "file": "src/components/layout/bottom-nav.tsx"
+    },
+    {
+      "status": "M",
+      "file": "src/components/settings/feature-flags-tab.tsx"
+    },
+    {
+      "status": "M",
+      "file": "src/components/site-header.tsx"
+    },
+    {
+      "status": "M",
+      "file": "src/components/student/floorplan-editor/item-upgrade-forge-modal.tsx"
+    },
+    {
+      "status": "M",
+      "file": "src/components/student/house-tour-modal.tsx"
+    },
+    {
+      "status": "M",
+      "file": "src/components/student/svg-pet.tsx"
+    },
+    {
+      "status": "M",
+      "file": "src/context/feature-flags-context.tsx"
+    },
+    {
+      "status": "M",
+      "file": "src/domain/floorplan/inventory-store.ts"
+    },
+    {
+      "status": "M",
+      "file": "src/domain/floorplan/types.ts"
+    },
+    {
+      "status": "M",
+      "file": "src/lib/supabase-admin.ts"
+    },
+    {
+      "status": "M",
+      "file": "src/types/student-portal.ts"
+    },
+    {
+      "status": "??",
+      "file": ".ai/consultations/TASK-EVALUATE-6-TECHNICAL-RISKS-015-EVALUATION.md"
+    },
+    {
+      "status": "??",
+      "file": ".ai/consultations/TASK-STUDENT-CURRICULUM-VITAE-MASTER-PLAN-013-MASTER-BLUEPRINT.md"
+    },
+    {
+      "status": "??",
+      "file": ".ai/consultations/TASK-STUDENT-CV-EXTENSIBILITY-AND-BATCH-PDF-014-MASTER-BLUEPRINT.md"
+    },
+    {
+      "status": "??",
+      "file": ".ai/improvements/"
+    },
+    {
+      "status": "??",
+      "file": ".ai/plans/"
+    },
+    {
+      "status": "??",
+      "file": ".ai/review-requests/TASK-STUDENT-CURRICULUM-VITAE-016-FINAL-APPROVAL.json"
+    },
+    {
+      "status": "??",
+      "file": ".ai/review-requests/TASK-STUDENT-CURRICULUM-VITAE-017-FINAL-APPROVAL.json"
+    },
+    {
+      "status": "??",
+      "file": ".ai/review-requests/TASK-STUDENT-CURRICULUM-VITAE-018-FINAL-APPROVAL.json"
+    },
+    {
+      "status": "??",
+      "file": ".ai/review-requests/TASK-STUDENT-PORTAL-REFACTOR-019-FINAL-APPROVAL.json"
+    },
+    {
+      "status": "??",
+      "file": ".ai/tasks/TASK-STUDENT-PORTAL-REFACTOR-019.md"
+    },
+    {
+      "status": "??",
+      "file": "docs/CHILD_DATA_PROTECTION_MATRIX.md"
+    },
+    {
+      "status": "??",
+      "file": "docs/STUDENT_PORTAL_SYSTEM_SPECIFICATION.md"
+    },
+    {
+      "status": "??",
+      "file": "scripts/ai-loop/consult-6-risks-evaluation.mjs"
+    },
+    {
+      "status": "??",
+      "file": "scripts/ai-loop/consult-student-curriculum-vitae.mjs"
+    },
+    {
+      "status": "??",
+      "file": "scripts/ai-loop/consult-student-cv-extensibility.mjs"
+    },
+    {
+      "status": "??",
+      "file": "scripts/ai-loop/run-10min-autonomous-admin-dashboard-improvement.mjs"
+    },
+    {
+      "status": "??",
+      "file": "scripts/ai-loop/run-30min-autonomous-portal-improvement.mjs"
+    },
+    {
+      "status": "??",
+      "file": "scripts/ai-loop/run-autonomous-student-portal-improvement.mjs"
+    },
+    {
+      "status": "??",
+      "file": "scripts/ai-loop/run-cv-review.mjs"
+    },
+    {
+      "status": "??",
+      "file": "scripts/ai-loop/run-deep-research-planning.mjs"
+    },
+    {
+      "status": "??",
+      "file": "scripts/ai-loop/run-real-triad-admin-dashboard-continuous-improvement.mjs"
+    },
+    {
+      "status": "??",
+      "file": "scripts/ai-loop/run-real-triad-feature-flags-improvement.mjs"
+    },
+    {
+      "status": "??",
+      "file": "scripts/ai-loop/run-student-portal-refactor-review.mjs"
+    },
+    {
+      "status": "??",
+      "file": "src/app/api/homeroom/export-student-cv-docx/"
+    },
+    {
+      "status": "??",
+      "file": "src/components/homeroom/batch-cv-print-modal.tsx"
+    },
+    {
+      "status": "??",
+      "file": "src/components/homeroom/student-cv-drawer.tsx"
+    },
+    {
+      "status": "??",
+      "file": "src/components/homeroom/teacher-custom-fields-modal.tsx"
+    },
+    {
+      "status": "??",
+      "file": "src/components/portal/student-curriculum-vitae-tab.tsx"
+    },
+    {
+      "status": "??",
+      "file": "src/domain/admin/"
+    },
+    {
+      "status": "??",
+      "file": "src/domain/sound/"
+    },
+    {
+      "status": "??",
+      "file": "src/domain/sync/"
+    },
+    {
+      "status": "??",
+      "file": "src/services/student-cv-service.ts"
+    },
+    {
+      "status": "??",
+      "file": "src/types/student-cv.ts"
+    },
+    {
+      "status": "??",
+      "file": "supabase/migrations/20260828_student_curriculum_vitae.sql"
+    }
+  ]
+}

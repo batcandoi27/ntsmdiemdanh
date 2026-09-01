@@ -40,6 +40,7 @@ import { Class, Student } from '@/types/models';
 import { cn } from '@/lib/utils';
 import { getBookTheme } from '@/lib/book-themes';
 import { VietQRPaymentModal } from '@/components/portal/vietqr-payment-modal';
+import { StudentCurriculumVitaeTab } from '@/components/portal/student-curriculum-vitae-tab';
 import toast from 'react-hot-toast';
 
 const PORTAL_AUTH_KEY = 'tbc_portal_parent_session';
@@ -57,7 +58,7 @@ export default function ParentPortalPage() {
   // Đã xác thực thành công
   const [authenticatedStudent, setAuthenticatedStudent] = useState<Student | null>(null);
   const [overview, setOverview] = useState<ParentStudentOverview | null>(null);
-  const [activeTab, setActiveTab] = useState<'attendance' | 'events' | 'monitor' | 'leaves' | 'message'>('attendance');
+  const [activeTab, setActiveTab] = useState<'attendance' | 'events' | 'monitor' | 'leaves' | 'curriculum_vitae' | 'message'>('attendance');
 
   // Đơn xin nghỉ phép state
   const [studentLeaves, setStudentLeaves] = useState<LeaveRequest[]>([]);
@@ -525,6 +526,18 @@ export default function ParentPortalPage() {
                 <span>4. Sổ Theo Dõi & Thu Phí ({overview.sharedMonitorColumns?.length || 0})</span>
               </button>
               <button
+                onClick={() => setActiveTab('curriculum_vitae')}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5",
+                  activeTab === 'curriculum_vitae'
+                    ? "bg-blue-700 text-white shadow-sm"
+                    : "bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-200"
+                )}
+              >
+                <FileText className="w-3.5 h-3.5 text-blue-600" />
+                <span>5. 📝 Sơ Yếu Lý Lịch</span>
+              </button>
+              <button
                 onClick={() => setActiveTab('message')}
                 className={cn(
                   "px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all",
@@ -533,7 +546,7 @@ export default function ParentPortalPage() {
                     : "bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900 border border-slate-200"
                 )}
               >
-                5. Gửi lời nhắn cho GVCN
+                6. Gửi lời nhắn cho GVCN
               </button>
             </div>
 
@@ -906,7 +919,27 @@ export default function ParentPortalPage() {
               </div>
             )}
 
-            {/* TAB 5: GỬI LỜI NHẮN */}
+            {/* TAB 5: SƠ YẾU LÝ LỊCH HỌC SINH (CHUẨN BIỂU MẪU NHÀ TRƯỜNG) */}
+            {activeTab === 'curriculum_vitae' && (
+              <StudentCurriculumVitaeTab
+                student={authenticatedStudent || {
+                  id: overview.student.id,
+                  code: overview.student.code,
+                  fullName: overview.student.full_name,
+                  classId: overview.student.class_id,
+                  order: 1,
+                  firstName: '',
+                  lastName: '',
+                  gender: (overview.student.gender as any) || 'Nam',
+                  birthday: overview.student.birthday || '',
+                  status: 'Đang học'
+                }}
+                classId={overview.student.class_id}
+                className={overview.student.class_name}
+              />
+            )}
+
+            {/* TAB 6: GỬI LỜI NHẮN */}
             {activeTab === 'message' && (
               <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-4">
                 <div>

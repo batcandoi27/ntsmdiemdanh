@@ -78,6 +78,38 @@ export default async function TeacherDashboard() {
           </div>
         </Link>
 
+        {/* Quick Portals Grid */}
+        <div className="grid grid-cols-3 gap-2.5">
+          <Link
+            href="/homeroom"
+            className="p-3 bg-white rounded-2xl border border-slate-200 text-center hover:border-blue-300 hover:shadow-md transition-all group"
+          >
+            <div className="text-2xl mb-1 group-hover:scale-110 transition-transform">👨‍🏫</div>
+            <div className="font-bold text-xs text-slate-800">Trợ Lý GVCN</div>
+            <div className="text-[10px] text-slate-400">Hồ sơ & SYLL</div>
+          </Link>
+
+          <Link
+            href="/portal"
+            target="_blank"
+            className="p-3 bg-white rounded-2xl border border-slate-200 text-center hover:border-indigo-300 hover:shadow-md transition-all group"
+          >
+            <div className="text-2xl mb-1 group-hover:scale-110 transition-transform">👨‍👩‍👧</div>
+            <div className="font-bold text-xs text-slate-800">Cổng Phụ Huynh</div>
+            <div className="text-[10px] text-slate-400">Tra cứu & Nộp đơn</div>
+          </Link>
+
+          <Link
+            href="/student"
+            target="_blank"
+            className="p-3 bg-white rounded-2xl border border-slate-200 text-center hover:border-emerald-300 hover:shadow-md transition-all group"
+          >
+            <div className="text-2xl mb-1 group-hover:scale-110 transition-transform">🎮</div>
+            <div className="font-bold text-xs text-slate-800">Cổng Học Sinh</div>
+            <div className="text-[10px] text-slate-400">Thú ảo & Điểm thưởng</div>
+          </Link>
+        </div>
+
         {/* Meeting List */}
         <div className="space-y-4">
            <div className="flex items-center justify-between px-2">

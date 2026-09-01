@@ -36,10 +36,14 @@ import { cn, sortStudentsByCode } from '@/lib/utils';
 import { HomeroomTooltip } from '@/components/homeroom/homeroom-tooltip';
 import { QuickCaptureModal } from '@/components/homeroom/quick-capture-modal';
 import { QRCodeSVG } from 'qrcode.react';
-import { QrCode, Zap } from 'lucide-react';
+import { QrCode, Zap, FileText, Settings } from 'lucide-react';
+import { StudentCvDrawer } from '@/components/homeroom/student-cv-drawer';
+import { TeacherCustomFieldsModal } from '@/components/homeroom/teacher-custom-fields-modal';
+import { usePrivacy } from '@/context/privacy-context';
 import toast from 'react-hot-toast';
 
 export default function HomeroomStudentsPage() {
+  const { maskStudentName, maskPhone } = usePrivacy();
   const [classId, setClassId] = useState<string>('');
   const [className, setClassName] = useState<string>('');
   const [teacherName, setTeacherName] = useState<string>('Giáo viên chủ nhiệm');
@@ -53,6 +57,12 @@ export default function HomeroomStudentsPage() {
   const [timelineEvents, setTimelineEvents] = useState<Student360Event[]>([]);
   const [profileLoading, setProfileLoading] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+  // Sơ Yếu Lý Lịch State
+  const [isCvDrawerOpen, setIsCvDrawerOpen] = useState(false);
+  const [cvStudent, setCvStudent] = useState<Student | null>(null);
+  const [isCustomFieldsModalOpen, setIsCustomFieldsModalOpen] = useState(false);
+  const [teacherId, setTeacherId] = useState('');
 
   // Modals
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
@@ -176,16 +186,27 @@ export default function HomeroomStudentsPage() {
           </p>
         </div>
 
-        {/* SEARCH BOX */}
-        <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 text-text-tertiary absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Tìm theo tên hoặc mã HS..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-surface-section border border-border-default rounded-2xl pl-10 pr-4 py-2.5 text-xs text-text-primary focus:outline-none focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus transition-all placeholder:text-text-disabled font-medium shadow-xs"
-          />
+        {/* ACTIONS & SEARCH BOX */}
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <button
+            onClick={() => setIsCustomFieldsModalOpen(true)}
+            className="px-3.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-2xl text-xs transition-all border border-indigo-200 flex items-center gap-1.5 shadow-xs"
+            title="Thêm các câu hỏi / trường tùy chỉnh riêng cho lớp"
+          >
+            <Settings className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Trường tùy chỉnh lớp</span>
+          </button>
+
+          <div className="relative w-full sm:w-64">
+            <Search className="w-4 h-4 text-text-tertiary absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Tìm theo tên hoặc mã HS..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-surface-section border border-border-default rounded-2xl pl-10 pr-4 py-2.5 text-xs text-text-primary focus:outline-none focus:ring-4 focus:ring-sky-500/15 focus:border-border-focus transition-all placeholder:text-text-disabled font-medium shadow-xs"
+            />
+          </div>
         </div>
       </div>
 
@@ -241,6 +262,18 @@ export default function HomeroomStudentsPage() {
                       </td>
                       <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCvStudent(st);
+                              setIsCvDrawerOpen(true);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-200 text-xs font-bold transition-all shadow-xs"
+                            title="Xem & Duyệt Sơ Yếu Lý Lịch"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Lý lịch</span>
+                          </button>
                           <button
                             onClick={(e) => handleOpenQrModal(st, e)}
                             className="p-1.5 rounded-xl bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 border border-slate-200 text-xs font-bold transition-all shadow-xs"
@@ -465,6 +498,33 @@ export default function HomeroomStudentsPage() {
         classId={classId}
         students={students}
         onEventCreated={() => {
+          if (classId) loadData(classId);
+        }}
+      />
+
+      {/* SƠ YẾU LÝ LỊCH DRAWER CHO GVCN */}
+      <StudentCvDrawer
+        isOpen={isCvDrawerOpen}
+        onClose={() => {
+          setIsCvDrawerOpen(false);
+          setCvStudent(null);
+        }}
+        student={cvStudent}
+        classId={classId}
+        className={className}
+        onUpdated={() => {
+          if (classId) loadData(classId);
+        }}
+      />
+
+      {/* MODAL CẤU HÌNH TRƯỜNG TÙY CHỈNH CHO LỚP */}
+      <TeacherCustomFieldsModal
+        isOpen={isCustomFieldsModalOpen}
+        onClose={() => setIsCustomFieldsModalOpen(false)}
+        classId={classId}
+        className={className}
+        teacherId={teacherId}
+        onSaved={() => {
           if (classId) loadData(classId);
         }}
       />

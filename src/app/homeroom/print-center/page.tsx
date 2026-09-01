@@ -36,6 +36,7 @@ import { HomeroomClassSettings, HomeroomEvent, HomeroomPlan } from '@/types/home
 import { Student } from '@/types/models';
 import { cn, sortStudentsByCode } from '@/lib/utils';
 import { HomeroomTooltip } from '@/components/homeroom/homeroom-tooltip';
+import { BatchCvPrintModal } from '@/components/homeroom/batch-cv-print-modal';
 import toast from 'react-hot-toast';
 
 interface TemplateOption {
@@ -103,6 +104,14 @@ const TEMPLATES: TemplateOption[] = [
     category: 'Hồ sơ chủ nhiệm',
     desc: 'Báo cáo đánh giá 4 nhóm học sinh, tỷ lệ chuyên cần và đề xuất can thiệp cá nhân hóa gửi Ban Giám Hiệu.',
     icon: BookOpen
+  },
+  {
+    id: 'template_student_curriculum_vitae',
+    title: 'Sơ Yếu Lý Lịch Học Sinh (Mẫu Chuẩn 2 Trang & Batch PDF)',
+    code: 'BM-08/GVCN',
+    category: 'Hồ sơ học sinh chuẩn',
+    desc: 'Biểu mẫu chính thức 2 trang (Bản thân, Gia đình, Khảo sát tính cách & 3 Chữ ký). Hỗ trợ in 1 em hoặc cả lớp 86 trang.',
+    icon: FileText
   }
 ];
 
@@ -120,6 +129,7 @@ export default function HomeroomPrintCenterPage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('template_class_list');
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [downloading, setDownloading] = useState(false);
+  const [isBatchPrintModalOpen, setIsBatchPrintModalOpen] = useState(false);
 
   useEffect(() => {
     const activeId = localStorage.getItem('homeroom_active_class_id') || '';
@@ -348,6 +358,28 @@ export default function HomeroomPrintCenterPage() {
               )}
             </div>
           )}
+
+          {/* Selector & Actions cho Sơ Yếu Lý Lịch */}
+          {selectedTemplateId === 'template_student_curriculum_vitae' && (
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-3xl border border-blue-200 shadow-sm space-y-3">
+              <div className="flex items-center gap-2 text-blue-900 font-bold text-xs">
+                <Sparkles className="w-4 h-4 text-blue-600" />
+                <span>Trình In Sơ Yếu Lý Lịch Chuẩn A4</span>
+              </div>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                Biểu mẫu chính thức 2 trang/học sinh (Bản thân, Gia đình, Khảo sát 16 tiêu chí tính cách & 3 chữ ký). Bảo đảm 100% không bị lệch khi in 2 mặt (Duplex).
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setIsBatchPrintModalOpen(true)}
+                className="w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs shadow-md shadow-blue-600/30 flex items-center justify-center gap-1.5 transition-all"
+              >
+                <Printer className="w-4 h-4" />
+                <span>🖨️ Mở Trình In Batch PDF Cả Lớp ({students.length * 2} trang)</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* CỘT PHẢI (8 CỘT): LIVE PREVIEW KHỔ A4 TRẮNG SÁNG */}
@@ -489,6 +521,15 @@ export default function HomeroomPrintCenterPage() {
         </div>
 
       </div>
+
+      {/* BATCH PRINT MODAL CHO SƠ YẾU LÝ LỊCH CẢ LỚP */}
+      <BatchCvPrintModal
+        isOpen={isBatchPrintModalOpen}
+        onClose={() => setIsBatchPrintModalOpen(false)}
+        classId={classId}
+        className={className}
+        teacherName={teacherName}
+      />
     </div>
   );
 }

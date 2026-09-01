@@ -96,9 +96,9 @@ export interface StudentQuestCompletion {
   proof_urls?: string[];
   action_anchor?: string;
   temporal_anchor?: string;
-  physical_anchor_verified?: boolean;
+  physical_anchor_verified?: boolean; // Mặc định false/pending; chỉ true khi GV xác nhận
   personal_reflection?: string;
-  score_achieved: number;
+  score_achieved?: number; // Tách biệt completion khỏi official assessment
   xp_awarded: number;
   coins_awarded: number;
   status: QuestCompletionStatus;

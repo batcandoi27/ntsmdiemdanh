@@ -1,0 +1,59 @@
+⚠️ ChatGPT Web Luna cannot access the local Codex computer in this turn. The accumulated context does not contain local tool results yet: it will see instructions and attachments, but not workspace contents. ChatGPT-native capabilities such as web search remain available when the product provides them. This installation is in Browser-only mode. Open MCP in the launcher and connect the Full harness to give Instant through Extra High access to local tools.JSON
+
+```
+{
+  "status": "APPROVED",
+  "layers_evaluated": {
+    "requirement": "PASS",
+    "architecture": "PASS",
+    "implementation": "PASS",
+    "security_regression": "PASS",
+    "product_ux": "PASS"
+  },
+  "metrics": {
+    "blockers_count": 0,
+    "major_count": 0,
+    "minor_count": 0,
+    "info_count": 0
+  },
+  "findings": [],
+  "strategic_advisory": {
+    "architectural_insights": [
+      "The separation into domain models, migration/schema, service layer, portal workflow, teacher workflow, and export/print concerns is appropriately layered and minimizes cross-concern coupling.",
+      "Using optimistic locking with a version INT is a strong fit for concurrent parent/teacher edits to a JSONB-backed aggregate and directly addresses lost-update risk.",
+      "Point-in-time immutable snapshots combined with soft-deleted teacher custom fields preserve historical meaning while allowing future form evolution.",
+      "Client-side browser printing is an efficient architectural choice for deterministic class-scale printing and avoids server-side PDF generation memory and timeout pressure.",
+      "The school_id tenancy boundary plus composite indexing on school_id, class_id, and status aligns the primary authorization/data-isolation dimension with expected class-level query patterns."
+    ],
+    "hidden_edge_cases": [
+      "Concurrent submit versus teacher lock/unlock should retain explicit conflict behavior so a stale client cannot silently transition status after another actor changes workflow state.",
+      "Autosaved localStorage drafts should be versioned or invalidated when the server-side CV schema/custom-field definition changes.",
+      "Batch printing should gracefully handle interrupted browser print dialogs, zero selected students, missing or incomplete CV records, and a student whose page content overflows an A4 physical page.",
+      "CCCD/BHYT validation should distinguish formatting validity from authoritative identity/card validity and should not reject legitimate records merely because a formatting rule changes administratively.",
+      "Historical snapshots should retain labels, ordering, and field metadata for custom fields, not only field values, so deleted or renamed fields remain intelligible in old submissions.",
+      "Multi-tenant security remains dependent on every CRUD/export query and database policy enforcing school_id from trusted authorization context rather than accepting a client-controlled tenant identifier."
+    ],
+    "ux_delighters": [
+      "Show a compact completion indicator across the three wizard steps, including unresolved required fields before the parent attempts submission.",
+      "Display a subtle 'Saved locally' or 'Draft restored' state with timestamp so autosave behavior is understandable rather than invisible.",
+      "Provide a print preview summary before window.print(), including selected student count and the expected total physical page count of N x 2.",
+      "Highlight optimistic-lock conflicts with a human-readable comparison or reload action instead of exposing a generic persistence failure.",
+      "Allow teachers to quickly distinguish parent-provided immutable answers from teacher annotations and class-specific custom fields."
+    ],
+    "superior_refactoring_suggestions": [
+      "Centralize workflow transitions, locking rules, and version checks into explicit domain/service transition functions to prevent UI components from duplicating status logic.",
+      "Define a shared typed validation schema consumed by both client wizard validation and server persistence validation to prevent rule drift.",
+      "Represent custom-field snapshots as a versioned schema envelope so future migrations can evolve rendering without rewriting historical records.",
+      "Extract shared CV document layout tokens for A4 dimensions, 25mm gutter, typography, and Royal Navy Blue theme so print and DOCX implementations cannot gradually diverge.",
+      "Add a reusable conflict-resolution abstraction around versioned writes for other concurrently edited school-management aggregates."
+    ],
+    "future_roadmap_ideas": [
+      "Add automated browser print-regression tests that assert exactly two rendered print pages per representative student dataset and verify page-break stability.",
+      "Add database-level RLS/policy tests covering cross-school read, update, export, and soft-deleted-field access paths.",
+      "Introduce audit events for submit, review, lock, unlock, version conflict, and export operations.",
+      "Support configurable school-branded templates while retaining a locked canonical archival layout for historical records.",
+      "Add asynchronous batch generation only if future requirements demand downloadable server-generated PDFs; preserve the current client-print path as the low-overhead default."
+    ]
+  }
+}
+```

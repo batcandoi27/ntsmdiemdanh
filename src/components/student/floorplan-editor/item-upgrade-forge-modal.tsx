@@ -170,8 +170,8 @@ export const ItemUpgradeForgeModal: React.FC<ItemUpgradeForgeModalProps> = ({
               </div>
             </div>
 
-            <div className="text-[11px] font-bold text-indigo-300">
-              +{Math.round((nextConfig.buffMultiplier - currentConfig.buffMultiplier) * 100)}% Chỉ Số
+            <div className="text-[11px] font-bold text-amber-300">
+              ✨ {nextConfig.flairTitle}
             </div>
           </div>
         ) : (

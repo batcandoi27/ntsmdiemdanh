@@ -7,6 +7,8 @@ import { SiteFooter } from '@/components/site-footer';
 import { ViewModeProvider } from '@/context/view-mode-context';
 import { ViewContainer } from '@/components/view-container';
 import { FeatureFlagsProvider } from '@/context/feature-flags-context';
+import { PrivacyProvider } from '@/context/privacy-context';
+import { PrivacyDemoBadge } from '@/components/privacy-demo-badge';
 import { BottomNav } from '@/components/layout/bottom-nav';
 import { Analytics } from "@vercel/analytics/next";
 
@@ -69,19 +71,21 @@ export default function RootLayout({
         <LoadingProvider>
           <AuthProvider>
             <FeatureFlagsProvider>
-              <ChatProvider>
-                <ViewModeProvider>
-                  <div className="flex flex-col min-h-screen pb-20 md:pb-0 bg-app">
-                    <SiteHeader />
-                    <ViewContainer>
-                      {children}
-                    </ViewContainer>
-                    <SiteFooter />
-                    <BottomNav />
-                    <ChatContainer />
-                  </div>
-                </ViewModeProvider>
-              </ChatProvider>
+              <PrivacyProvider>
+                <ChatProvider>
+                  <ViewModeProvider>
+                    <div className="flex flex-col min-h-screen pb-20 md:pb-0 bg-app">
+                      <SiteHeader />
+                      <ViewContainer>
+                        {children}
+                      </ViewContainer>
+                      <SiteFooter />
+                      <BottomNav />
+                      <ChatContainer />
+                    </div>
+                  </ViewModeProvider>
+                </ChatProvider>
+              </PrivacyProvider>
             </FeatureFlagsProvider>
           </AuthProvider>
           <LoadingOverlay />

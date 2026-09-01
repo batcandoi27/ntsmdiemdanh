@@ -4,11 +4,13 @@ import React, { useState } from 'react';
 import { SvgPet } from '@/components/student/svg-pet';
 import { EggCustomizationModal } from '@/components/student/egg-customization-modal';
 import { PetEvolutionBranch, StudentPet } from '@/types/student-portal';
-import { Palette, Sparkles, RefreshCw, Lock, Edit3, ShieldAlert, Check } from 'lucide-react';
+import { soundscape } from '@/domain/sound/web-audio-soundscape';
+import { Palette, Sparkles, RefreshCw, Lock, Edit3, ShieldAlert, Check, Volume2, VolumeX } from 'lucide-react';
 
 export default function StudentPetPage() {
   const [isColorModalOpen, setIsColorModalOpen] = useState(false);
   const [eggColor, setEggColor] = useState('#9d4edd');
+  const [isMuted, setIsMuted] = useState(soundscape.isMuted());
   
   // Quota & Customization States
   const [nicknameChangesLeft, setNicknameChangesLeft] = useState(1);
@@ -49,6 +51,7 @@ export default function StudentPetPage() {
       alert('🔒 Bạn đã hết 3 lượt đổi nhánh tiến hóa! Hãy lọt Top thi đua tháng để nhận Phiếu Tẩy Tủy.');
       return;
     }
+    soundscape.playSoftChime();
     setPet(prev => ({ ...prev, evolution_branch: branch }));
     setEvolutionChangesLeft(prev => prev - 1);
   };
@@ -59,6 +62,7 @@ export default function StudentPetPage() {
       return;
     }
     if (!nicknameInput.trim()) return;
+    soundscape.playSoftChime();
     setPet(prev => ({ ...prev, anonymous_name: nicknameInput.trim() }));
     setNicknameChangesLeft(0);
     setIsEditingNickname(false);
@@ -69,11 +73,17 @@ export default function StudentPetPage() {
       alert('Bạn chưa có Phiếu Tẩy Tủy nào! Hãy hoàn thành nhiệm vụ và lọt Top tháng để nhận thưởng.');
       return;
     }
+    soundscape.playMilestoneFanfare();
     setRebirthTokens(prev => prev - 1);
     setEvolutionChangesLeft(3);
     setNicknameChangesLeft(1);
     setEggColorChangesMonth(1);
     alert('🔮 Đã Tẩy Tủy thành công! Bạn nhận lại 3 lượt đổi nhánh, 1 lượt đổi tên và 1 lượt đổi màu trứng.');
+  };
+
+  const toggleSound = () => {
+    const newState = soundscape.toggleMute();
+    setIsMuted(newState);
   };
 
   const xpRequired = Math.round(100 * Math.pow(1.5, Math.max(0, pet.level)));
@@ -87,11 +97,26 @@ export default function StudentPetPage() {
             🥚 Không Gian Nuôi Dưỡng Thú Cưng SVG
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            Khởi tạo Level 1 Baseline • Quản lý hạn ngạch tùy biến & Cơ chế Tẩy Tủy hàng tháng
+            Khởi tạo Level 1 Baseline • Quản lý hạn ngạch tùy biến & Âm thanh tương tác sống động
           </p>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Mute / Unmute Soundscape */}
+          <button
+            type="button"
+            onClick={toggleSound}
+            className={`p-2 rounded-xl border font-bold text-xs flex items-center gap-1.5 transition ${
+              isMuted
+                ? 'bg-slate-900 border-slate-800 text-slate-500'
+                : 'bg-indigo-950/80 border-indigo-500/40 text-indigo-300 shadow'
+            }`}
+            title={isMuted ? 'Bật âm thanh tương tác' : 'Tắt âm thanh'}
+          >
+            {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4 text-amber-300" />}
+            <span className="hidden sm:inline">{isMuted ? 'Tắt Âm' : 'Âm Thanh Bật'}</span>
+          </button>
+
           <button
             type="button"
             onClick={() => {
@@ -143,7 +168,14 @@ export default function StudentPetPage() {
       {/* Main Showcase */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Visual Showcase Card */}
-        <div className="md:col-span-2 rounded-3xl border border-indigo-500/30 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-950 p-6 flex flex-col items-center justify-center relative overflow-hidden shadow-2xl">
+        <div
+          onClick={() => soundscape.playPetInteractSound(pet.evolution_branch)}
+          className="md:col-span-2 rounded-3xl border border-indigo-500/30 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-950 p-6 flex flex-col items-center justify-center relative overflow-hidden shadow-2xl cursor-pointer group select-none"
+          title="Nhấn vào để tương tác cùng thú cưng!"
+        >
+          <div className="absolute top-3 right-3 text-[10px] text-indigo-400/80 bg-indigo-950/60 px-2.5 py-1 rounded-full border border-indigo-800/40 flex items-center gap-1">
+            <span>✨ Chạm vào để chơi cùng bạn ấy!</span>
+          </div>
           
           <SvgPet
             branch={pet.evolution_branch}
@@ -153,7 +185,7 @@ export default function StudentPetPage() {
             customColor={eggColor}
             gender="female"
             size={160}
-            className="my-4"
+            className="my-4 transition transform group-hover:scale-105"
           />
 
           <div className="text-center mt-2 z-10">

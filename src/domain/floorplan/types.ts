@@ -22,7 +22,7 @@ export interface TierConfig {
   stars: string;
   xpCost: number;
   coinCost: number;
-  buffMultiplier: number;
+  flairTitle: string;
   buffDescription: string;
 }
 
@@ -33,8 +33,8 @@ export const TIER_CONFIGS: Record<FurnitureTier, TierConfig> = {
     stars: '⭐',
     xpCost: 0,
     coinCost: 0,
-    buffMultiplier: 1.0,
-    buffDescription: 'Hiệu quả cơ bản: +10% sinh lực & năng lượng'
+    flairTitle: 'Thiết Kế Mộc Mạc',
+    buffDescription: 'Kiểu dáng tiêu chuẩn, mang lại không gian học tập gọn gàng'
   },
   2: {
     tier: 2,
@@ -42,8 +42,8 @@ export const TIER_CONFIGS: Record<FurnitureTier, TierConfig> = {
     stars: '⭐⭐',
     xpCost: 25,
     coinCost: 10,
-    buffMultiplier: 1.25,
-    buffDescription: 'Viền kim loại: +25% tốc độ hồi phục sinh lực'
+    flairTitle: 'Viền Kim Loại Sáng',
+    buffDescription: 'Hiệu ứng viền phản chiếu ánh sáng nhẹ khi đặt trong phòng'
   },
   3: {
     tier: 3,
@@ -51,8 +51,8 @@ export const TIER_CONFIGS: Record<FurnitureTier, TierConfig> = {
     stars: '⭐⭐⭐',
     xpCost: 50,
     coinCost: 20,
-    buffMultiplier: 1.5,
-    buffDescription: 'Hoa văn hoàng gia: +50% thưởng XP nhiệm vụ rèn luyện'
+    flairTitle: 'Họa Tiết Hoàng Gia',
+    buffDescription: 'Họa tiết ánh kim phát sáng dịu nhẹ trong không gian góc học tập'
   },
   4: {
     tier: 4,
@@ -60,8 +60,8 @@ export const TIER_CONFIGS: Record<FurnitureTier, TierConfig> = {
     stars: '⭐⭐⭐⭐',
     xpCost: 100,
     coinCost: 40,
-    buffMultiplier: 1.85,
-    buffDescription: 'Hào quang ma thuật: +85% toàn bộ điểm thi đua & may mắn'
+    flairTitle: 'Vệt Sáng Ma Thuật',
+    buffDescription: 'Vệt sáng huyền ảo và hạt bụi phát quang nhẹ bay quanh vật phẩm'
   },
   5: {
     tier: 5,
@@ -69,8 +69,8 @@ export const TIER_CONFIGS: Record<FurnitureTier, TierConfig> = {
     stars: '⭐⭐⭐⭐⭐',
     xpCost: 200,
     coinCost: 80,
-    buffMultiplier: 2.2,
-    buffDescription: 'Bụi sao thần thánh: +120% toàn bộ chỉ số & hào quang siêu cấp'
+    flairTitle: 'Hào Quang Tinh Tú Vĩnh Cửu',
+    buffDescription: 'Hào quang tinh vân rực rỡ và hạt sao đa sắc chuyển động'
   }
 };
 

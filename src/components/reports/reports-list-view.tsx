@@ -7,6 +7,7 @@ import { Plus, X, Loader2, MessageSquare } from "lucide-react";
 import { getClassAndStudents } from "@/app/actions/common";
 import { Student } from "@/types/models";
 import { useAuth } from "@/context/auth-context";
+import { usePrivacy } from "@/context/privacy-context";
 import { ReportMessageModal } from "./report-message-modal";
 
 const getGradeColor = (className: string) => {
@@ -46,8 +47,8 @@ interface ReportsListViewProps {
 }
 
 export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns, onRefresh }: ReportsListViewProps) {
-    console.log('[ReportsListView] Rendering with data count:', data.length, 'Visible columns:', visibleColumns);
     const { appUser } = useAuth();
+    const { maskStudentName } = usePrivacy();
     const [editCell, setEditCell] = useState<{ classId: string, studentCode: string, studentName: string, date: string, currentStatus: string, rect: { top: number, left: number } } | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [addModalConfig, setAddModalConfig] = useState<{ className: string, date?: string } | null>(null);
@@ -408,7 +409,7 @@ export function ReportsListView({ data, classSizes = {}, groupBy, visibleColumns
                                                                 statuses[0]?.split(/[(\[\s]/)[0].toUpperCase().startsWith('KH') ? "text-orange-600" :
                                                                 "text-slate-700"
                                                             )}>
-                                                                {student.name}
+                                                                {maskStudentName(student.name)}
                                                             </span>
                                                             {(student as any).isSC && <span className="text-red-600 font-extrabold text-[10px] leading-none tracking-tighter flex-shrink-0">(SC)</span>}
 

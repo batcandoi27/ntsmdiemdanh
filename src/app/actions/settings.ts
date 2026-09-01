@@ -53,6 +53,40 @@ export async function saveRoleCodes(roleCodes: Record<string, string>, updaterRo
     }
 }
 
+// --- Feature Flags Actions ---
+
+export async function getFeatureFlags() {
+    try {
+        const { data, error } = await supabaseAdmin.from('settings').select('value').eq('key', 'feature_flags').maybeSingle();
+        if (error) throw error;
+        return { success: true, flags: data?.value || {} };
+    } catch (error) {
+        console.error('Error fetching feature flags:', error);
+        return { success: false, flags: {}, message: 'Lỗi khi tải cấu hình tính năng.' };
+    }
+}
+
+export async function saveFeatureFlags(flags: Record<string, boolean>, updaterRole?: string) {
+    if (updaterRole && updaterRole !== 'admin' && updaterRole !== 'principal') {
+        return { success: false, message: 'Chỉ Quản trị viên (Admin) hoặc Ban Giám Hiệu mới có quyền bật/tắt tính năng.' };
+    }
+    try {
+        const { error } = await supabaseAdmin.from('settings').upsert(
+            { key: 'feature_flags', value: flags },
+            { onConflict: 'key' }
+        );
+        if (error) throw error;
+        try {
+            revalidatePath('/settings');
+        } catch (_) {}
+        return { success: true, message: 'Đã lưu cấu hình tính năng thành công!' };
+    } catch (error: any) {
+        console.error('Error saving feature flags:', error);
+        return { success: false, message: `Lỗi khi lưu tính năng: ${error.message || 'Lỗi cơ sở dữ liệu'}` };
+    }
+}
+
+
 
 export async function loadUsersPaginated(pageSize: number, lastUid?: string) {
     try {

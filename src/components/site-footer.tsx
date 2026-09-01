@@ -3,11 +3,13 @@
 import Link from 'next/link';
 import { useAuth } from '@/context/auth-context';
 import { useChat } from '@/context/chat-context';
+import { usePrivacy } from '@/context/privacy-context';
 import { MessageCircle } from 'lucide-react';
 
 export function SiteFooter() {
     const { appUser, authUser, loading } = useAuth();
     const { setIsChatOpen, setIsBubbleVisible, unreadCount } = useChat();
+    const { maskSchoolName } = usePrivacy();
 
     let userInfo = 'Đang tải...';
     if (!loading) {
@@ -25,7 +27,7 @@ export function SiteFooter() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-2 text-xs sm:text-sm text-slate-500">
                     <div className="whitespace-nowrap font-medium">
-                        &copy; 2026 THCS Trần Bội Cơ
+                        &copy; 2026 {maskSchoolName('THCS Trần Bội Cơ')}
                     </div>
                     
                     <div className="flex items-center gap-3 sm:gap-4 font-medium">
