@@ -1,5 +1,5 @@
 // Webhook Router receiving inbound events from Zalo Bot Gateway (:3871)
-// Handles /ketnoi, /baobai, /thoikhoabieu, /diemdanh, /hocphi, /xinnghi, /bangdiem, /lienhe, /?
+// Implements 6 Zero-Touch Touchpoints, Keypad 1..8 Shortcuts & Multi-Child State Machine
 
 import { NextRequest, NextResponse } from 'next/server';
 import { ZaloService } from '@/services/zalo-service';
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
                 text: bindResult.message
             });
 
-            return NextResponse.json({ ok: true, action: 'ONBOARD_PROCESSED', result: bindResult });
+            return NextResponse.json({ ok: true, action: 'ONBOARD_PROCESSED', result: bindResult, reply: bindResult.message });
         }
 
         // 3. Resolve student(s) connected to this parent Zalo ID
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
 
         // If not connected yet and asking for school commands
         if (connectedStudents.length === 0) {
-            if (rawText.startsWith('/') || lowerText.includes('điểm danh') || lowerText.includes('học phí') || lowerText.includes('báo bài')) {
+            if (rawText.startsWith('/') || /^[1-8]$/.test(rawText) || lowerText.includes('điểm danh') || lowerText.includes('học phí') || lowerText.includes('báo bài') || lowerText.includes('hồ sơ') || lowerText.includes('phụ huynh')) {
                 const guideMsg = `🏫 TRỢ LÝ GIÁO DỤC TRƯỜNG THCS TRẦN BỘI CƠ
 ━━━━━━━━━━━━━━━━━━━━━━
 Dạ chào anh/chị! Số Zalo này hiện chưa được liên kết với hồ sơ học sinh nào trong trường.
@@ -67,19 +67,49 @@ Anh/chị vui lòng nhắn tin theo cú pháp:
                     thread_type: 0,
                     text: guideMsg
                 });
+                return NextResponse.json({ ok: true, action: 'UNLINKED_PARENT_GUIDED', reply: guideMsg });
             }
-            return NextResponse.json({ ok: true, action: 'UNLINKED_PARENT_GUIDED' });
+            return NextResponse.json({ ok: true, action: 'UNLINKED_PARENT_NOOP' });
         }
 
-        // Pick primary student (or first one)
-        const primaryStudent = connectedStudents[0];
+        // 4. Multi-Child State Machine (Xử lý phụ huynh có từ 2 con trở lên)
+        let selectedStudent = connectedStudents[0];
+
+        if (connectedStudents.length > 1) {
+            // Check active session in DB
+            const { data: session } = await supabaseAdmin
+                .from('zalo_interactive_sessions')
+                .select('*')
+                .eq('parent_zalo_id', sender_id)
+                .maybeSingle();
+
+            const isExpired = session ? new Date(session.expires_at).getTime() < Date.now() : true;
+
+            // If user selects child by single digit (1 or 2..)
+            if (/^[1-9]$/.test(rawText) && session && !isExpired && session.current_step === 'AWAIT_CHILD_SELECT') {
+                const childIdx = parseInt(rawText, 10) - 1;
+                if (childIdx >= 0 && childIdx < connectedStudents.length) {
+                    selectedStudent = connectedStudents[childIdx];
+                    // Update session
+                    await supabaseAdmin.from('zalo_interactive_sessions').upsert({
+                        parent_zalo_id: sender_id,
+                        current_step: 'IDLE',
+                        selected_student_id: selectedStudent.student_id,
+                        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString()
+                    });
+                }
+            } else if (session?.selected_student_id && !isExpired) {
+                const found = connectedStudents.find(s => s.student_id === session.selected_student_id);
+                if (found) selectedStudent = found;
+            }
+        }
 
         // Resolve student's class_id
         let resolvedClassId = '';
         const { data: stCls } = await supabaseAdmin
             .from('student_classes')
             .select('class_id')
-            .eq('student_id', primaryStudent.student_id)
+            .eq('student_id', selectedStudent.student_id)
             .eq('is_active', true)
             .maybeSingle();
 
@@ -89,19 +119,30 @@ Anh/chị vui lòng nhắn tin theo cú pháp:
             const { data: clsData } = await supabaseAdmin
                 .from('classes')
                 .select('id')
-                .eq('name', primaryStudent.class_name)
+                .eq('name', selectedStudent.class_name)
                 .maybeSingle();
-            resolvedClassId = clsData?.id || primaryStudent.class_name;
+            resolvedClassId = clsData?.id || selectedStudent.class_name;
         }
 
-        // 4. Handle Slash Commands
-        // 4.1. /baobai - Báo bài & Dặn dò
-        if (lowerText === '/baobai' || lowerText === 'baobai' || lowerText.includes('báo bài')) {
+        // 5. Normalization & Keypad 1..8 Mapping
+        // 1: Báo bài, 2: TKB, 3: Chuyên cần, 4: Bảng điểm, 5: Học phí, 6: Xin nghỉ, 7: Hồ sơ, 8: Liên hệ, 9/?: Menu
+        const isBaoBai = lowerText === '1' || lowerText === '/baobai' || lowerText === 'baobai' || lowerText.includes('báo bài');
+        const isTkb = lowerText === '2' || lowerText === '/thoikhoabieu' || lowerText === 'thoikhoabieu' || lowerText.includes('thời khóa biểu') || lowerText.includes('tkb');
+        const isDiemDanh = lowerText === '3' || lowerText === '/diemdanh' || lowerText === 'diemdanh' || lowerText.includes('điểm danh') || lowerText.includes('chuyên cần');
+        const isBangDiem = lowerText === '4' || lowerText === '/bangdiem' || lowerText === 'bangdiem' || lowerText.includes('bảng điểm') || lowerText.includes('kết quả học tập');
+        const isHocPhi = lowerText === '5' || lowerText === '/hocphi' || lowerText === 'hocphi' || lowerText.includes('học phí') || lowerText.includes('tiền học');
+        const isXinNghi = lowerText === '6' || lowerText.startsWith('/xinnghi') || lowerText.startsWith('xinnghi') || lowerText.includes('xin nghỉ');
+        const isHoSo = lowerText === '7' || lowerText === '/hoso' || lowerText === '/phuynh' || lowerText === 'hoso' || lowerText === 'phuynh' || lowerText.includes('hồ sơ') || lowerText.includes('phụ huynh');
+        const isLienHe = lowerText === '8' || lowerText === '/lienhe' || lowerText === 'lienhe' || lowerText.includes('liên hệ') || lowerText.includes('sdt');
+        const isMenu = lowerText === '?' || lowerText === '/?' || lowerText === '/menu' || lowerText === 'menu' || lowerText === 'help' || lowerText.includes('hướng dẫn');
+
+        // 5.1. Báo bài & Dặn dò (Key: 1 hoặc /baobai)
+        if (isBaoBai) {
             const todayStr = new Date().toISOString().slice(0, 10);
             const report = await HomeworkService.getDailyHomeworkReport(
                 resolvedClassId,
                 todayStr,
-                primaryStudent.class_name
+                selectedStudent.class_name
             );
 
             const reportText = HomeworkService.formatHomeworkReportForZalo(report);
@@ -113,12 +154,11 @@ Anh/chị vui lòng nhắn tin theo cú pháp:
             return NextResponse.json({ ok: true, command: 'BAOBAI_SENT', reply: reportText });
         }
 
-        // 4.2. /thoikhoabieu - Thời khóa biểu
-        if (lowerText === '/thoikhoabieu' || lowerText === 'thoikhoabieu' || lowerText.includes('thời khóa biểu') || lowerText.includes('tkb')) {
-            const timetable = await HomeworkService.getClassTimetable(resolvedClassId, primaryStudent.class_name);
+        // 5.2. Thời khóa biểu (Key: 2 hoặc /thoikhoabieu)
+        if (isTkb) {
+            const timetable = await HomeworkService.getClassTimetable(resolvedClassId, selectedStudent.class_name);
             const todayDay = new Date().getDay() === 0 ? 7 : new Date().getDay() + 1; // 2..7
             
-            // Prefer Thursday (4) or today
             let targetDay = timetable.days.find(d => d.day_of_week === todayDay);
             if (!targetDay || targetDay.morning.length === 0) {
                 targetDay = timetable.days.find(d => d.day_of_week === 4) || timetable.days[0];
@@ -126,7 +166,7 @@ Anh/chị vui lòng nhắn tin theo cú pháp:
 
             let tkbText = `📅 THỜI KHÓA BIỂU (${targetDay?.day_label || 'Thứ Năm'})
 ━━━━━━━━━━━━━━━━━━━━━━
-🏫 Lớp: ${primaryStudent.class_name} | Học sinh: ${primaryStudent.student_name}
+🏫 Lớp: ${selectedStudent.class_name} | Học sinh: ${selectedStudent.student_name}
 ━━━━━━━━━━━━━━━━━━━━━━\n`;
 
             if (targetDay && targetDay.morning.length > 0) {
@@ -148,7 +188,7 @@ Anh/chị vui lòng nhắn tin theo cú pháp:
             }
 
             tkbText += `\n━━━━━━━━━━━━━━━━━━━━━━
-💡 Quý phụ huynh gõ /baobai để xem dặn dò bài tập về nhà ngày mai nhé!`;
+💡 Nhắn phím 1 để xem Báo Bài & Dặn Dò ngày mai nhé!`;
 
             await zaloGateway.sendTextMessage({
                 thread_id: sender_id,
@@ -158,11 +198,11 @@ Anh/chị vui lòng nhắn tin theo cú pháp:
             return NextResponse.json({ ok: true, command: 'TKB_SENT', reply: tkbText });
         }
 
-        // 4.3. /diemdanh - Lịch sử chuyên cần
-        if (lowerText === '/diemdanh' || lowerText === 'diemdanh' || lowerText.includes('điểm danh')) {
+        // 5.3. Chuyên cần (Key: 3 hoặc /diemdanh)
+        if (isDiemDanh) {
             const attendanceMsg = `📋 TÌNH HÌNH CHUYÊN CẦN 7 NGÀY GẦN NHẤT
 ━━━━━━━━━━━━━━━━━━━━━━
-👨‍🎓 Học sinh: ${primaryStudent.student_name} (${primaryStudent.class_name})
+👨‍🎓 Học sinh: ${selectedStudent.student_name} (${selectedStudent.class_name})
 ━━━━━━━━━━━━━━━━━━━━━━
 ✅ Thứ Hai: Có mặt (Đúng giờ)
 ✅ Thứ Ba: Có mặt (Đúng giờ)
@@ -180,31 +220,12 @@ Anh/chị vui lòng nhắn tin theo cú pháp:
             return NextResponse.json({ ok: true, command: 'DIEMDANH_SENT', reply: attendanceMsg });
         }
 
-        // 4.4. /hocphi - Tra cứu học phí & VietQR
-        if (lowerText === '/hocphi' || lowerText === 'hocphi' || lowerText.includes('học phí')) {
-            const curMonth = `Tháng ${new Date().getMonth() + 1}/${new Date().getFullYear()}`;
-            await zaloGateway.sendTuitionInvoice({
-                parentZaloId: sender_id,
-                studentName: primaryStudent.student_name,
-                studentCode: primaryStudent.student_code,
-                className: primaryStudent.class_name,
-                monthStr: curMonth,
-                amount: 850000,
-                bankName: 'Ngân hàng TMCP Quân Đội (MB Bank)',
-                bankBin: '970422',
-                accountNumber: '090123456789',
-                accountHolder: 'TRUONG THCS TRAN BOI CO',
-                dueDateStr: 'Trước ngày 10 hàng tháng'
-            });
-            return NextResponse.json({ ok: true, command: 'HOCPHI_SENT', reply: `Đã gửi hóa đơn học phí kèm VietQR Napas247 cho cháu ${primaryStudent.student_name}` });
-        }
-
-        // 4.5. /bangdiem - Tra cứu bảng điểm học tập
-        if (lowerText === '/bangdiem' || lowerText === 'bangdiem' || lowerText.includes('bảng điểm') || lowerText.includes('kết quả học tập')) {
+        // 5.4. Bảng điểm (Key: 4 hoặc /bangdiem)
+        if (isBangDiem) {
             const gradeMsg = `📊 KẾT QUẢ HỌC TẬP & BẢNG ĐIỂM - HỌC KỲ I
 ━━━━━━━━━━━━━━━━━━━━━━
-👨‍🎓 Học sinh: ${primaryStudent.student_name} (${primaryStudent.class_name})
-Mã định danh: ${primaryStudent.student_code}
+👨‍🎓 Học sinh: ${selectedStudent.student_name} (${selectedStudent.class_name})
+🆔 Mã định danh: ${selectedStudent.student_code}
 ━━━━━━━━━━━━━━━━━━━━━━
 📐 Toán: 8.5
 📖 Ngữ Văn: 8.0
@@ -229,16 +250,49 @@ Mã định danh: ${primaryStudent.student_code}
             return NextResponse.json({ ok: true, command: 'BANGDIEM_SENT', reply: gradeMsg });
         }
 
-        // 4.6. /xinnghi - Đơn xin nghỉ phép
-        if (lowerText.startsWith('/xinnghi') || lowerText.startsWith('xinnghi') || lowerText.includes('xin nghỉ')) {
-            const reason = rawText.replace(/^\/xinnghi/i, '').replace(/^xinnghi/i, '').trim() || 'Em bị cảm sốt, xin phép nghỉ 1 ngày để dưỡng bệnh';
+        // 5.5. Học phí & VietQR & Widget Thẻ ATM (Key: 5 hoặc /hocphi)
+        if (isHocPhi) {
+            const curMonth = `Tháng ${new Date().getMonth() + 1}/${new Date().getFullYear()}`;
+            
+            // 1. Gửi tin nhắn hóa đơn kèm link VietQR Napas247
+            await zaloGateway.sendTuitionInvoice({
+                parentZaloId: sender_id,
+                studentName: selectedStudent.student_name,
+                studentCode: selectedStudent.student_code,
+                className: selectedStudent.class_name,
+                monthStr: curMonth,
+                amount: 850000,
+                bankName: 'Ngân hàng TMCP Quân Đội (MB Bank)',
+                bankBin: '970422',
+                accountNumber: '090123456789',
+                accountHolder: 'TRUONG THCS TRAN BOI CO',
+                dueDateStr: 'Trước ngày 10 hàng tháng'
+            });
+
+            // 2. Gửi thêm Widget Thẻ ATM Ngân Hàng chính thức (1-Click Copy STK)
+            await zaloGateway.sendBankCard({
+                thread_id: sender_id,
+                thread_type: 0,
+                bank_card: {
+                    binBank: '970422',
+                    numAccBank: '090123456789',
+                    nameAccBank: 'TRUONG THCS TRAN BOI CO'
+                }
+            });
+
+            return NextResponse.json({ ok: true, command: 'HOCPHI_SENT', reply: `Đã gửi hóa đơn học phí kèm thẻ ATM cho cháu ${selectedStudent.student_name}` });
+        }
+
+        // 5.6. Đơn xin nghỉ học (Key: 6 hoặc /xinnghi)
+        if (isXinNghi) {
+            const reason = rawText.replace(/^\/xinnghi/i, '').replace(/^xinnghi/i, '').replace(/^6\s*/, '').trim() || 'Em bị cảm sốt, xin phép nghỉ 1 ngày để dưỡng bệnh';
             const leaveMsg = `📝 ĐÃ TIẾP NHẬN ĐƠN XIN NGHỈ HỌC
 ━━━━━━━━━━━━━━━━━━━━━━
-👨‍🎓 Học sinh: ${primaryStudent.student_name} (${primaryStudent.class_name})
+👨‍🎓 Học sinh: ${selectedStudent.student_name} (${selectedStudent.class_name})
 📅 Ngày nghỉ: ${new Date().toLocaleDateString('vi-VN')}
 📋 Lý do: ${reason}
 ━━━━━━━━━━━━━━━━━━━━━━
-✅ Hệ thống đã chuyển đơn trực tiếp đến Giáo viên Chủ nhiệm Lớp ${primaryStudent.class_name}.
+✅ Hệ thống đã chuyển đơn trực tiếp đến Giáo viên Chủ nhiệm Lớp ${selectedStudent.class_name}.
 Chúc em mau khỏe để sớm quay trở lại lớp học cùng các bạn! ✨`;
 
             await zaloGateway.sendTextMessage({
@@ -249,15 +303,15 @@ Chúc em mau khỏe để sớm quay trở lại lớp học cùng các bạn! �
             return NextResponse.json({ ok: true, command: 'LEAVE_SUBMITTED', reply: leaveMsg });
         }
 
-        // 4.7. /hoso hoặc /phuynh - Thông tin hồ sơ học sinh
-        if (lowerText === '/hoso' || lowerText === '/phuynh' || lowerText.includes('hồ sơ')) {
+        // 5.7. Hồ sơ học sinh (Key: 7 hoặc /hoso, /phuynh)
+        if (isHoSo) {
             const profileMsg = `👤 HỒ SƠ HỌC SINH & LIÊN KẾT ZALO
 ━━━━━━━━━━━━━━━━━━━━━━
-👨‍🎓 Họ và tên: ${primaryStudent.student_name}
-🆔 Mã học sinh: ${primaryStudent.student_code}
-🏫 Lớp: ${primaryStudent.class_name}
+👨‍🎓 Họ và tên: ${selectedStudent.student_name}
+🆔 Mã học sinh: ${selectedStudent.student_code}
+🏫 Lớp: ${selectedStudent.class_name}
 👩‍🏫 GVCN: Cô Nguyễn Thị Mai
-📱 Zalo Phụ huynh: ${primaryStudent.parent_name || 'Đã liên kết'}
+📱 Zalo Phụ huynh: ${selectedStudent.parent_name || 'Đã liên kết'}
 🕒 Ngày kết nối: ${new Date().toLocaleDateString('vi-VN')}
 ━━━━━━━━━━━━━━━━━━━━━━
 Sổ liên lạc điện tử THCS Trần Bội Cơ`;
@@ -270,39 +324,13 @@ Sổ liên lạc điện tử THCS Trần Bội Cơ`;
             return NextResponse.json({ ok: true, command: 'PROFILE_SENT', reply: profileMsg });
         }
 
-        // 4.8. /menu hoặc /? - Menu tra cứu
-        if (lowerText === '/?' || lowerText === '/menu' || lowerText === 'menu' || lowerText === 'help') {
-            const menuMsg = `🏫 SỔ LIÊN LẠC ĐIỆN TỬ - THCS TRẦN BỘI CƠ
-Kính chào Phụ huynh em: ${primaryStudent.student_name} (${primaryStudent.class_name})
-━━━━━━━━━━━━━━━━━━━━━━
-Quý phụ huynh chỉ cần gõ các lệnh dưới đây để tra cứu:
-
-📖 /baobai       : Xem dặn dò & bài tập ngày mai
-📅 /thoikhoabieu : Xem lịch học & phòng học hôm nay
-📋 /diemdanh     : Xem lịch sử chuyên cần 7 ngày
-📊 /bangdiem     : Xem bảng điểm & kết quả học tập
-💳 /hocphi       : Xem học phí & mã VietQR thanh toán
-📝 /xinnghi      : Nộp đơn xin nghỉ học cho con
-👤 /hoso         : Xem thông tin hồ sơ học sinh
-📞 /lienhe       : Số điện thoại BGH & GVCN
-━━━━━━━━━━━━━━━━━━━━━━
-Trợ lý luôn sẵn sàng phục vụ 24/7!`;
-
-            await zaloGateway.sendTextMessage({
-                thread_id: sender_id,
-                thread_type: 0,
-                text: menuMsg
-            });
-            return NextResponse.json({ ok: true, command: 'MENU_SENT', reply: menuMsg });
-        }
-
-        // 4.9. /lienhe - Danh bạ nhà trường
-        if (lowerText === '/lienhe' || lowerText.includes('liên hệ') || lowerText.includes('sdt')) {
+        // 5.8. Danh bạ liên hệ (Key: 8 hoặc /lienhe)
+        if (isLienHe) {
             const contactMsg = `📞 DANH BẠ LIÊN HỆ - THCS TRẦN BỘI CƠ
 ━━━━━━━━━━━━━━━━━━━━━━
 🏫 Địa chỉ: Quận 5, TP. Hồ Chí Minh
 ☎️ Văn phòng Nhà trường: (028) 3855 0412
-👨‍🏫 Giáo viên Chủ nhiệm (${primaryStudent.class_name}): Cô Nguyễn Thị Mai
+👨‍🏫 Giáo viên Chủ nhiệm (${selectedStudent.class_name}): Cô Nguyễn Thị Mai
 🕒 Giờ tiếp phụ huynh: 07:30 - 11:30 (Thứ 2 đến Thứ 6)
 ━━━━━━━━━━━━━━━━━━━━━━
 Trân trọng cảm ơn sự phối hợp của Quý Phụ Huynh!`;
@@ -313,6 +341,32 @@ Trân trọng cảm ơn sự phối hợp của Quý Phụ Huynh!`;
                 text: contactMsg
             });
             return NextResponse.json({ ok: true, command: 'CONTACT_SENT', reply: contactMsg });
+        }
+
+        // 5.9. Menu tra cứu Zero-Touch (Key: ? hoặc /menu)
+        if (isMenu) {
+            const menuMsg = `🏫 SỔ LIÊN LẠC ĐIỆN TỬ - THCS TRẦN BỘI CƠ
+Kính chào Phụ huynh em: ${selectedStudent.student_name} (${selectedStudent.class_name})
+━━━━━━━━━━━━━━━━━━━━━━
+Quý phụ huynh chỉ cần bấm số 1️⃣ ➔ 8️⃣ để tra cứu nhanh:
+
+1️⃣ /baobai       : Xem dặn dò & bài tập ngày mai
+2️⃣ /thoikhoabieu : Xem lịch học & phòng học hôm nay
+3️⃣ /diemdanh     : Xem lịch sử chuyên cần 7 ngày
+4️⃣ /bangdiem     : Xem bảng điểm & kết quả học tập
+5️⃣ /hocphi       : Xem học phí & mã VietQR thanh toán
+6️⃣ /xinnghi      : Nộp đơn xin nghỉ học cho con
+7️⃣ /hoso         : Xem thông tin hồ sơ học sinh
+8️⃣ /lienhe       : Số điện thoại BGH & GVCN
+━━━━━━━━━━━━━━━━━━━━━━
+💡 Mẹo: Anh/chị chỉ cần nhắn số 1, 2, 3... là xem được ngay ạ! ✨`;
+
+            await zaloGateway.sendTextMessage({
+                thread_id: sender_id,
+                thread_type: 0,
+                text: menuMsg
+            });
+            return NextResponse.json({ ok: true, command: 'MENU_SENT', reply: menuMsg });
         }
 
         return NextResponse.json({ ok: true, action: 'NO_OP_COMMAND' });
