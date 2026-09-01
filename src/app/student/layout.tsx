@@ -44,11 +44,12 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
 
   const navLinks = [
     { href: '/student', label: 'Tổng Quan', icon: '⚡' },
+    { href: '/student/homework', label: 'Sổ Báo Bài', icon: '📖' },
     { href: '/student/pet', label: 'Thú Cưng SVG', icon: '🥚' },
     { href: '/student/quests', label: 'Nhiệm Vụ', icon: '🎯' },
     { href: '/student/map', label: 'Làng Lớp Học', icon: '🏡' },
     { href: '/student/coop', label: 'Tàu Vũ Trụ', icon: '🚀' },
-    { href: '/student/records', label: 'Tự Rèn Luyện', icon: '📖' }
+    { href: '/student/records', label: 'Tự Rèn Luyện', icon: '📝' }
   ];
 
   return (

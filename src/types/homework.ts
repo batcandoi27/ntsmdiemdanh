@@ -24,6 +24,24 @@ export interface ClassTimetable {
     updated_at: string;
 }
 
+export function getSubjectBadgeStyle(subject: string): { bg: string; text: string; border: string; accent: string; icon: string } {
+    const s = (subject || '').toLowerCase().trim();
+    if (s.includes('toán')) return { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', accent: 'bg-blue-600', icon: '📐' };
+    if (s.includes('văn') || s.includes('ngữ văn')) return { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-200', accent: 'bg-violet-600', icon: '📖' };
+    if (s.includes('anh') || s.includes('ngoại ngữ') || s.includes('english')) return { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', accent: 'bg-emerald-600', icon: '🇬🇧' };
+    if (s.includes('lý') || s.includes('vật lí') || s.includes('vật lý') || s.includes('khtn (lý)')) return { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200', accent: 'bg-cyan-600', icon: '⚡' };
+    if (s.includes('hóa') || s.includes('khtn (hóa)')) return { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', accent: 'bg-orange-600', icon: '🧪' };
+    if (s.includes('sinh') || s.includes('khtn (sinh)')) return { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', accent: 'bg-green-600', icon: '🌱' };
+    if (s.includes('sử') || s.includes('lịch sử')) return { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', accent: 'bg-amber-600', icon: '📜' };
+    if (s.includes('địa') || s.includes('địa lý')) return { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200', accent: 'bg-teal-600', icon: '🌏' };
+    if (s.includes('tin') || s.includes('tin học')) return { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', accent: 'bg-indigo-600', icon: '💻' };
+    if (s.includes('gdcd') || s.includes('công dân') || s.includes('gdđp')) return { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200', accent: 'bg-pink-600', icon: '⚖️' };
+    if (s.includes('thể dục') || s.includes('thể chất')) return { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', accent: 'bg-red-600', icon: '🏃' };
+    if (s.includes('nhạc') || s.includes('âm nhạc') || s.includes('mỹ thuật') || s.includes('nghệ thuật')) return { bg: 'bg-fuchsia-50', text: 'text-fuchsia-700', border: 'border-fuchsia-200', accent: 'bg-fuchsia-600', icon: '🎨' };
+    if (s.includes('công nghệ')) return { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-300', accent: 'bg-slate-600', icon: '⚙️' };
+    return { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200', accent: 'bg-slate-600', icon: '📚' };
+}
+
 export interface HomeworkSubjectEntry {
     subject_name: string;
     period?: number;

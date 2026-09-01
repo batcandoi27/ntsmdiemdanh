@@ -41,6 +41,8 @@ import { cn } from '@/lib/utils';
 import { getBookTheme } from '@/lib/book-themes';
 import { VietQRPaymentModal } from '@/components/portal/vietqr-payment-modal';
 import { StudentCurriculumVitaeTab } from '@/components/portal/student-curriculum-vitae-tab';
+import { ParentHomeworkTab } from '@/components/portal/parent-homework-tab';
+import { ParentTimetableTab } from '@/components/portal/parent-timetable-tab';
 import toast from 'react-hot-toast';
 
 const PORTAL_AUTH_KEY = 'tbc_portal_parent_session';
@@ -58,7 +60,7 @@ export default function ParentPortalPage() {
   // Đã xác thực thành công
   const [authenticatedStudent, setAuthenticatedStudent] = useState<Student | null>(null);
   const [overview, setOverview] = useState<ParentStudentOverview | null>(null);
-  const [activeTab, setActiveTab] = useState<'attendance' | 'events' | 'monitor' | 'leaves' | 'curriculum_vitae' | 'message'>('attendance');
+  const [activeTab, setActiveTab] = useState<'attendance' | 'events' | 'monitor' | 'leaves' | 'curriculum_vitae' | 'message' | 'homework' | 'timetable'>('attendance');
 
   // Đơn xin nghỉ phép state
   const [studentLeaves, setStudentLeaves] = useState<LeaveRequest[]>([]);
@@ -548,13 +550,30 @@ export default function ParentPortalPage() {
               >
                 6. Gửi lời nhắn
               </button>
-              <Link
-                href="/student/homework"
-                className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
+              <button
+                onClick={() => setActiveTab('homework')}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5",
+                  activeTab === 'homework'
+                    ? "bg-blue-600 text-white shadow-sm font-extrabold"
+                    : "bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-200"
+                )}
               >
-                <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
+                <BookOpen className="w-3.5 h-3.5" />
                 <span>7. 📖 Sổ Báo Bài</span>
-              </Link>
+              </button>
+              <button
+                onClick={() => setActiveTab('timetable')}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5",
+                  activeTab === 'timetable'
+                    ? "bg-indigo-600 text-white shadow-sm font-extrabold"
+                    : "bg-indigo-50 text-indigo-800 hover:bg-indigo-100 border border-indigo-200"
+                )}
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>8. 📅 Thời Khóa Biểu</span>
+              </button>
             </div>
 
             {/* TAB 1: CHUYÊN CẦN & NỀ NẾP (Chuẩn 5 Danh Mục: P, K, T, VP, KH) */}
@@ -978,6 +997,24 @@ export default function ParentPortalPage() {
                   </div>
                 </form>
               </div>
+            )}
+
+            {/* TAB 7: 📖 SỔ BÁO BÀI & DẶN DÒ */}
+            {activeTab === 'homework' && overview && (
+              <ParentHomeworkTab
+                classId={overview.student.class_id}
+                className={overview.student.class_name}
+                studentName={overview.student.full_name}
+              />
+            )}
+
+            {/* TAB 8: 📅 THỜI KHÓA BIỂU */}
+            {activeTab === 'timetable' && overview && (
+              <ParentTimetableTab
+                classId={overview.student.class_id}
+                className={overview.student.class_name}
+                studentName={overview.student.full_name}
+              />
             )}
           </div>
         )}

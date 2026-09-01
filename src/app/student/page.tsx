@@ -135,7 +135,41 @@ export default function StudentDashboardPage() {
         </div>
       </div>
 
-      {/* 2. GRID 3 THẺ TIẾN TRÌNH & THÓI QUEN (PERSONAL GROWTH CARDS) */}
+      {/* 2. KHỐI NỔI BẬT: SỔ BÁO BÀI & DẶN DÒ HÔM NAY (ZERO-TOUCH ACCESS) */}
+      <div className="rounded-3xl border border-blue-500/30 bg-gradient-to-r from-blue-950/80 via-slate-900/90 to-indigo-950/70 p-5 sm:p-6 shadow-xl relative overflow-hidden">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="h-12 w-12 rounded-2xl bg-blue-600/90 text-white flex items-center justify-center text-2xl shrink-0 shadow-lg shadow-blue-600/30">
+              📖
+            </div>
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <h3 className="text-base sm:text-lg font-extrabold text-white">
+                  Sổ Báo Bài & Dặn Dò Hôm Nay
+                </h3>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
+                  Lớp 9A1
+                </span>
+              </div>
+              <p className="text-xs text-blue-200/80">
+                Toán (Hình học) • Ngữ Văn (Mùa xuân nho nhỏ) • Tiếng Anh (Unit 3) • Vật Lý
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <Link
+              href="/student/homework"
+              className="px-4 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-2 transition shadow-md shadow-blue-600/30 active:scale-95"
+            >
+              <span>Xem Sổ Báo Bài Chi Tiết</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. GRID 3 THẺ TIẾN TRÌNH & THÓI QUEN (PERSONAL GROWTH CARDS) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4">
         {/* Card 1: Chuyên cần hôm nay */}
         <div className="rounded-2xl border border-slate-800/90 bg-slate-900/80 p-4 flex items-center gap-3.5 shadow-md">
