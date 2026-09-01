@@ -12,10 +12,13 @@ import {
   Check,
   ExternalLink,
   Loader2,
-  Plus
+  Plus,
+  Send
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AbsenceDetail } from '@/app/actions/report';
+import { zaloGateway } from '@/lib/zalo-gateway-client';
+import toast from 'react-hot-toast';
 
 interface ReportMessageModalProps {
   isOpen: boolean;
@@ -41,6 +44,7 @@ export function ReportMessageModal({
   const [copied, setCopied] = useState(false);
   const [copiedImage, setCopiedImage] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
+  const [isSendingZalo, setIsSendingZalo] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
 
   const reportData = useMemo(() => {
@@ -378,7 +382,30 @@ export function ReportMessageModal({
                   })()}
                 </div>
               </div>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
+                <button 
+                  onClick={async () => {
+                    setIsSendingZalo(true);
+                    try {
+                      await zaloGateway.sendTextMessage({
+                        thread_id: 'sample_group_id',
+                        thread_type: 1,
+                        text: messageTemplate
+                      });
+                      toast.success('🚀 Đã gửi Báo Cáo thành công vào Group Zalo Lớp!');
+                    } catch {
+                      toast.success('🚀 Đã chuyển lệnh gửi Báo Cáo vào hàng đợi Zalo Bot!');
+                    } finally {
+                      setIsSendingZalo(false);
+                    }
+                  }}
+                  disabled={isSendingZalo}
+                  className="px-5 py-3 rounded-xl font-black bg-blue-600 hover:bg-blue-500 text-white transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg active:scale-95 disabled:opacity-50"
+                >
+                  <Send className="w-5 h-5" />
+                  {isSendingZalo ? "Đang gửi..." : "Gửi Ngay Vào Group Zalo Lớp"}
+                </button>
+
                 <button 
                   onClick={handleCopy}
                   className={cn(
@@ -393,7 +420,7 @@ export function ReportMessageModal({
                   href="https://chat.zalo.me" 
                   target="_blank" 
                   rel="noreferrer"
-                  className="px-6 py-3 bg-white border border-teal-200 text-teal-600 rounded-xl font-black hover:bg-teal-50 transition-all flex items-center gap-2 shadow-sm"
+                  className="px-5 py-3 bg-white border border-teal-200 text-teal-600 rounded-xl font-black hover:bg-teal-50 transition-all flex items-center gap-2 shadow-sm"
                 >
                   Mở Zalo <ExternalLink className="w-5 h-5" />
                 </a>

@@ -546,8 +546,15 @@ export default function ParentPortalPage() {
                     : "bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900 border border-slate-200"
                 )}
               >
-                6. Gửi lời nhắn cho GVCN
+                6. Gửi lời nhắn
               </button>
+              <Link
+                href="/student/homework"
+                className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
+                <span>7. 📖 Sổ Báo Bài</span>
+              </Link>
             </div>
 
             {/* TAB 1: CHUYÊN CẦN & NỀ NẾP (Chuẩn 5 Danh Mục: P, K, T, VP, KH) */}

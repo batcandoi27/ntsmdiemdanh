@@ -36,9 +36,12 @@ import { cn, sortStudentsByCode } from '@/lib/utils';
 import { HomeroomTooltip } from '@/components/homeroom/homeroom-tooltip';
 import { QuickCaptureModal } from '@/components/homeroom/quick-capture-modal';
 import { QRCodeSVG } from 'qrcode.react';
-import { QrCode, Zap, FileText, Settings } from 'lucide-react';
+import { QrCode, Zap, FileText, Settings, Bot, BookOpen as BookOpenIcon } from 'lucide-react';
 import { StudentCvDrawer } from '@/components/homeroom/student-cv-drawer';
 import { TeacherCustomFieldsModal } from '@/components/homeroom/teacher-custom-fields-modal';
+import { ZaloConnectionModal } from '@/components/homeroom/zalo-connection-modal';
+import { TimetableEditorModal } from '@/components/homeroom/timetable-editor-modal';
+import { DailyHomeworkModal } from '@/components/student/daily-homework-modal';
 import { usePrivacy } from '@/context/privacy-context';
 import toast from 'react-hot-toast';
 
@@ -68,6 +71,9 @@ export default function HomeroomStudentsPage() {
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [qrUrl, setQrUrl] = useState('');
   const [isQuickCaptureOpen, setIsQuickCaptureOpen] = useState(false);
+  const [isZaloModalOpen, setIsZaloModalOpen] = useState(false);
+  const [isTimetableModalOpen, setIsTimetableModalOpen] = useState(false);
+  const [isHomeworkModalOpen, setIsHomeworkModalOpen] = useState(false);
 
   const loadData = async (activeId: string) => {
     if (!activeId) return;
@@ -187,14 +193,41 @@ export default function HomeroomStudentsPage() {
         </div>
 
         {/* ACTIONS & SEARCH BOX */}
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <button
+            onClick={() => setIsZaloModalOpen(true)}
+            className="px-3.5 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-2xl text-xs transition-all border border-blue-200 flex items-center gap-1.5 shadow-xs"
+            title="Quản lý kết nối Zalo Bot & Sổ liên lạc điện tử"
+          >
+            <Bot className="w-3.5 h-3.5 text-blue-600" />
+            <span>Sổ Zalo Bot</span>
+          </button>
+
+          <button
+            onClick={() => setIsTimetableModalOpen(true)}
+            className="px-3.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-2xl text-xs transition-all border border-indigo-200 flex items-center gap-1.5 shadow-xs"
+            title="Quản lý Thời khóa biểu lớp học"
+          >
+            <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Thời Khóa Biểu</span>
+          </button>
+
+          <button
+            onClick={() => setIsHomeworkModalOpen(true)}
+            className="px-3.5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-2xl text-xs transition-all border border-emerald-200 flex items-center gap-1.5 shadow-xs"
+            title="Sổ Báo Bài & Dặn Dò hằng ngày"
+          >
+            <BookOpenIcon className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Sổ Báo Bài</span>
+          </button>
+
           <button
             onClick={() => setIsCustomFieldsModalOpen(true)}
-            className="px-3.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-2xl text-xs transition-all border border-indigo-200 flex items-center gap-1.5 shadow-xs"
+            className="px-3.5 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold rounded-2xl text-xs transition-all border border-slate-200 flex items-center gap-1.5 shadow-xs"
             title="Thêm các câu hỏi / trường tùy chỉnh riêng cho lớp"
           >
             <Settings className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Trường tùy chỉnh lớp</span>
+            <span className="hidden lg:inline">Tùy chỉnh</span>
           </button>
 
           <div className="relative w-full sm:w-64">
@@ -527,6 +560,37 @@ export default function HomeroomStudentsPage() {
         onSaved={() => {
           if (classId) loadData(classId);
         }}
+      />
+
+      {/* MODAL QUẢN LÝ KẾT NỐI ZALO BOT */}
+      <ZaloConnectionModal
+        isOpen={isZaloModalOpen}
+        onClose={() => setIsZaloModalOpen(false)}
+        classId={classId}
+        className={className}
+        students={students.map(s => ({
+          id: s.id,
+          name: s.fullName || (s as any).full_name || (s as any).name || 'Học sinh',
+          student_code: s.code || s.id.slice(0, 7).toUpperCase()
+        }))}
+      />
+
+      {/* MODAL QUẢN LÝ THỜI KHÓA BIỂU */}
+      <TimetableEditorModal
+        isOpen={isTimetableModalOpen}
+        onClose={() => setIsTimetableModalOpen(false)}
+        classId={classId}
+        className={className}
+      />
+
+      {/* MODAL SỔ BÁO BÀI & DẶN DÒ */}
+      <DailyHomeworkModal
+        isOpen={isHomeworkModalOpen}
+        onClose={() => setIsHomeworkModalOpen(false)}
+        classId={classId}
+        className={className}
+        studentName={teacherName || 'Giáo viên Chủ Nhiệm'}
+        isReporterOrTeacher={true}
       />
     </div>
   );
