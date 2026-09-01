@@ -10,8 +10,8 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 export async function POST(req: NextRequest) {
     try {
         // 1. Verify Bridge Token
-        const token = req.headers.get('x-bridge-token');
-        const expectedToken = process.env.ZALO_BRIDGE_TOKEN || 'DEFAULT_TOKEN';
+        const token = req.headers.get('x-bridge-token') || req.headers.get('authorization')?.replace('Bearer ', '');
+        const expectedToken = process.env.ZALO_GATEWAY_TOKEN || process.env.ZALO_BRIDGE_TOKEN || 'sk-zalokeybatcandoi';
         if (token && token !== expectedToken) {
             return NextResponse.json({ ok: false, error: 'Unauthorized token' }, { status: 401 });
         }

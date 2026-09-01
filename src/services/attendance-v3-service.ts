@@ -366,6 +366,48 @@ export async function batchMarkAttendance(
                 console.error('Supabase Upsert Error:', upsertError);
                 throw new Error(`Lỗi PostgreSQL: ${upsertError.message}`);
             }
+
+            // 4. KÍCH HOẠT CẢNH BÁO NGOẠI LỆ ZALO BOT (Chỉ gửi 1-1 cho HS Vắng / Trễ / Vi Phạm)
+            setTimeout(async () => {
+                try {
+                    const { zaloGateway } = await import('@/lib/zalo-gateway-client');
+                    const { data: clsData } = await dbClient.from('classes').select('name').eq('id', input.classId).maybeSingle();
+                    const className = clsData?.name || 'Lớp';
+
+                    for (const m of input.marks) {
+                        const stCode = (m.status as string) || '';
+                        const isAbsent = ['absent', 'K', 'excused', 'P'].includes(stCode);
+                        const isLate = ['late', 'T'].includes(stCode);
+                        const isViolation = !!m.violation;
+
+                        if (isAbsent || isLate || isViolation) {
+                            const sId = codeToIdMap.get(m.studentId);
+                            if (!sId) continue;
+
+                            const { data: parentMapping } = await dbClient
+                                .from('student_parents_zalo')
+                                .select('parent_zalo_id, student_name')
+                                .eq('student_id', sId)
+                                .eq('status', 'CONNECTED')
+                                .maybeSingle();
+
+                            if (parentMapping && parentMapping.parent_zalo_id) {
+                                const alertStatus = isAbsent ? 'ABSENT' : (isLate ? 'LATE' : 'VIOLATION');
+                                await zaloGateway.sendAttendanceAlert({
+                                    parentZaloId: parentMapping.parent_zalo_id,
+                                    studentName: parentMapping.student_name || m.studentName,
+                                    className: className,
+                                    status: alertStatus,
+                                    timeStr: `${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - ${dateKey}`,
+                                    notes: m.note || m.violationNote
+                                });
+                            }
+                        }
+                    }
+                } catch (zaloErr) {
+                    console.error('[Attendance] Zalo alert async trigger error:', zaloErr);
+                }
+            }, 50);
         }
 
         return { written: inserts.length, deleted: studentsToResetAttendance.length };

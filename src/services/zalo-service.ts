@@ -22,11 +22,14 @@ export class ZaloService {
             const cleanCode = options.studentCode.trim().toUpperCase();
 
             // 1. Look up student in Supabase database
-            const { data: student, error: studentError } = await supabaseAdmin
-                .from('students')
-                .select('id, full_name, class_id, classes(name)')
-                .or(`student_code.ilike.${cleanCode},id.eq.${cleanCode}`)
-                .maybeSingle();
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanCode);
+            let query = supabaseAdmin.from('students').select('id, full_name, student_code');
+            if (isUuid) {
+                query = query.or(`student_code.ilike.${cleanCode},id.eq.${cleanCode}`);
+            } else {
+                query = query.ilike('student_code', cleanCode);
+            }
+            const { data: student, error: studentError } = await query.maybeSingle();
 
             if (studentError || !student) {
                 // If not found by exact code, search by full_name or id fallback
@@ -36,8 +39,16 @@ export class ZaloService {
                 };
             }
 
+            // Get Class Name from student_classes
+            const { data: stClass } = await supabaseAdmin
+                .from('student_classes')
+                .select('class_id, classes(name)')
+                .eq('student_id', student.id)
+                .eq('is_active', true)
+                .maybeSingle();
+
             const studentName = student.full_name || 'Học sinh';
-            const className = (student as any).classes?.name || 'Lớp';
+            const className = (stClass as any)?.classes?.name || '9A1';
 
             // 2. Upsert mapping into student_parents_zalo
             const { error: upsertError } = await supabaseAdmin

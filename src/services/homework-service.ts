@@ -133,28 +133,30 @@ export class HomeworkService {
             const rowsToInsert: any[] = [];
             timetable.days.forEach(day => {
                 day.morning.forEach(p => {
-                    if (p.subject_name.trim()) {
+                    const subName = (p.subject_name || (p as any).subject || '').trim();
+                    if (subName) {
                         rowsToInsert.push({
                             class_id: timetable.class_id,
                             day_of_week: day.day_of_week,
                             session: 'MORNING',
                             period: p.period,
-                            subject_name: p.subject_name,
+                            subject_name: subName,
                             teacher_name: p.teacher_name || null,
-                            room_name: p.room_name || null
+                            room_name: p.room_name || (p as any).room || null
                         });
                     }
                 });
                 day.afternoon.forEach(p => {
-                    if (p.subject_name.trim()) {
+                    const subName = (p.subject_name || (p as any).subject || '').trim();
+                    if (subName) {
                         rowsToInsert.push({
                             class_id: timetable.class_id,
                             day_of_week: day.day_of_week,
                             session: 'AFTERNOON',
                             period: p.period,
-                            subject_name: p.subject_name,
+                            subject_name: subName,
                             teacher_name: p.teacher_name || null,
-                            room_name: p.room_name || null
+                            room_name: p.room_name || (p as any).room || null
                         });
                     }
                 });

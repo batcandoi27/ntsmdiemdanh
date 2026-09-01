@@ -25,7 +25,7 @@ export class ZaloGatewayClient {
     constructor(customConfig?: Partial<ZaloGatewayConfig>) {
         this.config = {
             baseUrl: customConfig?.baseUrl || process.env.ZALO_GATEWAY_URL || process.env.NEXT_PUBLIC_ZALO_GATEWAY_URL || 'https://zalo.thaycoai.io.vn',
-            bridgeToken: customConfig?.bridgeToken || process.env.ZALO_GATEWAY_TOKEN || process.env.ZALO_BRIDGE_TOKEN || 'DEFAULT_TOKEN',
+            bridgeToken: customConfig?.bridgeToken || process.env.ZALO_GATEWAY_TOKEN || process.env.ZALO_BRIDGE_TOKEN || 'sk-zalokeybatcandoi',
             queueDelayMs: customConfig?.queueDelayMs || 1500
         };
     }
@@ -33,7 +33,8 @@ export class ZaloGatewayClient {
     private getHeaders(): Record<string, string> {
         return {
             'Content-Type': 'application/json',
-            'x-bridge-token': this.config.bridgeToken
+            'x-bridge-token': this.config.bridgeToken,
+            'Authorization': `Bearer ${this.config.bridgeToken}`
         };
     }
 
