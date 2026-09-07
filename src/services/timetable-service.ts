@@ -332,3 +332,188 @@ export async function importTimetablesFromRows(
 
     return result;
 }
+
+// ============================================
+// School Matrix Multi-Class Batch Save
+// ============================================
+
+import { ParsedClassTimetable, extractGradeFromClassName } from './school-matrix-timetable-parser';
+
+export interface BatchImportOptions {
+    autoCreateMissingClasses?: boolean;
+    deactivatePrevious?: boolean;
+    effectiveFrom?: string;
+    effectiveTo?: string;
+}
+
+export interface BatchImportStats {
+    success: boolean;
+    totalClasses: number;
+    classesCreated: number;
+    totalSlots: number;
+    createdClassNames: string[];
+    errors: string[];
+}
+
+/**
+ * Lưu hàng loạt thời khóa biểu toàn trường từ kết quả parse ma trận Excel
+ * Tự động tạo các lớp chưa có trong cơ sở dữ liệu (Auto-Provisioning)
+ * Bảo đảm Strict Year Isolation & Idempotency theo khuyến nghị từ Luna.
+ */
+export async function batchSaveSchoolMatrixTimetables(
+    user: AppUser,
+    parsedClasses: ParsedClassTimetable[],
+    options: BatchImportOptions = {}
+): Promise<BatchImportStats> {
+    const {
+        autoCreateMissingClasses = true,
+        deactivatePrevious = true,
+        effectiveFrom,
+        effectiveTo = '2027-05-31',
+    } = options;
+
+    const errors: string[] = [];
+    const createdClassNames: string[] = [];
+    let classesCreatedCount = 0;
+    let totalSlotsCount = 0;
+
+    // 1. Xác định Active Year ID chính xác (Strict Year Isolation)
+    let activeYearId: string | null = null;
+    const { data: activeYear } = await supabase
+        .from('academic_years')
+        .select('id')
+        .eq('is_active', true)
+        .maybeSingle();
+
+    if (activeYear) {
+        activeYearId = activeYear.id;
+    }
+
+    // Nếu bảng academic_years chưa có record active, lấy từ bất kỳ lớp nào có year_id
+    if (!activeYearId) {
+        const { data: anyClassWithYear } = await supabase
+            .from('classes')
+            .select('year_id')
+            .not('year_id', 'is', null)
+            .limit(1)
+            .maybeSingle();
+        if (anyClassWithYear?.year_id) {
+            activeYearId = anyClassWithYear.year_id;
+        }
+    }
+
+    // 2. Lấy danh sách lớp thuộc ĐÚNG năm học hiện hành (Strict Year Scoped Lookup)
+    let classesQuery = supabase.from('classes').select('id, name, year_id, grade');
+    if (activeYearId) {
+        classesQuery = classesQuery.eq('year_id', activeYearId);
+    }
+
+    const { data: existingClasses, error: fetchErr } = await classesQuery;
+    if (fetchErr) {
+        throw new Error('Lỗi truy vấn danh sách lớp: ' + fetchErr.message);
+    }
+
+    const classMap = new Map<string, string>(); // className -> classId (scoped to active year)
+    if (existingClasses && existingClasses.length > 0) {
+        existingClasses.forEach(c => {
+            classMap.set(c.name, c.id);
+        });
+    }
+
+    // 3. Tìm các lớp mới chưa có trong năm học hiện hành và tự động tạo (Idempotent Auto-Provisioning)
+    for (const parsed of parsedClasses) {
+        const cName = parsed.className;
+        if (!classMap.has(cName)) {
+            if (autoCreateMissingClasses && activeYearId) {
+                // Double check to prevent race condition duplicate class
+                const { data: duplicateCheck } = await supabase
+                    .from('classes')
+                    .select('id')
+                    .eq('year_id', activeYearId)
+                    .eq('name', cName)
+                    .maybeSingle();
+
+                if (duplicateCheck) {
+                    classMap.set(cName, duplicateCheck.id);
+                } else {
+                    const gradeNum = parsed.grade || extractGradeFromClassName(cName);
+                    const { data: newClass, error: createErr } = await supabase
+                        .from('classes')
+                        .insert({
+                            name: cName,
+                            grade: gradeNum,
+                            year_id: activeYearId,
+                            class_type: 'standard',
+                            manual_student_count: 0,
+                            adjustment_count: 0,
+                            actual_student_count: 0,
+                            sessions: ['morning', 'afternoon'],
+                            is_personal: false,
+                        })
+                        .select('id')
+                        .single();
+
+                    if (createErr) {
+                        errors.push(`Không thể tạo lớp mới ${cName}: ${createErr.message}`);
+                    } else if (newClass) {
+                        classMap.set(cName, newClass.id);
+                        createdClassNames.push(cName);
+                        classesCreatedCount++;
+                    }
+                }
+            } else {
+                errors.push(`Lớp ${cName} chưa tồn tại trong năm học hiện tại.`);
+            }
+        }
+    }
+
+    // 4. Lưu TKB cho từng lớp (Atomic Deactivate + Insert)
+    for (const parsed of parsedClasses) {
+        const classId = classMap.get(parsed.className);
+        if (!classId) continue;
+
+        const effFrom = effectiveFrom || parsed.effectiveDate || new Date().toISOString().split('T')[0];
+
+        // Vô hiệu hóa TKB cũ nếu được chọn
+        if (deactivatePrevious) {
+            await supabase
+                .from('timetables')
+                .update({ is_active: false })
+                .eq('class_id', classId)
+                .eq('is_active', true);
+        }
+
+        // Tạo bản ghi TKB mới
+        const row = {
+            class_id: classId,
+            class_name: parsed.className,
+            effective_from: effFrom,
+            effective_to: effectiveTo,
+            schedule: parsed.schedule,
+            created_by: user.uid,
+            created_by_name: user.displayName || 'Admin',
+            is_active: true,
+            updated_at: new Date().toISOString(),
+        };
+
+        const { error: insertErr } = await supabase
+            .from('timetables')
+            .insert(row);
+
+        if (insertErr) {
+            errors.push(`Lỗi lưu TKB lớp ${parsed.className}: ${insertErr.message}`);
+        } else {
+            totalSlotsCount += parsed.totalSlots;
+        }
+    }
+
+    return {
+        success: errors.length === 0 || totalSlotsCount > 0,
+        totalClasses: parsedClasses.length,
+        classesCreated: classesCreatedCount,
+        totalSlots: totalSlotsCount,
+        createdClassNames,
+        errors,
+    };
+}
+

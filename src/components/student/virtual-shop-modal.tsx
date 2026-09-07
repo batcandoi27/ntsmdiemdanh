@@ -204,32 +204,32 @@ export const VirtualShopModal: React.FC<VirtualShopModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150">
-      <div className="w-full max-w-2xl bg-gradient-to-b from-slate-900 via-indigo-950/60 to-slate-950 rounded-3xl border border-amber-500/40 shadow-2xl p-6 space-y-5 text-slate-100 max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+      <div className="w-full max-w-2xl bg-white rounded-3xl border border-slate-200 shadow-2xl p-6 space-y-5 text-slate-900 max-h-[90vh] flex flex-col">
         
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-indigo-900/50 pb-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300 shadow-md">
+            <div className="w-11 h-11 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shadow-2xs">
               <ShoppingBag className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="font-black text-lg text-white tracking-tight flex items-center gap-2">
+              <h3 className="font-black text-lg text-slate-900 tracking-tight flex items-center gap-2">
                 Cửa Hàng Vật Phẩm & Nội Thất
               </h3>
-              <p className="text-xs text-indigo-300">Trang hoàng căn cứ & sắm sửa trang sức độc quyền</p>
+              <p className="text-xs text-slate-500 font-medium">Trang hoàng căn cứ & sắm sửa trang sức độc quyền</p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-amber-950/60 border border-amber-500/50 text-amber-300 font-mono font-bold text-sm shadow-inner">
-              <Coins className="w-4 h-4 text-amber-400" />
+            <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 font-mono font-bold text-sm shadow-2xs">
+              <Coins className="w-4 h-4 text-amber-600" />
               <span>{userCoins} Xu</span>
             </div>
 
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition"
+              className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition"
             >
               <X className="w-4 h-4" />
             </button>
@@ -250,8 +250,8 @@ export const VirtualShopModal: React.FC<VirtualShopModalProps> = ({
               onClick={() => setSelectedCategory(tab.id as any)}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition flex items-center gap-1.5 ${
                 selectedCategory === tab.id
-                  ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                  : 'bg-slate-900/80 text-slate-300 hover:bg-slate-800 border border-slate-800'
+                  ? 'bg-amber-500 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
               }`}
             >
               <span>{tab.icon}</span>
@@ -274,23 +274,23 @@ export const VirtualShopModal: React.FC<VirtualShopModalProps> = ({
                 key={item.id}
                 className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 ${
                   !levelUnlocked
-                    ? 'bg-slate-950/60 border-slate-800/60 opacity-60'
-                    : 'bg-slate-900/80 border-slate-800 hover:border-indigo-500/50 hover:bg-slate-900'
+                    ? 'bg-slate-50 border-slate-200 opacity-60'
+                    : 'bg-white border-slate-200 hover:border-amber-400 hover:shadow-sm'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center text-2xl shadow-inner shrink-0">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center text-2xl shadow-2xs shrink-0">
                     {item.svg_asset_data}
                   </div>
                   <div>
-                    <h4 className="font-bold text-xs text-white leading-snug">{item.item_name}</h4>
+                    <h4 className="font-bold text-xs text-slate-900 leading-snug">{item.item_name}</h4>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[11px] font-black text-amber-400 font-mono flex items-center gap-0.5">
-                        <Coins className="w-3 h-3" />
+                      <span className="text-[11px] font-black text-amber-700 font-mono flex items-center gap-0.5">
+                        <Coins className="w-3 h-3 text-amber-600" />
                         {item.price_coins === 0 ? 'Miễn phí' : `${item.price_coins} Xu`}
                       </span>
                       {!levelUnlocked && (
-                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-rose-950 text-rose-300 font-bold border border-rose-800 flex items-center gap-0.5">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 font-bold border border-rose-200 flex items-center gap-0.5">
                           <Lock className="w-2.5 h-2.5" /> Lv.{item.required_level}+
                         </span>
                       )}
@@ -306,8 +306,8 @@ export const VirtualShopModal: React.FC<VirtualShopModalProps> = ({
                     isSuccess
                       ? 'bg-emerald-600 text-white'
                       : canBuy
-                      ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md shadow-amber-500/20'
-                      : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                      ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-2xs'
+                      : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
                   }`}
                 >
                   {isLoading ? (
@@ -329,8 +329,8 @@ export const VirtualShopModal: React.FC<VirtualShopModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="pt-2 border-t border-indigo-900/40 text-center">
-          <p className="text-[11px] text-slate-400">
+        <div className="pt-2 border-t border-slate-100 text-center">
+          <p className="text-[11px] text-slate-500 font-medium">
             💡 Mua vật phẩm sẽ tự động lưu vào Kho đồ và trang trí cho Căn cứ của bạn trong Metaverse!
           </p>
         </div>

@@ -1,260 +1,349 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { SvgPet } from '@/components/student/svg-pet';
-import { ClassroomWorldGrid } from '@/components/student/classroom-world-grid';
-import { GlobalTopPodium } from '@/components/student/global-top-podium';
-import { StudentPet } from '@/types/student-portal';
-import { generateClassroomRoster } from '@/domain/classroom-world/roster-builder';
-import { getISOWeekDetails } from '@/domain/quests/weekly-quest-engine';
-import { soundscape } from '@/domain/sound/web-audio-soundscape';
+import { useRouter } from 'next/navigation';
 import {
-  Sparkles,
-  Trophy,
-  Flame,
-  Zap,
-  Target,
-  ArrowRight,
-  ShieldCheck,
-  Calendar,
-  Layers,
-  MapPin,
-  Home,
-  Compass,
-  CheckCircle2,
-  Heart
+    BookOpen,
+    Calendar,
+    CreditCard,
+    GraduationCap,
+    Gamepad2,
+    Lock,
+    Sparkles,
+    ArrowRight,
+    CheckCircle2,
+    ShieldAlert,
+    X,
+    FileText,
+    UserCheck,
+    Award,
+    Compass
 } from 'lucide-react';
+import { STUDENT_PORTAL_CONFIG } from '@/config/student-portal.config';
+import { cn } from '@/lib/utils';
+import toast from 'react-hot-toast';
 
-export default function StudentDashboardPage() {
-  const classCode = '8A13';
-  const studentCode = '8A13_#821';
-  const { week, year } = getISOWeekDetails();
+export default function StudentHubPage() {
+    const router = useRouter();
+    const [studentInfo, setStudentInfo] = useState<{
+        studentName: string;
+        studentCode: string;
+        className: string;
+        role: string;
+    }>({
+        studentName: 'Nguyễn Văn An',
+        studentCode: 'HS-821',
+        className: '8A13',
+        role: 'STUDENT'
+    });
 
-  const [pet, setPet] = useState<StudentPet>({
-    id: 'mock-pet-01',
-    student_id: 'mock-pet-01',
-    class_id: classCode,
-    anonymous_name: 'Phượng Hoàng Băng #821',
-    anonymous_avatar_code: 'cosmic_egg',
-    evolution_branch: 'cosmic',
-    level: 1,
-    current_xp: 45,
-    vitality_percent: 100,
-    streak_days: 14,
-    is_hibernating: false,
-    total_coins: 120,
-    last_activity_at: new Date().toISOString(),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  });
+    const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false);
 
-  const fullRoster = generateClassroomRoster(classCode, 43);
-  const xpRequiredNextLevel = Math.round(100 * Math.pow(1.5, Math.max(0, pet.level)));
-  const progressPercent = Math.min(100, Math.round((pet.current_xp / xpRequiredNextLevel) * 100));
+    useEffect(() => {
+        // Load saved session if any
+        try {
+            const savedSession = localStorage.getItem('tbc_student_session');
+            const savedRole = localStorage.getItem('user_role') || localStorage.getItem('tbc_user_role');
+            if (savedSession) {
+                const parsed = JSON.parse(savedSession);
+                setStudentInfo(prev => ({
+                    ...prev,
+                    studentCode: parsed.studentCode || prev.studentCode,
+                    className: parsed.className || prev.className,
+                    studentName: parsed.studentName || prev.studentName
+                }));
+            }
+            if (savedRole === 'admin' || savedRole === 'ADMIN') {
+                setIsAdmin(true);
+            }
+        } catch {
+            // Ignore
+        }
+    }, []);
 
-  return (
-    <div className="space-y-6 animate-in fade-in pb-12">
-      
-      {/* 1. KHỐI TRỌNG TÂM: HÔM NAY CỦA EM & TIẾN BỘ TUẦN NÀY (GROWTH-FIRST HERO) */}
-      <div className="rounded-3xl border border-indigo-500/30 bg-gradient-to-r from-indigo-950/90 via-purple-950/60 to-slate-950 p-5 sm:p-7 shadow-2xl relative overflow-hidden">
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-5 sm:gap-8">
-          
-          {/* Avatar Thú Cưng & Cột Mốc Cấp Độ Vĩnh Viễn */}
-          <div className="flex items-center gap-4 sm:gap-5">
-            <div
-              onClick={() => soundscape.playPetInteractSound(pet.evolution_branch)}
-              className="cursor-pointer transition transform hover:scale-110 active:scale-95"
-              title="Chạm vào người bạn đồng hành!"
-            >
-              <SvgPet
-                branch={pet.evolution_branch}
-                level={pet.level}
-                vitality={pet.vitality_percent}
-                isHibernating={pet.is_hibernating}
-                size={80}
-                showRankInsignia={true}
-              />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-lg sm:text-2xl font-black text-white">{pet.anonymous_name}</h2>
-                <span className="text-xs px-3 py-0.5 rounded-full bg-indigo-600/90 text-white font-bold border border-indigo-400/40">
-                  Cột Mốc Cấp {pet.level}
-                </span>
-                <span className="text-xs px-3 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-bold">
-                  {pet.total_coins} Xu
-                </span>
-              </div>
-              
-              <p className="text-xs text-indigo-200/90 mt-1.5 flex items-center gap-1.5">
-                <span>🌱 Tiến độ tích lũy:</span>
-                <span className="font-mono font-bold text-white">{pet.current_xp}/{xpRequiredNextLevel} XP</span>
-                <span>({progressPercent}%)</span>
-              </p>
-              
-              {/* Progress bar */}
-              <div className="w-52 sm:w-64 h-2.5 bg-slate-900/90 rounded-full mt-2 overflow-hidden border border-slate-700/80 shadow-inner">
-                <div
-                  className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-amber-400 transition-all duration-500 rounded-full"
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-            </div>
-          </div>
+    const isMetaverseEnabled = STUDENT_PORTAL_CONFIG.ENABLE_METAVERSE_FOR_STUDENTS || isAdmin;
 
-          {/* Khối Lời Động Viên GVCN & Mục Tiêu Tiếp Theo */}
-          <div className="bg-slate-900/90 border border-indigo-500/20 rounded-2xl p-4 max-w-md w-full flex flex-col justify-between gap-3 shadow-lg">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
-                📢 Lời Nhắn Nhủ GVCN
-              </span>
-              <span className="text-[11px] text-indigo-300 font-medium font-mono">
-                Tuần {week} • Năm {year}
-              </span>
-            </div>
+    const handleEntertainmentClick = () => {
+        if (isMetaverseEnabled) {
+            router.push('/student/pet');
+        } else {
+            setShowMaintenanceModal(true);
+        }
+    };
+
+    return (
+        <div className="space-y-7 animate-in fade-in duration-300 max-w-6xl mx-auto py-2">
             
-            <p className="text-xs text-slate-200 leading-relaxed italic">
-              &ldquo;Chào mừng em trở lại không gian lớp học! Hãy tự tin hoàn thành nhiệm vụ theo nhịp độ riêng của mình nhé!&rdquo;
-            </p>
+            {/* Top Banner Greeting (Light Theme) */}
+            <div className="rounded-3xl border border-blue-200/80 bg-gradient-to-r from-blue-50/90 via-indigo-50/60 to-white p-6 sm:p-8 shadow-xs relative overflow-hidden">
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="space-y-2">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100/80 border border-blue-200 text-blue-800 text-xs font-bold">
+                            <Sparkles size={14} className="text-blue-600" />
+                            <span>Cổng Học Sinh 2 Trong 1 • Năm Học 2026–2027</span>
+                        </div>
+                        <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                            Xin Chào, {studentInfo.studentName}! 👋
+                        </h2>
+                        <p className="text-xs sm:text-sm text-slate-600 max-w-xl leading-relaxed font-medium">
+                            Lớp <span className="font-bold text-slate-900">{studentInfo.className}</span> • Mã học sinh: <span className="font-mono font-bold text-blue-700 bg-blue-100/60 px-2 py-0.5 rounded-md">{studentInfo.studentCode}</span>
+                            <br />
+                            Hãy chọn phân hệ bạn muốn truy cập bên dưới:
+                        </p>
+                    </div>
 
-            <div className="pt-1 flex items-center justify-between">
-              <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                <Compass className="w-3.5 h-3.5 text-indigo-400" />
-                <span>1 việc nhỏ hôm nay:</span>
-              </span>
-              <Link
-                href="/student/quests"
-                className="px-3 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold flex items-center gap-1 transition active:scale-95 shadow-md shadow-indigo-600/30"
-              >
-                <span>Xem Nhiệm Vụ Tuần</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
+                    <div className="flex items-center gap-3">
+                        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs text-center min-w-[120px]">
+                            <p className="text-[11px] text-slate-500 font-semibold">Chuyên cần</p>
+                            <p className="text-xs sm:text-sm font-black text-emerald-600 mt-0.5">✓ Đã Có Mặt</p>
+                        </div>
+                        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs text-center min-w-[120px]">
+                            <p className="text-[11px] text-slate-500 font-semibold">Trạng thái</p>
+                            <p className="text-xs sm:text-sm font-black text-blue-600 mt-0.5">Sẵn Sàng Học</p>
+                        </div>
+                    </div>
+                </div>
             </div>
-          </div>
-        </div>
-      </div>
 
-      {/* 2. KHỐI NỔI BẬT: SỔ BÁO BÀI & DẶN DÒ HÔM NAY (ZERO-TOUCH ACCESS) */}
-      <div className="rounded-3xl border border-blue-500/30 bg-gradient-to-r from-blue-950/80 via-slate-900/90 to-indigo-950/70 p-5 sm:p-6 shadow-xl relative overflow-hidden">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-start sm:items-center gap-3.5">
-            <div className="h-12 w-12 rounded-2xl bg-blue-600/90 text-white flex items-center justify-center text-2xl shrink-0 shadow-lg shadow-blue-600/30">
-              📖
+            {/* THE 2 PRIMARY FLASHCARDS (Light Theme) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
+                
+                {/* ========================================================================= */}
+                {/* FLASHCARD 1: KHU VỰC HỌC TẬP (STUDY HUB) */}
+                {/* ========================================================================= */}
+                <div className="group relative rounded-3xl border-2 border-blue-200 bg-white p-6 sm:p-8 shadow-sm transition-all duration-300 hover:border-blue-500 hover:shadow-xl hover:-translate-y-1 flex flex-col justify-between overflow-hidden">
+                    <div className="space-y-6 relative z-10">
+                        {/* Header of Card */}
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-center gap-4">
+                                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center text-3xl shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform">
+                                    🎓
+                                </div>
+                                <div>
+                                    <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-black uppercase tracking-wider border border-blue-200">
+                                        Trọng Tâm Chính
+                                    </span>
+                                    <h3 className="text-xl sm:text-2xl font-black text-slate-900 mt-1 group-hover:text-blue-700 transition-colors">
+                                        Khu Vực Học Tập
+                                    </h3>
+                                </div>
+                            </div>
+
+                            <span className="px-3 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold flex items-center gap-1.5 shrink-0">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                Đang Mở
+                            </span>
+                        </div>
+
+                        <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-medium">
+                            Không gian quản trị học tập toàn diện cho học sinh: Theo dõi bài tập dặn dò, thời khóa biểu sáng & chiều, tra cứu học phí VietQR, chuyên cần và hồ sơ cá nhân.
+                        </p>
+
+                        {/* Feature Badges List */}
+                        <div className="grid grid-cols-2 gap-2.5 pt-2">
+                            <div className="flex items-center gap-2 p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 font-bold hover:bg-blue-50/50 transition-colors">
+                                <BookOpen size={16} className="text-blue-600 shrink-0" />
+                                <span className="truncate">Sổ Báo Bài & Dặn Dò</span>
+                            </div>
+
+                            <div className="flex items-center gap-2 p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 font-bold hover:bg-amber-50/50 transition-colors">
+                                <Calendar size={16} className="text-amber-600 shrink-0" />
+                                <span className="truncate">TKB Sáng & Chiều (5 tiết)</span>
+                            </div>
+
+                            <div className="flex items-center gap-2 p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 font-bold hover:bg-emerald-50/50 transition-colors">
+                                <CreditCard size={16} className="text-emerald-600 shrink-0" />
+                                <span className="truncate">Học Phí & VietQR Auto</span>
+                            </div>
+
+                            <div className="flex items-center gap-2 p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 font-bold hover:bg-purple-50/50 transition-colors">
+                                <UserCheck size={16} className="text-purple-600 shrink-0" />
+                                <span className="truncate">Điểm Danh Chuyên Cần</span>
+                            </div>
+
+                            <div className="flex items-center gap-2 p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 font-bold hover:bg-pink-50/50 transition-colors">
+                                <Award size={16} className="text-pink-600 shrink-0" />
+                                <span className="truncate">Bảng Điểm & Kết Quả</span>
+                            </div>
+
+                            <div className="flex items-center gap-2 p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 font-bold hover:bg-indigo-50/50 transition-colors">
+                                <FileText size={16} className="text-indigo-600 shrink-0" />
+                                <span className="truncate">Sơ Yếu Lý Lịch Cá Nhân</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Action Button */}
+                    <div className="pt-6 relative z-10">
+                        <Link
+                            href="/student/study"
+                            className="w-full py-3.5 px-6 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm flex items-center justify-center gap-2.5 shadow-md shadow-blue-600/20 active:scale-98 transition-all"
+                        >
+                            <span>Truy Cập Khu Vực Học Tập</span>
+                            <ArrowRight size={18} />
+                        </Link>
+                    </div>
+                </div>
+
+                {/* ========================================================================= */}
+                {/* FLASHCARD 2: KHU VỰC GIẢI TRÍ & LÀNG THÚ CƯNG METAVERSE */}
+                {/* ========================================================================= */}
+                <div
+                    onClick={handleEntertainmentClick}
+                    className={cn(
+                        "group relative rounded-3xl border-2 p-6 sm:p-8 shadow-sm transition-all duration-300 flex flex-col justify-between overflow-hidden cursor-pointer",
+                        isMetaverseEnabled
+                            ? "border-purple-200 bg-white hover:border-purple-500 hover:shadow-xl hover:-translate-y-1"
+                            : "border-slate-200 bg-white hover:border-amber-400 hover:shadow-md"
+                    )}
+                >
+                    <div className="space-y-6 relative z-10">
+                        {/* Header of Card */}
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-center gap-4">
+                                <div className={cn(
+                                    "w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shadow-lg transition-transform group-hover:scale-105",
+                                    isMetaverseEnabled
+                                        ? "bg-gradient-to-br from-purple-600 to-pink-600 text-white shadow-purple-500/20"
+                                        : "bg-purple-50 text-purple-600 border border-purple-200"
+                                )}>
+                                    🎮
+                                </div>
+                                <div>
+                                    <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-black uppercase tracking-wider border border-purple-200">
+                                        Metaverse & Gamification
+                                    </span>
+                                    <h3 className="text-xl sm:text-2xl font-black text-slate-900 mt-1 group-hover:text-purple-700 transition-colors">
+                                        Khu Vực Giải Trí & Thú Cưng
+                                    </h3>
+                                </div>
+                            </div>
+
+                            {isMetaverseEnabled ? (
+                                <span className="px-3 py-1 rounded-xl bg-purple-50 border border-purple-200 text-purple-700 text-xs font-bold flex items-center gap-1 shrink-0">
+                                    <Sparkles size={13} className="text-purple-600" />
+                                    Mở (Admin)
+                                </span>
+                            ) : (
+                                <span className="px-3 py-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold flex items-center gap-1.5 shrink-0">
+                                    <Lock size={13} className="text-amber-600" />
+                                    Bảo Trì Nâng Cấp
+                                </span>
+                            )}
+                        </div>
+
+                        <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-medium">
+                            Không gian nuôi thú ảo linh vật ẩn danh, tham gia nhiệm vụ rèn luyện tuần, khám phá làng học tập 2.5D Isometric và thám hiểm vũ trụ cùng bạn bè.
+                        </p>
+
+                        {/* Feature Badges List */}
+                        <div className="grid grid-cols-2 gap-2.5 pt-2">
+                            <div className="flex items-center gap-2 p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 font-bold hover:bg-purple-50/50 transition-colors">
+                                <span className="text-base">🥚</span>
+                                <span className="truncate">Nuôi Thú Cưng Linh Vật</span>
+                            </div>
+
+                            <div className="flex items-center gap-2 p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 font-bold hover:bg-purple-50/50 transition-colors">
+                                <span className="text-base">🏡</span>
+                                <span className="truncate">Làng Học Tập 2.5D</span>
+                            </div>
+
+                            <div className="flex items-center gap-2 p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 font-bold hover:bg-purple-50/50 transition-colors">
+                                <span className="text-base">🎯</span>
+                                <span className="truncate">Nhiệm Vụ Tuần & Rèn Luyện</span>
+                            </div>
+
+                            <div className="flex items-center gap-2 p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 font-bold hover:bg-purple-50/50 transition-colors">
+                                <span className="text-base">🚀</span>
+                                <span className="truncate">Trạm Vũ Trụ & Thám Hiểm</span>
+                            </div>
+                        </div>
+
+                        {!isMetaverseEnabled && (
+                            <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 flex items-center gap-2.5 text-xs text-amber-900 font-medium">
+                                <ShieldAlert size={16} className="text-amber-600 shrink-0" />
+                                <span>Tạm thời khóa trong cấu hình hệ thống để chuẩn bị nội dung năm học 2026-2027.</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Action Button */}
+                    <div className="pt-6 relative z-10">
+                        {isMetaverseEnabled ? (
+                            <button
+                                type="button"
+                                className="w-full py-3.5 px-6 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-sm flex items-center justify-center gap-2.5 shadow-md shadow-purple-600/20 active:scale-98 transition-all"
+                            >
+                                <span>Vào Làng Thú Cưng & Giải Trí</span>
+                                <ArrowRight size={18} />
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                className="w-full py-3.5 px-6 rounded-2xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-bold text-sm flex items-center justify-center gap-2 transition-all"
+                            >
+                                <Lock size={16} className="text-amber-600" />
+                                <span>Tạm Khóa (Xem Chi Tiết Nâng Cấp)</span>
+                            </button>
+                        )}
+                    </div>
+                </div>
+
             </div>
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-2">
-                <h3 className="text-base sm:text-lg font-extrabold text-white">
-                  Sổ Báo Bài & Dặn Dò Hôm Nay
-                </h3>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
-                  Lớp 9A1
-                </span>
-              </div>
-              <p className="text-xs text-blue-200/80">
-                Toán (Hình học) • Ngữ Văn (Mùa xuân nho nhỏ) • Tiếng Anh (Unit 3) • Vật Lý
-              </p>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <Link
-              href="/student/homework"
-              className="px-4 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-2 transition shadow-md shadow-blue-600/30 active:scale-95"
-            >
-              <span>Xem Sổ Báo Bài Chi Tiết</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
+            {/* MAINTENANCE NOTIFICATION MODAL (Light Theme) */}
+            {showMaintenanceModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+                    <div className="relative w-full max-w-lg bg-white border border-amber-300 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-5 text-slate-900">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-2xl text-amber-600 font-bold">
+                                    <Lock size={22} />
+                                </div>
+                                <h3 className="text-base font-extrabold text-slate-900">
+                                    {STUDENT_PORTAL_CONFIG.MAINTENANCE_TITLE}
+                                </h3>
+                            </div>
+                            <button
+                                onClick={() => setShowMaintenanceModal(false)}
+                                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 transition-colors"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div className="space-y-3 text-xs sm:text-sm text-slate-600 leading-relaxed font-medium">
+                            <p>
+                                {STUDENT_PORTAL_CONFIG.MAINTENANCE_MESSAGE}
+                            </p>
+                            <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-200 space-y-1 text-xs text-blue-900">
+                                <p className="font-bold text-blue-950">💡 Lời khuyên dành cho em:</p>
+                                <p>Hãy truy cập <strong>Khu Vực Học Tập</strong> để xem sổ báo bài, chuẩn bị bài tập cho ngày mai và kiểm tra thời khóa biểu lớp nhé!</p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-3 pt-2">
+                            <button
+                                onClick={() => setShowMaintenanceModal(false)}
+                                className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700 transition-colors"
+                            >
+                                Đã Hiểu
+                            </button>
+                            <Link
+                                href="/student/study"
+                                onClick={() => setShowMaintenanceModal(false)}
+                                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-2 shadow-md shadow-blue-600/20 transition-all"
+                            >
+                                <span>Sang Khu Vực Học Tập</span>
+                                <ArrowRight size={14} />
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div>
-      </div>
-
-      {/* 3. GRID 3 THẺ TIẾN TRÌNH & THÓI QUEN (PERSONAL GROWTH CARDS) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4">
-        {/* Card 1: Chuyên cần hôm nay */}
-        <div className="rounded-2xl border border-slate-800/90 bg-slate-900/80 p-4 flex items-center gap-3.5 shadow-md">
-          <div className="h-11 w-11 rounded-xl bg-emerald-950/80 border border-emerald-500/40 flex items-center justify-center text-xl shrink-0">
-            <CheckCircle2 className="w-6 h-6 text-emerald-400" />
-          </div>
-          <div>
-            <p className="text-[11px] text-slate-400">Điểm danh hôm nay</p>
-            <h4 className="text-xs sm:text-sm font-bold text-emerald-400">Đã Có Mặt Đúng Giờ</h4>
-            <p className="text-[10px] text-slate-500">Mã định danh: {studentCode}</p>
-          </div>
-        </div>
-
-        {/* Card 2: Nhiệm vụ tuần đang mở */}
-        <Link
-          href="/student/quests"
-          className="rounded-2xl border border-slate-800/90 bg-slate-900/80 p-4 flex items-center justify-between gap-3 shadow-md hover:border-indigo-500/50 transition group"
-        >
-          <div className="flex items-center gap-3.5">
-            <div className="h-11 w-11 rounded-xl bg-indigo-950/80 border border-indigo-500/40 flex items-center justify-center text-xl shrink-0">
-              🎯
-            </div>
-            <div>
-              <p className="text-[11px] text-slate-400">Nhiệm vụ rèn luyện</p>
-              <h4 className="text-xs sm:text-sm font-bold text-indigo-300 group-hover:text-indigo-200">
-                Tuần {week} Đang Mở
-              </h4>
-              <p className="text-[10px] text-amber-400 font-medium">Tự do lựa chọn theo sức mình</p>
-            </div>
-          </div>
-          <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-white transition" />
-        </Link>
-
-        {/* Card 3: Nhịp độ rèn luyện mềm dẻo */}
-        <div className="rounded-2xl border border-slate-800/90 bg-slate-900/80 p-4 flex items-center gap-3.5 shadow-md">
-          <div className="h-11 w-11 rounded-xl bg-amber-950/80 border border-amber-500/40 flex items-center justify-center text-xl shrink-0">
-            🔥
-          </div>
-          <div>
-            <p className="text-[11px] text-slate-400">Nhịp độ rèn luyện</p>
-            <h4 className="text-xs sm:text-sm font-bold text-amber-400">{pet.streak_days} Ngày Tích Lũy</h4>
-            <p className="text-[10px] text-slate-500">Tôn trọng nhịp học linh hoạt</p>
-          </div>
-        </div>
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 3. KHÔNG GIAN HỌC TẬP & LÀNG LỚP HỌC 2.5D ISOMETRIC */}
-      {/* ========================================================================= */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
-            <Home className="w-4 h-4 text-indigo-400" />
-            <span>Làng Học Tập Lớp {classCode} (Không Gian Sáng Tạo 2.5D)</span>
-          </h3>
-          <Link
-            href="/student/map"
-            className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 transition"
-          >
-            <span>Mở Toàn Cảnh Bản Đồ</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-
-        <ClassroomWorldGrid
-          classCode={classCode}
-          students={fullRoster}
-          currentPetId={pet.id}
-          currentUserLevel={pet.level}
-        />
-      </div>
-
-      {/* ========================================================================= */}
-      {/* 4. DẢI BỤC VINH DANH TIẾN BỘ ẨN DANH (DISCOVERY & APPRECIATION) */}
-      {/* ========================================================================= */}
-      <div className="pt-4 border-t border-slate-800/60">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
-            <Trophy className="w-3.5 h-3.5 text-amber-400" />
-            <span>Góc Ghi Nhận Nỗ Lực Học Tập</span>
-          </span>
-        </div>
-        <GlobalTopPodium classNameCode={classCode} students={fullRoster} />
-      </div>
-
-    </div>
-  );
+    );
 }

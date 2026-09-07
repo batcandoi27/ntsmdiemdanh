@@ -12,48 +12,101 @@ import { Student } from '@/types/models';
 
 const DEFAULT_SCHOOL_ID = '00000000-0000-0000-0000-000000000001';
 
+export interface SchoolProfileData {
+  school_id?: string;
+  school_code: string;
+  school_name: string;
+  governing_body: string;
+  district_name: string;
+  province_name: string;
+  school_year: string;
+  portal_url: string;
+  hotline?: string;
+  zalo_gateway_url?: string;
+  zalo_bridge_token?: string;
+}
+
 /**
- * Service quản lý Sơ Yếu Lý Lịch Học Sinh (Student Curriculum Vitae)
- * Hỗ trợ Dual-Mode Persistence: Tự động dùng bảng 'student_curriculum_vitae' hoặc Fallback sang bảng 'settings'
+ * Service quản lý Sơ Yếu Lý Lịch Học Sinh & Thông Tin Trường Học Đa Điểm (Multi-Tenant)
+ * Hỗ trợ Dual-Mode Persistence: Tự động dùng bảng 'settings' hoặc 'app_settings'
  */
 export class StudentCurriculumVitaeService {
   /**
    * Lấy cấu hình thông tin trường học hiện tại (Dynamic School Identity)
    */
-  static async getSchoolProfile(schoolId = DEFAULT_SCHOOL_ID): Promise<{
-    school_name: string;
-    governing_body: string;
-    district_name: string;
-    province_name: string;
-    school_year: string;
-  }> {
+  static async getSchoolProfile(schoolId = DEFAULT_SCHOOL_ID): Promise<SchoolProfileData> {
+    const defaultProfile: SchoolProfileData = {
+      school_id: schoolId,
+      school_code: process.env.NEXT_PUBLIC_SCHOOL_CODE || 'TBC',
+      school_name: 'TRƯỜNG THCS TRẦN BỘI CƠ',
+      governing_body: 'ỦY BAN NHÂN DÂN QUẬN 5',
+      district_name: 'Quận 5',
+      province_name: 'TP. Hồ Chí Minh',
+      school_year: '2026-2027',
+      portal_url: process.env.NEXT_PUBLIC_APP_URL || 'https://thcstbc.kgvh.io.vn',
+      hotline: '(028) 3855 0412',
+      zalo_gateway_url: process.env.ZALO_GATEWAY_URL || 'https://zalo.thaycoai.io.vn',
+      zalo_bridge_token: process.env.ZALO_BRIDGE_TOKEN || 'sk-zalokeybatcandoi'
+    };
+
     try {
-      const { data } = await supabase
+      // 1. Try from 'settings' table (standard in current Supabase schema)
+      const { data: stData } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'school_profile')
+        .maybeSingle();
+
+      if (stData?.value && typeof stData.value === 'object') {
+        return {
+          ...defaultProfile,
+          ...stData.value
+        };
+      }
+
+      // 2. Try fallback from 'app_settings'
+      const { data: appData } = await supabase
         .from('app_settings')
         .select('value')
         .eq('key', 'school_profile')
         .maybeSingle();
 
-      if (data?.value) {
+      if (appData?.value && typeof appData.value === 'object') {
         return {
-          school_name: data.value.school_name || 'TRƯỜNG THCS TRẦN BỘI CƠ',
-          governing_body: data.value.governing_body || 'ỦY BAN NHÂN DÂN QUẬN 5',
-          district_name: data.value.district_name || 'Quận 5',
-          province_name: data.value.province_name || 'TP. Hồ Chí Minh',
-          school_year: data.value.school_year || '2026-2027'
+          ...defaultProfile,
+          ...appData.value
         };
       }
     } catch {
-      // Fallback
+      // Fallback to default
     }
 
-    return {
-      school_name: 'TRƯỜNG THCS TRẦN BỘI CƠ',
-      governing_body: 'ỦY BAN NHÂN DÂN QUẬN 5',
-      district_name: 'Quận 5',
-      province_name: 'TP. Hồ Chí Minh',
-      school_year: '2026-2027'
+    return defaultProfile;
+  }
+
+  /**
+   * Lưu cấu hình thông tin trường học vào Supabase
+   */
+  static async saveSchoolProfile(profile: Partial<SchoolProfileData>): Promise<void> {
+    const current = await this.getSchoolProfile();
+    const updated = {
+      ...current,
+      ...profile,
+      updated_at: new Date().toISOString()
     };
+
+    // Save to settings table
+    const { error: err1 } = await supabase
+      .from('settings')
+      .upsert({
+        key: 'school_profile',
+        value: updated,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' });
+
+    if (err1) {
+      console.warn('[StudentCurriculumVitaeService] Error saving to settings:', err1);
+    }
   }
 
   /**

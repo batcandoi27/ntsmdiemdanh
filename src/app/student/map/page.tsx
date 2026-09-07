@@ -122,19 +122,19 @@ export default function StudentMapPage() {
   return (
     <div className="space-y-6 animate-in fade-in">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 bg-white border border-slate-200 rounded-3xl shadow-2xs">
         <div>
-          <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+          <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
             🏡 Làng Lớp Học 2D (Classroom Metaverse)
           </h2>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-600 font-medium mt-1">
             Không gian cộng đồng 64 ô đất của lớp • Xây dựng căn cứ và ghé thăm bạn bè ẩn danh
           </p>
         </div>
 
         <button
           onClick={() => setIsShopOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition shadow-lg shadow-amber-500/20"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition shadow-md shadow-amber-500/20 active:scale-95"
         >
           <span>🛍️</span>
           <span>Mở Cửa Hàng Vật Phẩm</span>

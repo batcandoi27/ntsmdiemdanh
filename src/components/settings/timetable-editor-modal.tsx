@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X, Save, Plus, Trash2, AlertCircle } from 'lucide-react';
 import { Timetable, DayOfWeek, SessionType, PeriodSlot, DAY_ORDER, DAY_LABELS, SESSION_LABELS, createEmptyWeekSchedule } from '@/types/timetable';
+import { resolveClassSubjects } from '@/types/homework';
 import { saveTimetable } from '@/services/timetable-service';
 import { useAuth } from '@/context/auth-context';
 import { cn } from '@/lib/utils';
@@ -23,6 +24,9 @@ export function TimetableEditorModal({ isOpen, onClose, onSuccess, classId, clas
     const [effectiveTo, setEffectiveTo] = useState(existingTimetable ? existingTimetable.effectiveTo : '2026-05-31');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+
+    const { subjects, specialSubjects } = resolveClassSubjects(className);
+    const allSubjectOptions = Array.from(new Set([...subjects, ...specialSubjects]));
 
     if (!isOpen) return null;
 
@@ -159,6 +163,7 @@ export function TimetableEditorModal({ isOpen, onClose, onSuccess, classId, clas
                                                         <div className="flex-1 space-y-2">
                                                             <input
                                                                 type="text" placeholder="Môn học (Vd: Toán)"
+                                                                list="settings-subjects-list"
                                                                 value={slot.subject}
                                                                 onChange={e => updateSlot(day, 'morning', idx, 'subject', e.target.value)}
                                                                 className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 outline-none font-medium"
@@ -210,6 +215,7 @@ export function TimetableEditorModal({ isOpen, onClose, onSuccess, classId, clas
                                                         <div className="flex-1 space-y-2">
                                                             <input
                                                                 type="text" placeholder="Môn học (Vd: Toán)"
+                                                                list="settings-subjects-list"
                                                                 value={slot.subject}
                                                                 onChange={e => updateSlot(day, 'afternoon', idx, 'subject', e.target.value)}
                                                                 className="w-full px-2 py-1.5 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none font-medium"
@@ -236,6 +242,12 @@ export function TimetableEditorModal({ isOpen, onClose, onSuccess, classId, clas
                             </div>
                         ))}
                     </div>
+
+                    <datalist id="settings-subjects-list">
+                        {allSubjectOptions.map(opt => (
+                            <option key={opt} value={opt} />
+                        ))}
+                    </datalist>
                 </div>
 
                 {/* Footer */}

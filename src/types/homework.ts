@@ -24,22 +24,77 @@ export interface ClassTimetable {
     updated_at: string;
 }
 
+export const DEFAULT_APP_SUBJECTS = {
+    primary: "Tiếng Việt, Toán, Đạo đức, Tự nhiên, Xã hội, Khoa học, Lịch sử, Địa lí, Tin học, Ngoại ngữ, Công nghệ, Âm nhạc, Mỹ thuật, GDTC, Trải nghiệm",
+    secondary: "Ngữ văn, Toán, Ngoại ngữ, GDCD, Lịch sử, Địa lí, Vật lí, Hóa học, Sinh học, Tin học, Công nghệ, Âm nhạc, Mỹ thuật, GDTC, Trải nghiệm",
+    high: "Ngữ văn, Toán, Ngoại ngữ, Lịch sử, Địa lí, GDKTPL, Vật lí, Hóa học, Sinh học, Tin học, Công nghệ, Âm nhạc, Mỹ thuật, GDTC, GDQP-AN, Trải nghiệm"
+};
+
+export function resolveClassSubjects(className = '', customConfig?: any): { subjects: string[]; specialSubjects: string[] } {
+    let config = customConfig;
+    if (!config && typeof window !== 'undefined') {
+        try {
+            const raw = localStorage.getItem('app_subjects_config');
+            if (raw) config = JSON.parse(raw);
+        } catch (_) {}
+    }
+    if (!config) {
+        config = DEFAULT_APP_SUBJECTS;
+    }
+
+    const gradeMatch = className.match(/\d+/);
+    const grade = gradeMatch ? parseInt(gradeMatch[0], 10) : 6;
+
+    let csv = '';
+    if (grade >= 1 && grade <= 5) {
+        csv = config.primary || DEFAULT_APP_SUBJECTS.primary;
+    } else if (grade >= 10 && grade <= 12) {
+        csv = config.high || DEFAULT_APP_SUBJECTS.high;
+    } else {
+        csv = config.secondary || DEFAULT_APP_SUBJECTS.secondary;
+    }
+
+    const parsed = csv
+        ? csv.split(',').map((s: string) => s.trim()).filter(Boolean)
+        : ['Toán', 'Ngữ văn', 'Ngoại ngữ', 'Vật lí', 'Hóa học', 'Sinh học', 'Lịch sử & Địa lí', 'Tin học', 'GDCD', 'Công nghệ', 'Âm nhạc', 'Mỹ thuật', 'GDTC'];
+
+    // Distinct list
+    const uniqueSubjects = Array.from(new Set(parsed));
+    const specialSubjects = ['Chào Cờ', 'Sinh Hoạt Lớp', 'Hoạt động TNST', 'Trải nghiệm', 'Tự Học', 'Nghỉ'];
+
+    return {
+        subjects: uniqueSubjects,
+        specialSubjects
+    };
+}
+
 export function getSubjectBadgeStyle(subject: string): { bg: string; text: string; border: string; accent: string; icon: string } {
     const s = (subject || '').toLowerCase().trim();
+    if (!s || s === 'nghỉ' || s === 'trống' || s === '-') return { bg: 'bg-slate-100/70', text: 'text-slate-400', border: 'border-slate-200', accent: 'bg-slate-400', icon: '⏸️' };
+    if (s.includes('chào cờ')) return { bg: 'bg-red-100 text-red-800', text: 'text-red-700', border: 'border-red-300', accent: 'bg-red-600', icon: '🚩' };
+    if (s.includes('sinh hoạt') || s.includes('shl')) return { bg: 'bg-indigo-100 text-indigo-800', text: 'text-indigo-700', border: 'border-indigo-300', accent: 'bg-indigo-600', icon: '⭐' };
+    if (s.includes('trải nghiệm') || s.includes('hđtn') || s.includes('tnst')) return { bg: 'bg-emerald-100 text-emerald-800', text: 'text-emerald-700', border: 'border-emerald-300', accent: 'bg-emerald-600', icon: '🧭' };
     if (s.includes('toán')) return { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', accent: 'bg-blue-600', icon: '📐' };
     if (s.includes('văn') || s.includes('ngữ văn')) return { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-200', accent: 'bg-violet-600', icon: '📖' };
+    if (s.includes('tiếng việt')) return { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200', accent: 'bg-pink-600', icon: '✍️' };
     if (s.includes('anh') || s.includes('ngoại ngữ') || s.includes('english')) return { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', accent: 'bg-emerald-600', icon: '🇬🇧' };
     if (s.includes('lý') || s.includes('vật lí') || s.includes('vật lý') || s.includes('khtn (lý)')) return { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200', accent: 'bg-cyan-600', icon: '⚡' };
-    if (s.includes('hóa') || s.includes('khtn (hóa)')) return { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', accent: 'bg-orange-600', icon: '🧪' };
-    if (s.includes('sinh') || s.includes('khtn (sinh)')) return { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', accent: 'bg-green-600', icon: '🌱' };
-    if (s.includes('sử') || s.includes('lịch sử')) return { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', accent: 'bg-amber-600', icon: '📜' };
-    if (s.includes('địa') || s.includes('địa lý')) return { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200', accent: 'bg-teal-600', icon: '🌏' };
-    if (s.includes('tin') || s.includes('tin học')) return { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', accent: 'bg-indigo-600', icon: '💻' };
+    if (s.includes('hóa') || s.includes('hóa học') || s.includes('khtn (hóa)')) return { bg: 'bg-amber-50', text: 'text-amber-800', border: 'border-amber-200', accent: 'bg-amber-600', icon: '🧪' };
+    if (s.includes('sinh') || s.includes('sinh học') || s.includes('khtn (sinh)')) return { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', accent: 'bg-green-600', icon: '🌱' };
+    if (s.includes('khoa học') || s.includes('tự nhiên') || s.includes('khtn')) return { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200', accent: 'bg-teal-600', icon: '🔬' };
+    if (s.includes('sử') || s.includes('lịch sử')) return { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', accent: 'bg-orange-600', icon: '📜' };
+    if (s.includes('địa') || s.includes('địa lí') || s.includes('địa lý')) return { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200', accent: 'bg-teal-600', icon: '🌏' };
+    if (s.includes('tin') || s.includes('tin học')) return { bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-200', accent: 'bg-sky-600', icon: '💻' };
+    if (s.includes('gdktpl') || s.includes('kinh tế pháp luật')) return { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', accent: 'bg-rose-600', icon: '🏛️' };
+    if (s.includes('gdqp') || s.includes('quốc phòng')) return { bg: 'bg-lime-50', text: 'text-lime-800', border: 'border-lime-300', accent: 'bg-lime-700', icon: '🎖️' };
     if (s.includes('gdcd') || s.includes('công dân') || s.includes('gdđp')) return { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200', accent: 'bg-pink-600', icon: '⚖️' };
-    if (s.includes('thể dục') || s.includes('thể chất')) return { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', accent: 'bg-red-600', icon: '🏃' };
-    if (s.includes('nhạc') || s.includes('âm nhạc') || s.includes('mỹ thuật') || s.includes('nghệ thuật')) return { bg: 'bg-fuchsia-50', text: 'text-fuchsia-700', border: 'border-fuchsia-200', accent: 'bg-fuchsia-600', icon: '🎨' };
+    if (s.includes('đạo đức')) return { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', accent: 'bg-purple-600', icon: '💖' };
+    if (s.includes('thể dục') || s.includes('thể chất') || s.includes('gdtc')) return { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', accent: 'bg-red-600', icon: '🏃' };
+    if (s.includes('nhạc') || s.includes('âm nhạc')) return { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-200', accent: 'bg-violet-600', icon: '🎵' };
+    if (s.includes('mỹ thuật') || s.includes('mĩ thuật') || s.includes('nghệ thuật')) return { bg: 'bg-fuchsia-50', text: 'text-fuchsia-700', border: 'border-fuchsia-200', accent: 'bg-fuchsia-600', icon: '🎨' };
     if (s.includes('công nghệ')) return { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-300', accent: 'bg-slate-600', icon: '⚙️' };
-    return { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200', accent: 'bg-slate-600', icon: '📚' };
+    if (s.includes('tự học')) return { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', accent: 'bg-amber-600', icon: '📝' };
+    return { bg: 'bg-indigo-50/70', text: 'text-indigo-700', border: 'border-indigo-200', accent: 'bg-indigo-600', icon: '📚' };
 }
 
 export interface HomeworkSubjectEntry {

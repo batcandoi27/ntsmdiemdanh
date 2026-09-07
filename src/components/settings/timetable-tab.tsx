@@ -10,6 +10,8 @@ import { Timetable, DAY_ORDER, DAY_LABELS, SESSION_LABELS } from '@/types/timeta
 import { cn } from '@/lib/utils';
 import { TimetableEditorModal } from './timetable-editor-modal';
 import { TimetableImportModal } from './timetable-import-modal';
+import { exportSchoolMatrixTimetableFile } from '@/services/school-matrix-timetable-exporter';
+import toast from 'react-hot-toast';
 
 export function TimetableTab() {
     const { appUser, loading: authLoading } = useAuth();
@@ -19,6 +21,7 @@ export function TimetableTab() {
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
 
     useEffect(() => {
         loadClasses();
@@ -62,8 +65,32 @@ export function TimetableTab() {
     const handleSuccess = () => {
         setIsEditing(false);
         setIsImporting(false);
+        loadClasses();
         if (selectedClassId) {
             loadTimetable(selectedClassId);
+        }
+    };
+
+    const handleExportAll = async () => {
+        try {
+            setIsExporting(true);
+            const allTkb = await getAllTimetables();
+            if (!allTkb || allTkb.length === 0) {
+                toast.error('Chưa có dữ liệu Thời khóa biểu nào để xuất.');
+                return;
+            }
+            exportSchoolMatrixTimetableFile(allTkb, {
+                schoolName: 'THCS TRẦN BỘI CƠ',
+                semester: '1',
+                academicYear: '2026-2027',
+                effectiveDate: '2026-09-07',
+            });
+            toast.success(`Đã xuất file Excel TKB cho ${allTkb.length} lớp học!`);
+        } catch (err: any) {
+            console.error('Lỗi xuất file TKB:', err);
+            toast.error('Lỗi xuất file: ' + (err?.message || err));
+        } finally {
+            setIsExporting(false);
         }
     };
 
@@ -79,24 +106,25 @@ export function TimetableTab() {
                 <div>
                     <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                         <CalendarDays className="text-blue-600" size={20} />
-                        Thời Khoá Biểu
+                        Thời Khoá Biểu Toàn Trường
                     </h2>
-                    <p className="text-sm text-gray-500">Thiết lập thời khoá biểu cho các lớp</p>
+                    <p className="text-sm text-gray-500">Thiết lập & Nhập/Xuất hàng loạt thời khoá biểu các lớp (Chuẩn THCS)</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     <button
                         onClick={() => setIsImporting(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium transition-colors text-sm shadow-sm"
+                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-bold transition-colors text-sm shadow-sm"
                     >
                         <Upload size={16} />
-                        Nhập từ Excel
+                        Nhập Hàng Loạt (.xlsx)
                     </button>
                     <button
-                        onClick={() => alert('Download template feature coming soon')}
-                        className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors text-sm shadow-sm"
+                        onClick={handleExportAll}
+                        disabled={isExporting}
+                        className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 font-bold transition-colors text-sm shadow-sm disabled:opacity-50"
                     >
                         <Download size={16} />
-                        Tải Mẫu Excel
+                        {isExporting ? 'Đang xuất...' : 'Xuất TKB Toàn Trường (.xlsx)'}
                     </button>
                 </div>
             </div>

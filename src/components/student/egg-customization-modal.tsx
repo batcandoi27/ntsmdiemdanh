@@ -46,32 +46,32 @@ export const EggCustomizationModal: React.FC<EggCustomizationModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150">
-      <div className="w-full max-w-md bg-gradient-to-b from-slate-900 via-indigo-950/50 to-slate-950 rounded-3xl border border-indigo-500/40 shadow-2xl p-6 space-y-6 animate-in zoom-in-95 duration-150 text-slate-100">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+      <div className="w-full max-w-md bg-white rounded-3xl border border-slate-200 shadow-2xl p-6 space-y-6 animate-in zoom-in-95 duration-150 text-slate-900">
         
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-indigo-900/50 pb-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-indigo-300">
+            <div className="w-9 h-9 rounded-2xl bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-600 shadow-2xs">
               <Palette className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-black text-base tracking-tight text-white flex items-center gap-1.5">
+              <h3 className="font-black text-base tracking-tight text-slate-900 flex items-center gap-1.5">
                 Tùy Biến Màu Sắc Quả Trứng
               </h3>
-              <p className="text-[11px] text-indigo-300">Tạo dấu ấn phong cách riêng biệt cho linh vật</p>
+              <p className="text-[11px] text-slate-500 font-medium">Tạo dấu ấn phong cách riêng biệt cho linh vật</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition"
+            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Live Egg Preview */}
-        <div className="p-6 rounded-2xl bg-slate-950/80 border border-indigo-500/30 flex flex-col items-center justify-center relative overflow-hidden shadow-inner">
+        <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col items-center justify-center relative overflow-hidden shadow-inner">
           <div
             className="absolute w-40 h-40 rounded-full blur-2xl opacity-40 transition-colors duration-500"
             style={{ backgroundColor: selectedColor }}
@@ -83,14 +83,14 @@ export const EggCustomizationModal: React.FC<EggCustomizationModalProps> = ({
             size={110}
             className="z-10 cursor-pointer"
           />
-          <span className="text-xs font-bold text-slate-300 mt-2 z-10 font-mono">
+          <span className="text-xs font-bold text-slate-700 mt-2 z-10 font-mono">
             {selectedColor.toUpperCase()}
           </span>
         </div>
 
         {/* Preset Palettes */}
         <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-300 block">
+          <label className="text-xs font-bold text-slate-700 block">
             Bảng màu thần thoại khuyên dùng:
           </label>
           <div className="grid grid-cols-4 gap-2.5">
@@ -103,17 +103,17 @@ export const EggCustomizationModal: React.FC<EggCustomizationModalProps> = ({
                   onClick={() => handleSelectPreset(col.hex)}
                   className={`p-2 rounded-xl border flex flex-col items-center gap-1.5 transition-all text-center ${
                     isSelected
-                      ? 'border-amber-400 bg-indigo-950/80 ring-2 ring-amber-400/40 shadow-md scale-105'
-                      : 'border-slate-800 bg-slate-900/60 hover:border-slate-700 hover:bg-slate-900'
+                      ? 'border-purple-500 bg-purple-50 ring-2 ring-purple-400/30 shadow-xs scale-105'
+                      : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white'
                   }`}
                 >
                   <div
-                    className="w-7 h-7 rounded-full border border-white/20 shadow-sm flex items-center justify-center"
+                    className="w-7 h-7 rounded-full border border-slate-300 shadow-2xs flex items-center justify-center"
                     style={{ backgroundColor: col.hex }}
                   >
                     {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
                   </div>
-                  <span className="text-[10px] text-slate-400 font-medium truncate w-full">
+                  <span className="text-[10px] text-slate-600 font-bold truncate w-full">
                     {col.name.split(' ')[0]}
                   </span>
                 </button>
@@ -124,7 +124,7 @@ export const EggCustomizationModal: React.FC<EggCustomizationModalProps> = ({
 
         {/* Custom HEX Input */}
         <div className="space-y-1.5">
-          <label className="text-xs font-bold text-slate-300 block">
+          <label className="text-xs font-bold text-slate-700 block">
             Hoặc nhập mã màu HEX tùy ý:
           </label>
           <div className="flex items-center gap-3">
@@ -140,7 +140,7 @@ export const EggCustomizationModal: React.FC<EggCustomizationModalProps> = ({
               maxLength={7}
               placeholder="#FF5733"
               onChange={(e) => handleCustomHexChange(e.target.value)}
-              className="flex-1 px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-slate-200 font-mono text-xs font-bold uppercase focus:ring-2 focus:ring-indigo-500 outline-none"
+              className="flex-1 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-mono text-xs font-bold uppercase focus:ring-2 focus:ring-purple-500 outline-none"
             />
           </div>
         </div>
@@ -150,14 +150,14 @@ export const EggCustomizationModal: React.FC<EggCustomizationModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition"
           >
             Hủy
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 flex items-center gap-2 active:scale-95 transition"
+            className="px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md shadow-purple-600/20 flex items-center gap-2 active:scale-95 transition"
           >
             <Sparkles className="w-4 h-4 text-amber-300" />
             <span>Lưu Màu Trứng</span>

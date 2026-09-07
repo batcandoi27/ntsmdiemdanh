@@ -10,98 +10,15 @@ import {
     DayTimetable
 } from '@/types/homework';
 
+import { getTimetableForClass } from './timetable-service';
+import { DayOfWeek } from '@/types/timetable';
+
 export class HomeworkService {
     /**
-     * Get or initialize a default 6-day Timetable for a class (Thứ 2 -> Thứ 7)
+     * Get or initialize Timetable for a class (Thứ 2 -> Thứ 7), supporting both Morning and Afternoon!
+     * Unified Single Source of Truth from `timetables` table.
      */
     static async getClassTimetable(classId: string, className = 'Lớp'): Promise<ClassTimetable> {
-        try {
-            const { data, error } = await supabaseAdmin
-                .from('class_timetables')
-                .select('*')
-                .eq('class_id', classId)
-                .order('day_of_week', { ascending: true })
-                .order('period', { ascending: true });
-
-            const daysMap = new Map<number, { morning: any[]; afternoon: any[] }>();
-            for (let d = 2; d <= 7; d++) {
-                daysMap.set(d, { morning: [], afternoon: [] });
-            }
-
-            if (!error && data && data.length > 0) {
-                data.forEach((row: any) => {
-                    const d = daysMap.get(row.day_of_week);
-                    if (d) {
-                        const targetSession = row.session === 'AFTERNOON' ? d.afternoon : d.morning;
-                        targetSession.push({
-                            period: row.period,
-                            subject_name: row.subject_name,
-                            teacher_name: row.teacher_name || '',
-                            room_name: row.room_name || ''
-                        });
-                    }
-                });
-            }
-
-            const dayLabels: Record<number, string> = {
-                2: 'Thứ Hai',
-                3: 'Thứ Ba',
-                4: 'Thứ Tư',
-                5: 'Thứ Năm',
-                6: 'Thứ Sáu',
-                7: 'Thứ Bảy'
-            };
-
-            const days: DayTimetable[] = [];
-            for (let d = 2; d <= 7; d++) {
-                const s = daysMap.get(d)!;
-                days.push({
-                    day_of_week: d,
-                    day_label: dayLabels[d],
-                    morning: s.morning.length > 0 ? s.morning : this.getDefaultPeriods('MORNING', d),
-                    afternoon: s.afternoon.length > 0 ? s.afternoon : []
-                });
-            }
-
-            return {
-                class_id: classId,
-                class_name: className,
-                days,
-                updated_at: new Date().toISOString()
-            };
-        } catch (err) {
-            console.error('[HomeworkService] getClassTimetable error:', err);
-            return {
-                class_id: classId,
-                class_name: className,
-                days: this.getInitialEmptyDays(),
-                updated_at: new Date().toISOString()
-            };
-        }
-    }
-
-    private static getDefaultPeriods(session: 'MORNING' | 'AFTERNOON', day: number) {
-        if (session === 'AFTERNOON') return [];
-        // Default 5 morning periods based on day
-        const mockSubjectsByDay: Record<number, string[]> = {
-            2: ['Chào Cờ', 'Toán', 'Ngữ Văn', 'Tiếng Anh', 'Lịch Sử'],
-            3: ['Toán', 'Hóa Học', 'Sinh Học', 'Ngữ Văn', 'Tin Học'],
-            4: ['Vật Lý', 'Toán', 'Tiếng Anh', 'Địa Lí', 'GDCD'],
-            5: ['Ngữ Văn', 'Toán', 'Hóa Học', 'Thể Dục', 'Tiếng Anh'],
-            6: ['Toán', 'Ngữ Văn', 'Sinh Học', 'Vật Lý', 'Âm Nhạc'],
-            7: ['Công Nghệ', 'Tiếng Anh', 'Mĩ Thuật', 'Hoạt động TNST', 'Sinh Hoạt Lớp']
-        };
-
-        const subjects = mockSubjectsByDay[day] || ['Toán', 'Ngữ Văn', 'Tiếng Anh', 'Lý', 'Hóa'];
-        return subjects.map((subj, idx) => ({
-            period: idx + 1,
-            subject_name: subj,
-            teacher_name: '',
-            room_name: ''
-        }));
-    }
-
-    private static getInitialEmptyDays(): DayTimetable[] {
         const dayLabels: Record<number, string> = {
             2: 'Thứ Hai',
             3: 'Thứ Ba',
@@ -110,16 +27,125 @@ export class HomeworkService {
             6: 'Thứ Sáu',
             7: 'Thứ Bảy'
         };
-        const res: DayTimetable[] = [];
-        for (let d = 2; d <= 7; d++) {
-            res.push({
-                day_of_week: d,
-                day_label: dayLabels[d],
-                morning: this.getDefaultPeriods('MORNING', d),
-                afternoon: []
-            });
+
+        const dayKeys: DayOfWeek[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+        try {
+            // 1. Kiểm tra trong bảng `timetables` chính của hệ thống (Single Source of Truth)
+            const mainTkb = await getTimetableForClass(classId);
+            if (mainTkb && mainTkb.schedule) {
+                const days: DayTimetable[] = [];
+                for (let d = 2; d <= 7; d++) {
+                    const dayKey = dayKeys[d - 2];
+                    const daySched = mainTkb.schedule[dayKey] || { morning: [], afternoon: [] };
+
+                    days.push({
+                        day_of_week: d,
+                        day_label: dayLabels[d],
+                        morning: (daySched.morning || []).map(s => ({
+                            period: s.period,
+                            subject_name: s.subject,
+                            teacher_name: s.teacherName || '',
+                            room_name: s.room || ''
+                        })),
+                        afternoon: (daySched.afternoon || []).map(s => ({
+                            period: s.period,
+                            subject_name: s.subject,
+                            teacher_name: s.teacherName || '',
+                            room_name: s.room || ''
+                        }))
+                    });
+                }
+
+                return {
+                    class_id: classId,
+                    class_name: mainTkb.className || className,
+                    days,
+                    updated_at: mainTkb.updatedAt || new Date().toISOString()
+                };
+            }
+
+            // 2. Fallback kiểm tra trong bảng `class_timetables` nếu có
+            const { data, error } = await supabaseAdmin
+                .from('class_timetables')
+                .select('*')
+                .eq('class_id', classId)
+                .order('day_of_week', { ascending: true })
+                .order('period', { ascending: true });
+
+            if (!error && data && data.length > 0) {
+                const daysMap = new Map<number, { morning: any[]; afternoon: any[] }>();
+                for (let d = 2; d <= 7; d++) {
+                    daysMap.set(d, { morning: [], afternoon: [] });
+                }
+
+                data.forEach((row: any) => {
+                    const d = daysMap.get(row.day_of_week);
+                    if (d) {
+                        const targetSession = String(row.session || '').toUpperCase() === 'AFTERNOON' ? d.afternoon : d.morning;
+                        targetSession.push({
+                            period: row.period,
+                            subject_name: row.subject_name,
+                            teacher_name: row.teacher_name || '',
+                            room_name: row.room_name || ''
+                        });
+                    }
+                });
+
+                const days: DayTimetable[] = [];
+                for (let d = 2; d <= 7; d++) {
+                    const s = daysMap.get(d)!;
+                    days.push({
+                        day_of_week: d,
+                        day_label: dayLabels[d],
+                        morning: s.morning,
+                        afternoon: s.afternoon
+                    });
+                }
+
+                return {
+                    class_id: classId,
+                    class_name: className,
+                    days,
+                    updated_at: new Date().toISOString()
+                };
+            }
+
+            // 3. Nếu chưa có TKB, trả về các ngày rỗng sạch sẽ (TUYỆT ĐỐI KHÔNG DÙNG MOCK DATA GIẢ TẠO)
+            const emptyDays: DayTimetable[] = [];
+            for (let d = 2; d <= 7; d++) {
+                emptyDays.push({
+                    day_of_week: d,
+                    day_label: dayLabels[d],
+                    morning: [],
+                    afternoon: []
+                });
+            }
+
+            return {
+                class_id: classId,
+                class_name: className,
+                days: emptyDays,
+                updated_at: new Date().toISOString()
+            };
+        } catch (err) {
+            console.error('[HomeworkService] getClassTimetable error:', err);
+            const emptyDays: DayTimetable[] = [];
+            for (let d = 2; d <= 7; d++) {
+                emptyDays.push({
+                    day_of_week: d,
+                    day_label: dayLabels[d],
+                    morning: [],
+                    afternoon: []
+                });
+            }
+            return {
+                class_id: classId,
+                class_name: className,
+                days: emptyDays,
+                updated_at: new Date().toISOString()
+            };
         }
-        return res;
     }
 
     /**
@@ -175,7 +201,7 @@ export class HomeworkService {
     }
 
     /**
-     * Get or pre-populate Daily Homework Report for a specific date (Zero-Touch Smart Defaults)
+     * Get or pre-populate Daily Homework Report for a specific date (Clean & No Mock Data)
      */
     static async getDailyHomeworkReport(
         classId: string,
@@ -207,7 +233,7 @@ export class HomeworkService {
                 };
             }
 
-            // If not existing yet, pre-populate subjects from Timetable for this date!
+            // Nếu chưa có báo bài trong DB, trích xuất danh sách môn học từ TKB để hỗ trợ form nhập (KHÔNG TỰ ĐIỀN NỘI DUNG MOCK)
             const dateObj = new Date(reportDate);
             const dayOfWeek = dateObj.getDay() === 0 ? 7 : dateObj.getDay() + 1; // 2..7
 
@@ -222,13 +248,12 @@ export class HomeworkService {
                     if (p.subject_name && !['Chào Cờ', 'Sinh Hoạt Lớp'].includes(p.subject_name)) {
                         if (!subjectsSet.has(p.subject_name)) {
                             subjectsSet.add(p.subject_name);
-                            // Auto-suggest smart preset defaults!
-                            const preset = COMMON_SUBJECT_PRESETS.find(pr => pr.subject.toLowerCase() === p.subject_name.toLowerCase());
+                            // Khởi tạo RỖNG (để giáo viên/ban cán sự tự điền hoặc chọn chip gợi ý)
                             initialEntries.push({
                                 subject_name: p.subject_name,
                                 period: p.period,
-                                homework_tasks: preset?.quick_tasks[0] || 'Làm bài tập trong SGK',
-                                notes_and_tools: preset?.quick_tools[0] || 'Mang đầy đủ SGK và vở ghi',
+                                homework_tasks: '',
+                                notes_and_tools: '',
                                 is_test_scheduled: false
                             });
                         }
@@ -244,7 +269,7 @@ export class HomeworkService {
                 created_by_role: 'STUDENT_BCS',
                 created_by_name: 'Ban Cán Sự Lớp',
                 entries: initialEntries,
-                general_announcement: 'Nhớ đi học đúng giờ và mặc đúng đồng phục quy định.',
+                general_announcement: '',
                 is_published: false,
                 sent_to_zalo_group: false,
                 created_at: new Date().toISOString(),
@@ -260,6 +285,7 @@ export class HomeworkService {
                 created_by_role: 'STUDENT_BCS',
                 created_by_name: 'Ban Cán Sự Lớp',
                 entries: [],
+                general_announcement: '',
                 is_published: false,
                 sent_to_zalo_group: false,
                 created_at: new Date().toISOString(),

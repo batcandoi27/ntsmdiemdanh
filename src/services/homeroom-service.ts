@@ -1127,12 +1127,33 @@ export async function submitLeaveRequest(payload: {
     inMem.unshift(newRequest);
     inMemoryLeaveRequests.set(payload.class_id, inMem);
 
-    // Lưu vào Supabase homeroom_leave_requests (với fallback vào local storage nếu bảng chưa có)
+    // Lưu vào Supabase homeroom_leave_requests (với fallback vào bảng settings nếu bảng chưa có)
     const { error } = await supabase
       .from('homeroom_leave_requests')
       .insert([newRequest]);
 
     if (error) {
+      try {
+        const { data: currentSettings } = await supabase
+          .from('settings')
+          .select('value')
+          .eq('key', `homeroom_leaves_${payload.class_id}`)
+          .maybeSingle();
+
+        const currentLeaves = Array.isArray(currentSettings?.value) ? currentSettings.value : [];
+        currentLeaves.unshift(newRequest);
+
+        await supabase
+          .from('settings')
+          .upsert({
+            key: `homeroom_leaves_${payload.class_id}`,
+            value: currentLeaves,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'key' });
+      } catch (settingsErr) {
+        console.warn('Fallback saving leave request to settings error:', settingsErr);
+      }
+
       if (typeof window !== 'undefined') {
         const saved = JSON.parse(localStorage.getItem(`homeroom_leaves_${payload.class_id}`) || '[]');
         saved.unshift(newRequest);
@@ -1163,7 +1184,19 @@ export async function getLeaveRequests(classId: string, status?: LeaveRequestSta
     if (!error && data && data.length > 0) {
       list = data as LeaveRequest[];
     } else {
-      if (typeof window !== 'undefined') {
+      // Check Supabase 'settings' table fallback
+      try {
+        const { data: settingsData } = await supabase
+          .from('settings')
+          .select('value')
+          .eq('key', `homeroom_leaves_${classId}`)
+          .maybeSingle();
+        if (settingsData?.value && Array.isArray(settingsData.value)) {
+          list = settingsData.value;
+        }
+      } catch {}
+
+      if (list.length === 0 && typeof window !== 'undefined') {
         const local = localStorage.getItem(`homeroom_leaves_${classId}`);
         if (local) list = JSON.parse(local);
       }

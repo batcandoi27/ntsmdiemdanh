@@ -43,6 +43,34 @@ export const supabaseAuth = {
                 .eq('email', email);
             
             profile = profilesByEmail && profilesByEmail.length > 0 ? profilesByEmail[0] : null;
+
+            // 3. Nếu chưa có profile nhưng email có trong danh sách 121 giáo viên (teachers table)
+            if (!profile) {
+                const { data: teacher } = await supabase
+                    .from('teachers')
+                    .select('*')
+                    .ilike('email', email.trim())
+                    .maybeSingle();
+
+                if (teacher) {
+                    const { data: createdProfile } = await supabase
+                        .from('profiles')
+                        .upsert({
+                            id: userId,
+                            full_name: teacher.full_name,
+                            role: 'teacher',
+                            is_active: true,
+                            email: email.trim(),
+                            phone: teacher.phone
+                        }, { onConflict: 'id' })
+                        .select()
+                        .maybeSingle();
+
+                    if (createdProfile) {
+                        profile = createdProfile;
+                    }
+                }
+            }
         }
 
         if (!profile) return null;

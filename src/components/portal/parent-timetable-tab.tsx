@@ -163,14 +163,18 @@ export function ParentTimetableTab({ classId, className, studentName }: ParentTi
                                     )}
                                 </div>
 
-                                {/* Afternoon Sessions if any */}
-                                {day.afternoon && day.afternoon.length > 0 && (
-                                    <div className="space-y-1.5 pt-2 border-t border-slate-100">
-                                        <div className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-700 flex items-center gap-1">
-                                            <Moon size={12} className="text-indigo-500" />
-                                            <span>Buổi Chiều:</span>
-                                        </div>
+                                {/* Afternoon Sessions */}
+                                <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                                    <div className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-700 flex items-center gap-1">
+                                        <Moon size={12} className="text-indigo-500" />
+                                        <span>Buổi Chiều (5 Tiết):</span>
+                                    </div>
 
+                                    {!day.afternoon || day.afternoon.length === 0 ? (
+                                        <div className="p-2 rounded-xl bg-slate-50/60 border border-dashed border-slate-200 text-center">
+                                            <p className="text-[11px] text-slate-400 font-medium italic">Nghỉ học / Không có tiết chiều</p>
+                                        </div>
+                                    ) : (
                                         <div className="space-y-1">
                                             {day.afternoon.map((p) => {
                                                 const badge = getSubjectBadgeStyle(p.subject_name);
@@ -200,8 +204,8 @@ export function ParentTimetableTab({ classId, className, studentName }: ParentTi
                                                 );
                                             })}
                                         </div>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </div>
                         );
                     })}

@@ -72,12 +72,11 @@ export function DailyHomeworkModal({
     };
 
     const handleAddSubject = (subjectName: string) => {
-        const preset = COMMON_SUBJECT_PRESETS.find(p => p.subject.toLowerCase() === subjectName.toLowerCase());
         const newEntry: HomeworkSubjectEntry = {
             subject_name: subjectName,
             period: report.entries.length + 1,
-            homework_tasks: preset?.quick_tasks[0] || 'Làm bài tập trong SGK',
-            notes_and_tools: preset?.quick_tools[0] || 'Mang đầy đủ SGK và vở ghi',
+            homework_tasks: '',
+            notes_and_tools: '',
             is_test_scheduled: false
         };
         setReport({ ...report, entries: [...report.entries, newEntry] });
@@ -100,6 +99,16 @@ export function DailyHomeworkModal({
     };
 
     const handleSave = async (closeAfterSave = false) => {
+        // Validation: Ensure report has at least some content before saving
+        const hasTaskContent = report.entries.some(e => e.homework_tasks && e.homework_tasks.trim().length > 0);
+        const hasToolContent = report.entries.some(e => e.notes_and_tools && e.notes_and_tools.trim().length > 0);
+        const hasAnnouncement = report.general_announcement && report.general_announcement.trim().length > 0;
+
+        if (!hasTaskContent && !hasToolContent && !hasAnnouncement) {
+            toast.error('⚠️ Sổ báo bài chưa có nội dung! Vui lòng nhập bài tập hoặc chọn gợi ý trước khi lưu.');
+            return;
+        }
+
         setIsSaving(true);
         try {
             const res = await HomeworkService.saveDailyHomeworkReport(report);

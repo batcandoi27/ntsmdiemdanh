@@ -88,15 +88,96 @@ export async function saveFeatureFlags(flags: Record<string, boolean>, updaterRo
 
 
 
-export async function loadUsersPaginated(pageSize: number, lastUid?: string) {
+export async function getDriveBackupConfig() {
     try {
-        const result = await getUsersPaginated(pageSize, lastUid);
-        return { success: true, ...result };
-    } catch (error) {
-        console.error('Error loading users:', error);
-        return { success: false, users: [], hasMore: false, message: 'Lỗi tải danh sách người dùng.' };
+        const { data, error } = await supabaseAdmin.from('settings').select('value').eq('key', 'google_drive_backup_config').maybeSingle();
+        if (error) throw error;
+        return {
+            success: true,
+            config: data?.value || {
+                enabled: false,
+                gas_webhook_url: '',
+                secret_token: 'TBC_DRIVE_BACKUP_2026',
+                backup_frequency: 'daily',
+                last_backup_at: null,
+                last_status: 'IDLE'
+            }
+        };
+    } catch (error: any) {
+        return { success: false, message: error.message };
     }
 }
+
+export async function saveDriveBackupConfig(config: Record<string, any>, updaterRole?: string) {
+    if (updaterRole && updaterRole !== 'admin' && updaterRole !== 'principal') {
+        return { success: false, message: 'Chỉ Quản trị viên (Admin) hoặc Ban Giám Hiệu mới có quyền cấu hình sao lưu.' };
+    }
+    try {
+        const { error } = await supabaseAdmin.from('settings').upsert(
+            { key: 'google_drive_backup_config', value: config },
+            { onConflict: 'key' }
+        );
+        if (error) throw error;
+        try { revalidatePath('/settings'); } catch (_) {}
+        return { success: true, message: 'Đã lưu cấu hình sao lưu Google Drive thành công!' };
+    } catch (error: any) {
+        return { success: false, message: `Lỗi khi lưu cấu hình: ${error.message}` };
+    }
+}
+
+export async function triggerDriveBackupNow(gasWebhookUrl: string, secretToken: string) {
+    try {
+        if (!gasWebhookUrl || !gasWebhookUrl.startsWith('http')) {
+            return { success: false, message: 'Vui lòng nhập URL Google Apps Script Webhook hợp lệ.' };
+        }
+
+        // Gather database summary
+        const { data: students, count: studentCount } = await supabaseAdmin.from('students').select('id', { count: 'exact' });
+        const { data: classes, count: classCount } = await supabaseAdmin.from('classes').select('id', { count: 'exact' });
+        const { data: attendance, count: attCount } = await supabaseAdmin.from('attendance').select('id', { count: 'exact' });
+
+        const payload = {
+            action: 'BACKUP_DATABASE',
+            secret_token: secretToken,
+            timestamp: new Date().toISOString(),
+            school_name: 'THCS TRẦN BỘI CƠ',
+            summary: {
+                total_students: studentCount || students?.length || 0,
+                total_classes: classCount || classes?.length || 0,
+                total_attendance_records: attCount || attendance?.length || 0
+            }
+        };
+
+        const res = await fetch(gasWebhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await res.json().catch(() => ({ ok: res.ok }));
+
+        // Update last backup timestamp
+        await supabaseAdmin.from('settings').upsert({
+            key: 'google_drive_backup_config',
+            value: {
+                gas_webhook_url: gasWebhookUrl,
+                secret_token: secretToken,
+                enabled: true,
+                last_backup_at: new Date().toISOString(),
+                last_status: res.ok ? 'SUCCESS' : 'FAILED'
+            }
+        }, { onConflict: 'key' });
+
+        return {
+            success: true,
+            message: `Đã kích hoạt sao lưu lên Google Drive thành công! (${payload.summary.total_students} học sinh, ${payload.summary.total_attendance_records} điểm danh).`,
+            details: result
+        };
+    } catch (error: any) {
+        return { success: false, message: `Lỗi kết nối Google Apps Script: ${error.message}` };
+    }
+}
+
 
 // --- App Settings Actions ---
 

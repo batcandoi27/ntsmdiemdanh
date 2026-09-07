@@ -17,13 +17,16 @@ import { FeatureFlagsTab } from '@/components/settings/feature-flags-tab';
 import { ClassSizeTab } from '@/components/settings/class-size-tab';
 import { SubjectsTab } from '@/components/settings/subjects-tab';
 import { TeacherGroupsTab } from '@/components/settings/teacher-groups-tab';
+import { TenantSetupTab } from '@/components/settings/tenant-setup-tab';
+import { DataBackupTab } from '@/components/settings/data-backup-tab';
+import { School } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { db } from '@/services/db';
 import { Class } from '@/types/models';
 import { TeacherGroup } from '@/types/teacher';
 import { getAllGroups } from '@/services/teacher-service';
 
-type TabType = 'data' | 'subjects' | 'teacher-groups' | 'fixed-columns' | 'custom-columns' | 'my-classes' | 'users' | 'timetable' | 'year' | 'export' | 'api' | 'feature-flags' | 'class-size';
+type TabType = 'tenant-setup' | 'data' | 'subjects' | 'teacher-groups' | 'fixed-columns' | 'custom-columns' | 'my-classes' | 'users' | 'timetable' | 'year' | 'export' | 'api' | 'feature-flags' | 'class-size';
 
 export default function SettingsPage() {
     const [isPending, startTransition] = useTransition();
@@ -172,6 +175,7 @@ export default function SettingsPage() {
     const tabs: { id: TabType; label: string; icon: any }[] = [];
 
     if (appUser?.role === 'admin' || appUser?.role === 'principal') {
+        tabs.push({ id: 'tenant-setup' as TabType, label: 'Trường học & Bot Zalo', icon: School });
         tabs.push({ id: 'data' as TabType, label: 'Dữ liệu', icon: Database });
         tabs.push({ id: 'timetable' as TabType, label: 'Thời khoá biểu', icon: CalendarDays });
         tabs.push({ id: 'year' as TabType, label: 'Năm học', icon: Archive });
@@ -248,90 +252,12 @@ export default function SettingsPage() {
 
                 <div className="p-6">
                     {/* Tab Content */}
+                    {activeTab === 'tenant-setup' && (
+                        <TenantSetupTab />
+                    )}
+
                     {activeTab === 'data' && (
-                        <div className="grid grid-cols-1 gap-6">
-                            {/* Data Management Card */}
-                            <div className="bg-gray-50 rounded-xl p-6 border border-gray-100">
-                                <div className="flex items-center gap-3 mb-4">
-                                    <div className="bg-blue-100 p-2 rounded-lg text-blue-600">
-                                        <Database size={24} />
-                                    </div>
-                                    <h2 className="font-bold text-lg text-gray-800">Dữ Liệu Điểm Danh</h2>
-                                </div>
-                                <p className="text-gray-500 text-sm mb-6">
-                                    Công cụ hỗ trợ tạo dữ liệu mẫu để kiểm thử hoặc xóa toàn bộ/một phần dữ liệu để làm mới hệ thống.
-                                </p>
-
-                                <div className="space-y-4">
-                                    <button
-                                        onClick={handleGenerate}
-                                        disabled={isPending}
-                                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-blue-200 shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2"
-                                    >
-                                        {isPending ? <RefreshCw className="animate-spin" size={18} /> : <Database size={18} />}
-                                        Tạo Dữ Liệu Giả (Hôm nay)
-                                    </button>
-
-                                    <div className="bg-white p-4 rounded-xl border border-red-100 flex flex-col gap-4">
-                                        <div className="flex items-center gap-2 text-red-600 font-semibold mb-1">
-                                            <Trash2 size={18} />
-                                            Xoá Dữ Liệu Điểm Danh
-                                        </div>
-
-                                        <div className="flex flex-col sm:flex-row gap-3">
-                                            <div className="flex-1">
-                                                <label className="text-xs font-semibold text-gray-600 mb-1 block">Từ ngày</label>
-                                                <input
-                                                    type="date"
-                                                    value={deleteStartDate}
-                                                    onChange={e => {
-                                                        setDeleteStartDate(e.target.value);
-                                                        setQuickDeleteMode('custom');
-                                                    }}
-                                                    className="w-full text-sm border p-2.5 rounded-lg outline-none focus:ring-2 focus:ring-red-200"
-                                                />
-                                            </div>
-                                            <div className="flex-1">
-                                                <label className="text-xs font-semibold text-gray-600 mb-1 block">Đến ngày</label>
-                                                <input
-                                                    type="date"
-                                                    value={deleteEndDate}
-                                                    onChange={e => {
-                                                        setDeleteEndDate(e.target.value);
-                                                        setQuickDeleteMode('custom');
-                                                    }}
-                                                    className="w-full text-sm border p-2.5 rounded-lg outline-none focus:ring-2 focus:ring-red-200"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="flex flex-wrap gap-2 w-full">
-                                            <button
-                                                onClick={() => handleQuickSelect('this_week')}
-                                                className={cn("flex-1 px-3 py-2 text-xs font-medium rounded-lg transition-colors text-center whitespace-nowrap", quickDeleteMode === 'this_week' ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}
-                                            >Tuần này</button>
-                                            <button
-                                                onClick={() => handleQuickSelect('this_month')}
-                                                className={cn("flex-1 px-3 py-2 text-xs font-medium rounded-lg transition-colors text-center whitespace-nowrap", quickDeleteMode === 'this_month' ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}
-                                            >Tháng này</button>
-                                            <button
-                                                onClick={() => handleQuickSelect('all')}
-                                                className={cn("flex-1 px-3 py-2 text-xs font-medium rounded-lg transition-colors text-center whitespace-nowrap", quickDeleteMode === 'all' ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}
-                                            >Tất cả</button>
-                                        </div>
-
-                                        <button
-                                            onClick={handleClear}
-                                            disabled={isPending}
-                                            className="w-full bg-red-50 hover:bg-red-100 text-red-600 font-bold py-3 px-4 rounded-xl border border-red-200 active:scale-95 transition-all flex items-center justify-center gap-2 mt-2"
-                                        >
-                                            {isPending ? <RefreshCw className="animate-spin" size={18} /> : <Trash2 size={18} />}
-                                            <span className="truncate">{quickDeleteMode === 'all' ? 'XÓA TOÀN BỘ' : 'Xóa Dữ Liệu'}</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        <DataBackupTab />
                     )}
 
                     {activeTab === 'my-classes' && (

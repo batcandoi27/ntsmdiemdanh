@@ -27,6 +27,7 @@ import {
   Trash2,
   AlertCircle
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export default function StudentQuestsPage() {
   const studentId = 'std-demo-current';
@@ -176,26 +177,26 @@ export default function StudentQuestsPage() {
       
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-6 right-6 z-50 p-4 rounded-2xl bg-emerald-950/90 border border-emerald-500 text-emerald-200 text-xs font-bold shadow-2xl flex items-center gap-2 animate-in slide-in-from-top duration-200">
-          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+        <div className="fixed top-6 right-6 z-50 p-4 rounded-2xl bg-emerald-600 text-white text-xs font-bold shadow-2xl flex items-center gap-2 animate-in slide-in-from-top duration-200">
+          <CheckCircle2 className="w-5 h-5 text-emerald-200 shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 bg-white border border-slate-200 rounded-3xl shadow-2xs">
         <div>
-          <h2 className="text-xl font-black text-white flex items-center gap-2 tracking-tight">
+          <h2 className="text-xl font-black text-slate-900 flex items-center gap-2 tracking-tight">
             🎯 Nhiệm Vụ Rèn Luyện Tuần {week} ({year})
           </h2>
-          <p className="text-xs text-indigo-300 mt-0.5">
-            Thuật toán tuần tự động giao 1 nhiệm vụ cố định cho <strong>{anonymousName}</strong>
+          <p className="text-xs text-slate-600 font-medium mt-0.5">
+            Thuật toán tuần tự động giao 1 nhiệm vụ cố định cho <strong className="text-slate-900">{anonymousName}</strong>
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="px-3.5 py-1.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5">
-            <Zap className="w-4 h-4 text-amber-400" />
+          <span className="px-3.5 py-1.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-200 text-xs font-bold flex items-center gap-1.5 shadow-2xs">
+            <Zap className="w-4 h-4 text-amber-600" />
             <span>Phần Thưởng: +{weeklyQuest.xpReward} XP • +{weeklyQuest.coinReward} Xu</span>
           </span>
         </div>
@@ -204,27 +205,27 @@ export default function StudentQuestsPage() {
       {/* ========================================================================= */}
       {/* 1. ASSIGNED WEEKLY QUEST HERO CARD */}
       {/* ========================================================================= */}
-      <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-indigo-950/80 via-purple-950/60 to-slate-900 border-2 border-indigo-500/60 shadow-2xl space-y-4">
+      <div className="p-5 sm:p-6 rounded-3xl bg-white border-2 border-indigo-200 shadow-sm space-y-4">
         
         {/* Quest Badge & Category */}
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl p-2 rounded-2xl bg-slate-950 border border-slate-800">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl p-2.5 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-700 shadow-2xs">
               {weeklyQuest.categoryIcon}
             </span>
             <div>
-              <span className="text-[10px] font-black uppercase tracking-wider text-indigo-300 px-2 py-0.5 rounded-full bg-indigo-900/60 border border-indigo-700">
+              <span className="text-[10px] font-black uppercase tracking-wider text-indigo-800 px-2.5 py-0.5 rounded-full bg-indigo-100 border border-indigo-200">
                 {weeklyQuest.categoryName}
               </span>
-              <h3 className="text-lg font-black text-white mt-0.5">{weeklyQuest.title}</h3>
+              <h3 className="text-lg font-black text-slate-900 mt-1">{weeklyQuest.title}</h3>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className={`text-[11px] px-3 py-1 rounded-full font-bold border ${
+            <span className={`text-xs px-3.5 py-1 rounded-full font-bold border shadow-2xs ${
               submission
-                ? 'bg-emerald-950/80 text-emerald-300 border-emerald-600'
-                : 'bg-amber-950/80 text-amber-300 border-amber-600 animate-pulse'
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                : 'bg-amber-50 text-amber-800 border-amber-300 animate-pulse'
             }`}>
               {submission ? '✓ Đã Nộp Minh Chứng' : '⏳ Đang Thực Hiện'}
             </span>
@@ -232,12 +233,12 @@ export default function StudentQuestsPage() {
         </div>
 
         {/* Quest Description & Hint */}
-        <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2 text-xs">
-          <p className="text-slate-200 leading-relaxed font-medium">
+        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
+          <p className="text-slate-800 leading-relaxed font-semibold">
             {weeklyQuest.description}
           </p>
-          <div className="p-2.5 rounded-xl bg-indigo-950/40 border border-indigo-900/60 text-indigo-300 text-[11px] flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+          <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-[11px] flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
             <span><strong>Gợi ý thực hiện:</strong> {weeklyQuest.hint}</span>
           </div>
         </div>
@@ -247,43 +248,43 @@ export default function StudentQuestsPage() {
         {/* ========================================================================= */}
         {submission && !isEditing ? (
           /* View Submitted Proof */
-          <div className="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/40 space-y-3 animate-in fade-in">
+          <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-3 animate-in fade-in">
             <div className="flex items-center justify-between">
-              <span className="font-bold text-xs text-emerald-300 flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span className="font-bold text-xs text-emerald-900 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 Minh Chứng Đã Nộp (Lúc {new Date(submission.updatedAt).toLocaleTimeString('vi-VN')} ngày {new Date(submission.updatedAt).toLocaleDateString('vi-VN')}):
               </span>
 
               <button
                 type="button"
                 onClick={() => setIsEditing(true)}
-                className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 transition active:scale-95 shadow-md shadow-amber-500/20"
+                className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs flex items-center gap-1.5 transition active:scale-95 shadow-sm"
               >
                 <Edit3 className="w-3.5 h-3.5" />
                 <span>Chỉnh Sửa Bài Nộp</span>
               </button>
             </div>
 
-            <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-slate-200 whitespace-pre-wrap">
+            <div className="p-3.5 rounded-xl bg-white border border-slate-200 text-xs text-slate-800 whitespace-pre-wrap font-medium shadow-2xs">
               {submission.content}
             </div>
 
             {submission.evidenceUrl && (
-              <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
-                <span className="text-xs font-bold text-slate-300 block">Minh Chứng Đính Kèm:</span>
+              <div className="p-3.5 rounded-xl bg-white border border-slate-200 space-y-2 shadow-2xs">
+                <span className="text-xs font-bold text-slate-700 block">Minh Chứng Đính Kèm:</span>
                 {submission.evidenceUrl.startsWith('data:image') ? (
-                  <div className="relative inline-block rounded-xl overflow-hidden border border-indigo-500/50 shadow-md">
+                  <div className="relative inline-block rounded-xl overflow-hidden border border-indigo-200 shadow-md">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={submission.evidenceUrl} alt="Minh chứng" className="max-h-48 rounded-xl object-contain bg-slate-950" />
+                    <img src={submission.evidenceUrl} alt="Minh chứng" className="max-h-48 rounded-xl object-contain bg-slate-50" />
                   </div>
                 ) : (
                   <a
                     href={submission.evidenceUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-indigo-400 hover:text-indigo-300 font-mono text-xs underline flex items-center gap-1.5 truncate max-w-lg"
+                    className="text-blue-600 hover:text-blue-800 font-mono text-xs underline flex items-center gap-1.5 truncate max-w-lg"
                   >
-                    <ExternalLink className="w-4 h-4 shrink-0 text-amber-400" />
+                    <ExternalLink className="w-4 h-4 shrink-0 text-amber-500" />
                     <span className="truncate">{submission.evidenceUrl}</span>
                   </a>
                 )}
@@ -292,10 +293,10 @@ export default function StudentQuestsPage() {
           </div>
         ) : (
           /* Submission / Edit Form */
-          <form onSubmit={handleSubmitOrUpdate} className="p-4 rounded-2xl bg-slate-950/80 border border-indigo-500/40 space-y-4">
+          <form onSubmit={handleSubmitOrUpdate} className="p-5 rounded-2xl bg-white border border-indigo-200 space-y-4 shadow-2xs">
             <div className="flex items-center justify-between">
-              <span className="font-bold text-xs text-indigo-300 flex items-center gap-1.5">
-                <Edit3 className="w-4 h-4 text-amber-400" />
+              <span className="font-extrabold text-xs text-indigo-900 flex items-center gap-1.5">
+                <Edit3 className="w-4 h-4 text-indigo-600" />
                 {isEditing ? 'Cập Nhật / Bổ Sung Minh Chứng Bài Nộp' : 'Nộp Minh Chứng Hoàn Thành Nhiệm Vụ'}
               </span>
 
@@ -303,7 +304,7 @@ export default function StudentQuestsPage() {
                 <button
                   type="button"
                   onClick={() => setIsEditing(false)}
-                  className="text-xs text-slate-400 hover:text-white"
+                  className="text-xs text-slate-500 hover:text-slate-800 font-bold"
                 >
                   Hủy Chỉnh Sửa
                 </button>
@@ -312,7 +313,7 @@ export default function StudentQuestsPage() {
 
             {/* Content Textarea */}
             <div className="space-y-1">
-              <label className="text-[11px] font-bold text-slate-300 block">
+              <label className="text-[11px] font-bold text-slate-700 block">
                 1. Nhật ký & Cảm nhận rèn luyện:
               </label>
               <textarea
@@ -321,14 +322,14 @@ export default function StudentQuestsPage() {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="Ghi lại kết quả thực hiện, các bước em đã làm hoặc bài học rút ra..."
-                className="w-full p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 custom-scrollbar"
+                className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
             {/* Evidence Attachment Box (File Upload + Google Drive / YouTube) */}
-            <div className="space-y-3 p-3.5 rounded-2xl bg-slate-900/60 border border-slate-800">
-              <label className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
-                <Upload className="w-3.5 h-3.5 text-indigo-400" />
+            <div className="space-y-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+              <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                <Upload className="w-3.5 h-3.5 text-blue-600" />
                 <span>2. Đính Kèm File Ảnh / Link Google Drive / YouTube:</span>
               </label>
 
@@ -345,20 +346,20 @@ export default function StudentQuestsPage() {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-4 py-2 rounded-xl bg-indigo-600/40 hover:bg-indigo-600/60 border border-indigo-400/40 text-indigo-200 text-xs font-bold flex items-center gap-2 transition active:scale-95 shadow-sm"
+                  className="px-4 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 text-xs font-bold flex items-center gap-2 transition active:scale-95 shadow-2xs"
                 >
-                  <ImageIcon className="w-4 h-4 text-amber-300" />
+                  <ImageIcon className="w-4 h-4 text-blue-600" />
                   <span>Chọn Ảnh / Tệp Từ Máy</span>
                 </button>
 
-                <span className="text-[11px] text-slate-400">hoặc dán đường link bên dưới:</span>
+                <span className="text-[11px] text-slate-500 font-medium">hoặc dán đường link bên dưới:</span>
               </div>
 
               {/* Uploaded Thumbnail Preview */}
               {uploadedFilePreview && (
-                <div className="relative inline-block rounded-xl overflow-hidden border-2 border-indigo-500 shadow-md">
+                <div className="relative inline-block rounded-xl overflow-hidden border-2 border-indigo-400 shadow-md">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={uploadedFilePreview} alt="Preview" className="max-h-36 rounded-xl object-contain bg-slate-950" />
+                  <img src={uploadedFilePreview} alt="Preview" className="max-h-36 rounded-xl object-contain bg-slate-100" />
                   <button
                     type="button"
                     onClick={() => {
@@ -367,7 +368,7 @@ export default function StudentQuestsPage() {
                       setUploadedFileName(null);
                       setLinkValidationStatus(null);
                     }}
-                    className="absolute top-1 right-1 p-1 rounded-full bg-rose-600/90 text-white hover:bg-rose-500 shadow"
+                    className="absolute top-1 right-1 p-1 rounded-full bg-rose-600 text-white hover:bg-rose-700 shadow"
                     title="Xóa ảnh này"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -387,7 +388,7 @@ export default function StudentQuestsPage() {
                       validateLinkUrl(e.target.value);
                     }}
                     placeholder="Dán Link Google Drive / Video YouTube / Ảnh trực tuyến..."
-                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                   />
                 </div>
 
@@ -395,13 +396,13 @@ export default function StudentQuestsPage() {
                 {linkValidationStatus && (
                   <div className={`p-2 rounded-xl text-[11px] font-bold flex items-center gap-2 ${
                     linkValidationStatus.valid
-                      ? 'bg-emerald-950/70 border border-emerald-600/60 text-emerald-300'
-                      : 'bg-rose-950/70 border border-rose-600/60 text-rose-300'
+                      ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                      : 'bg-rose-50 border border-rose-200 text-rose-800'
                   }`}>
                     {linkValidationStatus.valid ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                     ) : (
-                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
                     )}
                     <span>{linkValidationStatus.message}</span>
                   </div>
@@ -411,13 +412,13 @@ export default function StudentQuestsPage() {
 
             {/* Form Actions */}
             <div className="flex items-center justify-between pt-1">
-              <span className="text-[11px] text-slate-400">
+              <span className="text-[11px] text-slate-500 font-medium">
                 ⭐ Em có thể xem lại và cập nhật lại bài nộp bất cứ khi nào
               </span>
 
               <button
                 type="submit"
-                className="px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-xs shadow-md shadow-emerald-500/20 flex items-center gap-1.5 transition active:scale-95"
+                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs shadow-md shadow-blue-600/20 flex items-center gap-1.5 transition active:scale-95"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>{isEditing ? 'Lưu Cập Nhật' : 'Nộp Bài Nhiệm Vụ'}</span>
@@ -431,15 +432,15 @@ export default function StudentQuestsPage() {
       {/* ========================================================================= */}
       {/* 3. NGÂN HÀNG 80+ NHIỆM VỤ THAM KHẢO (EXPLORATION DRAWER) */}
       {/* ========================================================================= */}
-      <div className="space-y-4 pt-4 border-t border-indigo-900/40">
+      <div className="space-y-4 pt-4 border-t border-slate-200">
         
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h3 className="font-black text-base text-white flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-amber-400" />
+            <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-blue-600" />
               <span>Ngân Hàng 80 Nhiệm Vụ Rèn Luyện Toàn Diện (20 Mỗi Nhóm)</span>
             </h3>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-600 font-medium">
               Khám phá các nhiệm vụ rèn luyện chuẩn mực theo chương trình giáo dục
             </p>
           </div>
@@ -450,7 +451,7 @@ export default function StudentQuestsPage() {
             placeholder="Tìm kiếm nhiệm vụ..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="px-4 py-2 text-xs rounded-xl bg-slate-900 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500 max-w-xs w-full shadow-sm"
+            className="px-4 py-2 text-xs rounded-xl bg-white border border-slate-200 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-xs w-full shadow-2xs font-medium"
           />
         </div>
 
@@ -466,10 +467,10 @@ export default function StudentQuestsPage() {
             <button
               key={cat.code}
               onClick={() => setActiveCategory(cat.code)}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
                 activeCategory === cat.code
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-                  : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50'
               }`}
             >
               <span>{cat.icon}</span>
@@ -479,38 +480,38 @@ export default function StudentQuestsPage() {
         </div>
 
         {/* 80 Quests Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
           {filteredBank.map((q) => (
             <div
               key={q.id}
-              className={`p-4 rounded-2xl border flex flex-col justify-between space-y-2.5 transition hover:border-indigo-500/50 ${
+              className={`p-4 rounded-2xl border flex flex-col justify-between space-y-2.5 transition hover:shadow-md bg-white ${
                 q.id === weeklyQuest.id
-                  ? 'bg-indigo-950/60 border-indigo-500/70 shadow-lg ring-2 ring-indigo-500/30'
-                  : 'bg-slate-900/60 border-slate-800/80'
+                  ? 'border-blue-500 shadow-md ring-2 ring-blue-400/30'
+                  : 'border-slate-200'
               }`}
             >
               <div>
                 <div className="flex items-center justify-between gap-1 mb-1.5">
                   <span className="text-xl">{q.categoryIcon}</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-950 border border-slate-800 text-amber-300 font-bold font-mono">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 font-bold font-mono">
                     +{q.xpReward} XP
                   </span>
                 </div>
 
-                <h4 className="font-bold text-xs text-white line-clamp-1">{q.title}</h4>
-                <p className="text-[11px] text-slate-400 line-clamp-2 mt-1 leading-relaxed">
+                <h4 className="font-extrabold text-xs text-slate-900 line-clamp-1">{q.title}</h4>
+                <p className="text-[11px] text-slate-600 font-medium line-clamp-2 mt-1 leading-relaxed">
                   {q.description}
                 </p>
               </div>
 
-              <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between text-[10px] text-indigo-300">
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-blue-700 font-bold">
                 <span className="capitalize">{q.categoryName}</span>
                 {q.id === weeklyQuest.id ? (
-                  <span className="px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black">
+                  <span className="px-2 py-0.5 rounded-full bg-blue-600 text-white font-black">
                     Tuần Này
                   </span>
                 ) : (
-                  <span className="text-slate-500">Ngân Hàng</span>
+                  <span className="text-slate-400 font-normal">Ngân Hàng</span>
                 )}
               </div>
             </div>
