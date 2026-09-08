@@ -12,6 +12,69 @@ export default function DashboardContent() {
 
     const isMobile = viewDevice === 'mobile';
     const isAdmin = appUser?.role === 'admin' || appUser?.role === 'principal';
+    const isClassMonitor = appUser?.role === 'class_monitor';
+
+    // Dashboard riêng biệt cho Học sinh / Ban Cán Sự Lớp (chỉ giữ đúng 4 thẻ: 2, 4, 6, 8 như chuẩn)
+    if (isClassMonitor) {
+        return (
+            <div className={cn(
+                "grid gap-4 sm:gap-6 w-full max-w-4xl transition-all",
+                isMobile ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2"
+            )}>
+                {/* 2. Cổng Học Sinh */}
+                <DashboardCard
+                    orderNumber={2}
+                    href="/student"
+                    icon={<Gamepad2 className={cn("w-8 h-8 sm:w-10 sm:h-10 text-white")} />}
+                    title="Cổng Học Sinh"
+                    description="Bản đồ học tập, Thú cưng ảo & Nhiệm vụ"
+                    color="bg-emerald-600"
+                    hoverColor="group-hover:text-emerald-700"
+                    borderColor="border-b-emerald-700"
+                    compact={isMobile}
+                />
+
+                {/* 4. Điểm Danh HS */}
+                <DashboardCard
+                    orderNumber={4}
+                    href="/quick-attendance"
+                    icon={<Zap className={cn("w-8 h-8 sm:w-10 sm:h-10 text-white")} />}
+                    title="Điểm Danh HS"
+                    description="Chọn lớp & Điểm danh"
+                    color="bg-amber-500"
+                    hoverColor="group-hover:text-amber-700"
+                    borderColor="border-b-amber-600"
+                    compact={isMobile}
+                />
+
+                {/* 6. Báo Cáo HS */}
+                <DashboardCard
+                    orderNumber={6}
+                    href="/reports"
+                    icon={<BarChart3 className={cn("w-8 h-8 sm:w-10 sm:h-10 text-white")} />}
+                    title="Báo Cáo HS"
+                    description="Thống kê Tình hình Nề nếp"
+                    color="bg-emerald-600"
+                    hoverColor="group-hover:text-emerald-700"
+                    borderColor="border-b-emerald-700"
+                    compact={isMobile}
+                />
+
+                {/* 8. Cài Đặt */}
+                <DashboardCard
+                    orderNumber={8}
+                    href="/settings"
+                    icon={<Settings className={cn("w-8 h-8 sm:w-10 sm:h-10 text-white")} />}
+                    title="Cài Đặt"
+                    description="Công cụ quản trị & Cấu hình"
+                    color="bg-slate-600"
+                    hoverColor="group-hover:text-slate-800"
+                    borderColor="border-b-slate-700"
+                    compact={isMobile}
+                />
+            </div>
+        );
+    }
 
     let cardCounter = 1;
 

@@ -24,7 +24,8 @@ import {
   Layers,
   CalendarCheck,
   Eye,
-  EyeOff
+  EyeOff,
+  LogIn
 } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { ROLE_DISPLAY, UserRole } from '@/types/models';
@@ -138,7 +139,7 @@ const navigationStructure: NavEntry[] = [
     href: '/reports',
     label: 'Báo Cáo',
     icon: BarChart3,
-    roles: ['admin', 'principal', 'supervisor', 'teacher'] as UserRole[],
+    roles: ['admin', 'principal', 'supervisor', 'teacher', 'class_monitor'] as UserRole[],
     flagKey: 'reports'
   },
 
@@ -147,7 +148,7 @@ const navigationStructure: NavEntry[] = [
     href: '/settings',
     label: 'Cài Đặt',
     icon: Settings,
-    roles: ['admin', 'principal'] as UserRole[]
+    roles: ['admin', 'principal', 'supervisor', 'teacher', 'class_monitor'] as UserRole[]
   }
 ];
 
@@ -179,16 +180,28 @@ export function SiteHeader() {
   }, []);
 
   // Lọc navigation theo role người dùng và trạng thái Feature Flags
-  const userRole = appUser?.role || 'admin';
+  const isAnonymous = !appUser;
+  const userRole = appUser?.role;
   const roleInfo = appUser ? ROLE_DISPLAY[appUser.role] : null;
 
   const isFlagAllowed = (item: NavLinkItem) => {
+    // Admin và Ban Giám Hiệu luôn hiển thị toàn bộ tính năng
+    if (userRole === 'admin' || userRole === 'principal') return true;
     if (!item.flagKey) return true;
     return flags[item.flagKey] ?? true;
   };
 
   const filteredNav = navigationStructure
-    .filter(entry => entry.roles.includes(userRole))
+    .filter(entry => {
+      if (isAnonymous) {
+        // Khách vãng lai / Phụ huynh / Học sinh chưa đăng nhập: chỉ thấy Trang Chủ và Cổng Tra Cứu
+        if ('children' in entry) {
+          return entry.key === 'portals';
+        }
+        return entry.href === '/';
+      }
+      return userRole ? entry.roles.includes(userRole) : false;
+    })
     .filter(entry => {
       if (!('children' in entry)) {
         return isFlagAllowed(entry);
@@ -200,7 +213,12 @@ export function SiteHeader() {
         return {
           ...entry,
           children: entry.children
-            .filter(child => child.roles.includes(userRole))
+            .filter(child => {
+              if (isAnonymous) {
+                return child.href === '/portal' || child.href === '/student';
+              }
+              return userRole ? child.roles.includes(userRole) : false;
+            })
             .filter(child => isFlagAllowed(child))
         };
       }
@@ -409,6 +427,19 @@ export function SiteHeader() {
                 >
                   <LogOut size={17} />
                 </button>
+              </div>
+            )}
+
+            {/* Login Button (Khi chưa đăng nhập) */}
+            {!appUser && (
+              <div className="hidden lg:flex items-center gap-2">
+                <Link
+                  href="/login"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-primary text-white rounded-xl font-bold text-xs shadow-xs hover:bg-primary/90 transition-all active:scale-95"
+                >
+                  <LogIn size={15} />
+                  <span>Đăng nhập</span>
+                </Link>
               </div>
             )}
 

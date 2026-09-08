@@ -40,6 +40,16 @@ function PendingBanner() {
     );
 }
 
+const isPublicRoute = (path: string | null): boolean => {
+    if (!path) return false;
+    return (
+        path === '/login' ||
+        path.startsWith('/portal') ||
+        path.startsWith('/student') ||
+        path.startsWith('/checkin')
+    );
+};
+
 function AuthGuardInner({ children }: { children: React.ReactNode }) {
     const { authUser, appUser, loading } = useAuth();
     const router = useRouter();
@@ -65,9 +75,11 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         if (loading) return;
 
+        const isPublic = isPublicRoute(pathname);
         const isLoginPage = pathname === '/login';
 
-        if (!authUser && !isLoginPage) {
+        if (!authUser && !isPublic) {
+            // Chưa đăng nhập và không phải trang public → chuyển hướng tới /login
             router.push('/login');
         } else if (authUser && isLoginPage) {
             if (!appUser) {
@@ -75,15 +87,15 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
             } else {
                 router.push('/');
             }
-        } else if (authUser && !appUser && !isLoginPage) {
+        } else if (authUser && !appUser && !isPublic) {
             router.push('/login');
         } else {
             // OK
         }
     }, [authUser, appUser, loading, pathname, router]);
 
-    // Loading overlay
-    if (loading || !checked) {
+    // Loading overlay (không chặn các trang public)
+    if ((loading || !checked) && !isPublicRoute(pathname)) {
         return (
             <div className={`fixed inset-0 bg-white z-40 flex flex-col items-center justify-center transition-opacity duration-300 ${showOverlay ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                 {showOverlay && (

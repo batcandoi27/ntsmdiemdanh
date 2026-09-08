@@ -6,9 +6,8 @@
 import { Column, ColumnFrequency } from '@/types/models';
 import { createFixedColumnsForClass, isFixedColumn } from '@/lib/defaults';
 import { supabase } from '@/lib/supabase';
-import { supabaseAdmin } from '@/lib/supabase-admin';
 
-const dbClient = (typeof window === 'undefined' && supabaseAdmin) ? supabaseAdmin : supabase;
+const dbClient = supabase;
 
 // ============================================
 // Helper: Supabase row ↔ TypeScript Column

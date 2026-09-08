@@ -14,12 +14,14 @@ export function BottomNav() {
 
     if (!appUser) return null;
 
+    const isAdmin = ['admin', 'principal'].includes(appUser.role);
+
     const navItems = [
         {
             name: 'Cài Đặt',
             href: '/settings',
             icon: Settings,
-            show: ['admin', 'principal'].includes(appUser.role),
+            show: isAdmin,
         },
         {
             name: 'Quản Lý Lớp',
@@ -31,19 +33,19 @@ export function BottomNav() {
             name: 'Điểm Danh',
             href: '/quick-attendance',
             icon: Home,
-            show: flags.quickAttendance ?? true,
+            show: isAdmin || (flags.quickAttendance ?? true),
         },
         {
             name: 'Sổ Theo Dõi',
             href: '/monitor',
             icon: BookOpen,
-            show: (flags.monitor ?? true) && ['admin', 'principal', 'supervisor', 'teacher'].includes(appUser.role),
+            show: (isAdmin || (flags.monitor ?? true)) && ['admin', 'principal', 'supervisor', 'teacher'].includes(appUser.role),
         },
         {
             name: 'Báo Cáo',
             href: '/reports',
             icon: BarChart3,
-            show: (flags.reports ?? true) && ['admin', 'principal', 'supervisor', 'teacher'].includes(appUser.role),
+            show: (isAdmin || (flags.reports ?? true)) && ['admin', 'principal', 'supervisor', 'teacher'].includes(appUser.role),
         },
     ];
 

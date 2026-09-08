@@ -86,7 +86,25 @@ export default function MonitorDashboardPage() {
         return <div className="p-8 text-center text-gray-500 flex justify-center items-center h-[50vh]"><Loader2 className="animate-spin mr-2" /> Đang tải...</div>;
     }
 
-    if (!flags.monitor) {
+    const isStudentOrMonitor = appUser?.role === 'class_monitor';
+    if (isStudentOrMonitor) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center animate-in fade-in duration-300">
+                <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-4 ring-8 ring-red-50/50">
+                    <AlertTriangle size={32} />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900 mb-2">Không Có Quyền Truy Cập</h2>
+                <p className="text-gray-500 max-w-md mb-4">Học sinh và Ban Cán Sự lớp không có quyền truy cập Sổ Theo Dõi nề nếp của giáo viên.</p>
+                <Link href="/" className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-600/20">
+                    Về Bảng Điều Khiển
+                </Link>
+            </div>
+        );
+    }
+
+    const isAdmin = ['admin', 'principal'].includes(appUser?.role || '');
+
+    if (!flags.monitor && !isAdmin) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center animate-in fade-in duration-300">
                 <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-4 ring-8 ring-amber-50/50">

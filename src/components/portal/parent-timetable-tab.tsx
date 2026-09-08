@@ -9,9 +9,12 @@ import {
     Sparkles,
     Printer,
     MapPin,
-    User
+    User,
+    LayoutGrid,
+    List,
+    Layers
 } from 'lucide-react';
-import { ClassTimetable, DayTimetable, getSubjectBadgeStyle } from '@/types/homework';
+import { ClassTimetable, DayTimetable, TimetablePeriod, getSubjectBadgeStyle } from '@/types/homework';
 import { HomeworkService } from '@/services/homework-service';
 import { cn } from '@/lib/utils';
 
@@ -21,9 +24,19 @@ interface ParentTimetableTabProps {
     studentName: string;
 }
 
+const DAYS_HEADER = [
+    { dayOfWeek: 2, label: 'Thứ Hai', short: 'T2' },
+    { dayOfWeek: 3, label: 'Thứ Ba', short: 'T3' },
+    { dayOfWeek: 4, label: 'Thứ Tư', short: 'T4' },
+    { dayOfWeek: 5, label: 'Thứ Năm', short: 'T5' },
+    { dayOfWeek: 6, label: 'Thứ Sáu', short: 'T6' },
+    { dayOfWeek: 7, label: 'Thứ Bảy', short: 'T7' }
+];
+
 export function ParentTimetableTab({ classId, className, studentName }: ParentTimetableTabProps) {
     const [timetable, setTimetable] = useState<ClassTimetable | null>(null);
     const [loading, setLoading] = useState(false);
+    const [viewMode, setViewMode] = useState<'grid' | 'cards'>('grid');
     const todayDayOfWeek = new Date().getDay() === 0 ? 7 : new Date().getDay() + 1; // 2..7
 
     useEffect(() => {
@@ -42,6 +55,15 @@ export function ParentTimetableTab({ classId, className, studentName }: ParentTi
         } finally {
             setLoading(false);
         }
+    };
+
+    // Helper to get period data for a specific day and session
+    const getPeriod = (dayOfWeek: number, session: 'morning' | 'afternoon', periodNum: number): TimetablePeriod | undefined => {
+        if (!timetable) return undefined;
+        const day = timetable.days.find(d => d.day_of_week === dayOfWeek);
+        if (!day) return undefined;
+        const list = session === 'morning' ? day.morning : day.afternoon;
+        return list.find(p => p.period === periodNum);
     };
 
     return (
@@ -63,17 +85,49 @@ export function ParentTimetableTab({ classId, className, studentName }: ParentTi
                         </div>
                     </div>
 
-                    <button
-                        onClick={() => window.print()}
-                        className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-xs font-bold text-slate-700 flex items-center gap-1.5 transition-all shadow-2xs w-fit"
-                    >
-                        <Printer size={13} />
-                        <span>In Thời Khóa Biểu</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {/* View Switcher: Grid vs Cards */}
+                        <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200/80">
+                            <button
+                                onClick={() => setViewMode('grid')}
+                                className={cn(
+                                    "flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold transition-all",
+                                    viewMode === 'grid'
+                                        ? "bg-white text-indigo-600 shadow-2xs"
+                                        : "text-slate-600 hover:text-slate-900"
+                                )}
+                                title="Xem dạng bảng lưới (Ma trận)"
+                            >
+                                <LayoutGrid size={13} />
+                                <span>Lưới Grid</span>
+                            </button>
+                            <button
+                                onClick={() => setViewMode('cards')}
+                                className={cn(
+                                    "flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold transition-all",
+                                    viewMode === 'cards'
+                                        ? "bg-white text-indigo-600 shadow-2xs"
+                                        : "text-slate-600 hover:text-slate-900"
+                                )}
+                                title="Xem dạng thẻ từng ngày"
+                            >
+                                <List size={13} />
+                                <span>Thẻ Ngày</span>
+                            </button>
+                        </div>
+
+                        <button
+                            onClick={() => window.print()}
+                            className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-xs font-bold text-slate-700 flex items-center gap-1.5 transition-all shadow-2xs w-fit"
+                        >
+                            <Printer size={13} />
+                            <span>In TKB</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            {/* Weekly Grid */}
+            {/* Weekly Timetable Content */}
             {loading ? (
                 <div className="p-10 text-center bg-white rounded-3xl border border-slate-200 space-y-2">
                     <div className="w-7 h-7 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
@@ -85,7 +139,171 @@ export function ParentTimetableTab({ classId, className, studentName }: ParentTi
                     <h4 className="text-sm font-extrabold text-slate-800">Chưa có dữ liệu thời khóa biểu</h4>
                     <p className="text-xs text-slate-500">Giáo viên chủ nhiệm chưa cập nhật thời khóa biểu cho lớp {className}.</p>
                 </div>
+            ) : viewMode === 'grid' ? (
+                /* ========================================================================= */
+                /* MODE 1: TRADITIONAL GRID MATRIX TABLE (BẢNG LƯỚI MA TRẬN CHUẨN TRƯỜNG HỌC) */
+                /* ========================================================================= */
+                <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[760px] border-collapse text-left text-xs">
+                            {/* Table Header: Days of Week */}
+                            <thead>
+                                <tr className="bg-slate-100/90 border-b border-slate-200 text-slate-700 font-extrabold uppercase text-[11px]">
+                                    <th className="py-3.5 px-3 w-28 text-center border-r border-slate-200 bg-slate-200/60">
+                                        Buổi / Tiết
+                                    </th>
+                                    {DAYS_HEADER.map(d => {
+                                        const isToday = d.dayOfWeek === todayDayOfWeek;
+                                        return (
+                                            <th
+                                                key={d.dayOfWeek}
+                                                className={cn(
+                                                    "py-3.5 px-3 text-center border-r border-slate-200 last:border-r-0 transition-colors",
+                                                    isToday ? "bg-blue-600 text-white shadow-xs" : "text-slate-800"
+                                                )}
+                                            >
+                                                <div className="flex flex-col items-center justify-center gap-0.5">
+                                                    <span className="font-black text-xs">{d.label}</span>
+                                                    {isToday && (
+                                                        <span className="px-1.5 py-0.2 bg-white/20 rounded-md text-[9px] font-bold tracking-wider uppercase">
+                                                            Hôm nay
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </th>
+                                        );
+                                    })}
+                                </tr>
+                            </thead>
+
+                            <tbody className="divide-y divide-slate-100">
+                                {/* ================= BUỔI SÁNG HEADER ================= */}
+                                <tr className="bg-amber-50/70 border-y border-amber-200/80">
+                                    <td colSpan={7} className="py-2 px-4 font-extrabold text-amber-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                                        <Sun size={14} className="text-amber-600" />
+                                        <span>☀️ Buổi Sáng (5 Tiết)</span>
+                                    </td>
+                                </tr>
+
+                                {/* 5 Morning Periods */}
+                                {[1, 2, 3, 4, 5].map(periodNum => (
+                                    <tr key={`morning_${periodNum}`} className="hover:bg-slate-50/60 transition-colors">
+                                        {/* Period Label */}
+                                        <td className="py-2.5 px-2 text-center border-r border-slate-200 font-bold bg-slate-50/80 text-slate-700">
+                                            <span className="w-6 h-6 rounded-lg bg-white border border-slate-200 inline-flex items-center justify-center text-xs font-black shadow-2xs">
+                                                {periodNum}
+                                            </span>
+                                            <span className="block text-[10px] text-slate-400 font-medium mt-0.5">Tiết {periodNum}</span>
+                                        </td>
+
+                                        {/* 6 Day Columns */}
+                                        {DAYS_HEADER.map(d => {
+                                            const p = getPeriod(d.dayOfWeek, 'morning', periodNum);
+                                            const isToday = d.dayOfWeek === todayDayOfWeek;
+                                            const badge = p?.subject_name ? getSubjectBadgeStyle(p.subject_name) : null;
+
+                                            return (
+                                                <td
+                                                    key={`${d.dayOfWeek}_${periodNum}`}
+                                                    className={cn(
+                                                        "py-2 px-2.5 border-r border-slate-200/80 last:border-r-0 align-top transition-colors",
+                                                        isToday ? "bg-blue-50/30" : ""
+                                                    )}
+                                                >
+                                                    {p?.subject_name ? (
+                                                        <div className="space-y-1">
+                                                            <div className={cn(
+                                                                "px-2 py-1 rounded-xl font-bold text-xs border flex items-center gap-1.5 shadow-2xs",
+                                                                badge?.bg, badge?.text, badge?.border
+                                                            )}>
+                                                                <span>{badge?.icon}</span>
+                                                                <span className="truncate">{p.subject_name}</span>
+                                                            </div>
+                                                            {(p.room_name || p.teacher_name) && (
+                                                                <div className="text-[10px] text-slate-500 font-medium pl-1 flex items-center justify-between gap-1">
+                                                                    {p.room_name && <span>P.{p.room_name}</span>}
+                                                                    {p.teacher_name && <span className="truncate text-slate-400">({p.teacher_name})</span>}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="h-9 flex items-center justify-center text-slate-300 font-mono text-xs">
+                                                            —
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                ))}
+
+                                {/* ================= BUỔI CHIỀU HEADER ================= */}
+                                <tr className="bg-indigo-50/70 border-y border-indigo-200/80">
+                                    <td colSpan={7} className="py-2 px-4 font-extrabold text-indigo-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                                        <Moon size={14} className="text-indigo-600" />
+                                        <span>🌙 Buổi Chiều (5 Tiết)</span>
+                                    </td>
+                                </tr>
+
+                                {/* 5 Afternoon Periods */}
+                                {[1, 2, 3, 4, 5].map(periodNum => (
+                                    <tr key={`afternoon_${periodNum}`} className="hover:bg-slate-50/60 transition-colors">
+                                        {/* Period Label */}
+                                        <td className="py-2.5 px-2 text-center border-r border-slate-200 font-bold bg-slate-50/80 text-slate-700">
+                                            <span className="w-6 h-6 rounded-lg bg-white border border-slate-200 inline-flex items-center justify-center text-xs font-black shadow-2xs">
+                                                {periodNum}
+                                            </span>
+                                            <span className="block text-[10px] text-slate-400 font-medium mt-0.5">Tiết {periodNum}</span>
+                                        </td>
+
+                                        {/* 6 Day Columns */}
+                                        {DAYS_HEADER.map(d => {
+                                            const p = getPeriod(d.dayOfWeek, 'afternoon', periodNum);
+                                            const isToday = d.dayOfWeek === todayDayOfWeek;
+                                            const badge = p?.subject_name ? getSubjectBadgeStyle(p.subject_name) : null;
+
+                                            return (
+                                                <td
+                                                    key={`afternoon_${d.dayOfWeek}_${periodNum}`}
+                                                    className={cn(
+                                                        "py-2 px-2.5 border-r border-slate-200/80 last:border-r-0 align-top transition-colors",
+                                                        isToday ? "bg-blue-50/30" : ""
+                                                    )}
+                                                >
+                                                    {p?.subject_name ? (
+                                                        <div className="space-y-1">
+                                                            <div className={cn(
+                                                                "px-2 py-1 rounded-xl font-bold text-xs border flex items-center gap-1.5 shadow-2xs",
+                                                                badge?.bg, badge?.text, badge?.border
+                                                            )}>
+                                                                <span>{badge?.icon}</span>
+                                                                <span className="truncate">{p.subject_name}</span>
+                                                            </div>
+                                                            {(p.room_name || p.teacher_name) && (
+                                                                <div className="text-[10px] text-slate-500 font-medium pl-1 flex items-center justify-between gap-1">
+                                                                    {p.room_name && <span>P.{p.room_name}</span>}
+                                                                    {p.teacher_name && <span className="truncate text-slate-400">({p.teacher_name})</span>}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="h-9 flex items-center justify-center text-slate-300 font-mono text-xs">
+                                                            —
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             ) : (
+                /* ========================================================================= */
+                /* MODE 2: CARD VIEW PER DAY (DẠNG THẺ TỪNG NGÀY CHO MÀN HÌNH NHỎ) */
+                /* ========================================================================= */
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {timetable.days.map((day) => {
                         const isCurrentDay = day.day_of_week === todayDayOfWeek;

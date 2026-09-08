@@ -280,15 +280,17 @@ export async function getReports(criteria: ReportCriteria, userRole: string = 't
     const appSettings = settingsRes.success ? settingsRes.settings : null;
 
     // 1. Get raw attendance records
-    const records = await db.getReportData(criteria.startDate, criteria.endDate, criteria.classIds);
+    const rawRecords = await db.getReportData(criteria.startDate, criteria.endDate, criteria.classIds);
+    // BẢO VỆ 100%: TUYỆT ĐỐI KHÔNG ĐƯA HỌC SINH TEST / LỚP TEST VÀO BÁO CÁO THỐNG KÊ
+    const records = rawRecords.filter(r => r.studentId !== 'TEST9999' && !r.studentId?.startsWith('TEST'));
     console.log('[DEBUG_RECORDS] Raw records from DB:', JSON.stringify(records, null, 2));
     if (records.length > 0) {
         console.log('Sample record:', records[0]);
     }
 
     // 2. Fetch Class Info if needed (to map Class ID -> Name)
-    // Optimization: Fetch all classes once and cache map
-    const classes = await db.getClasses();
+    // Optimization: Fetch all classes once and cache map - TỰ ĐỘNG BỎ QUA LỚP TEST
+    const classes = (await db.getClasses()).filter(c => c.classType !== 'test' && !c.name.includes('TEST'));
     const classMap = new Map(classes.map(c => [c.id, c.name]));
 
     // 3. Process Data
@@ -487,11 +489,12 @@ export async function getExcelExportData(
     const appSettings = settingsRes.success ? settingsRes.settings : null;
 
     // 1. Get raw attendance records
-    const records = await db.getReportData(startDate, endDate, classIds);
+    const rawRecords = await db.getReportData(startDate, endDate, classIds);
+    const records = rawRecords.filter(r => r.studentId !== 'TEST9999' && !r.studentId?.startsWith('TEST'));
     console.log(`[Excel] Records fetched: ${records.length}`);
 
-    // 2. Fetch target classes
-    const classesInfo = await db.getClasses();
+    // 2. Fetch target classes (Bỏ qua lớp test)
+    const classesInfo = (await db.getClasses()).filter(c => c.classType !== 'test' && !c.name.includes('TEST'));
     const targetClasses = classIds.length > 0
         ? classesInfo.filter(c => classIds.includes(c.id))
         : classesInfo;
@@ -724,8 +727,8 @@ export async function getAdvancedReportData(
     if (!canViewAll && classIds.length > 10) {
         throw new Error(`Bạn chỉ được phép báo cáo học kỳ tối đa 10 lớp mỗi lần.`);
     }
-    // 1. Get Classes
-    const allClasses = await db.getClasses();
+    // 1. Get Classes (Bỏ qua lớp test)
+    const allClasses = (await db.getClasses()).filter(c => c.classType !== 'test' && !c.name.includes('TEST'));
     const targetClasses = classIds.length > 0
         ? allClasses.filter(c => classIds.includes(c.id))
         : allClasses;

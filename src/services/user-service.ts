@@ -13,10 +13,9 @@ import {
     BankInfo,
 } from '@/types/models';
 import { supabase } from '@/lib/supabase';
-import { supabaseAdmin } from '@/lib/supabase-admin';
 
-// Ưu tiên dùng Admin Client trên server để bypass RLS
-const dbClient = (typeof window === 'undefined' && supabaseAdmin) ? supabaseAdmin : supabase;
+// Dùng standard Supabase Client có RLS
+const dbClient = supabase;
 
 // ============================================
 // Helpers
@@ -58,7 +57,8 @@ export async function createUser(input: CreateUserInput): Promise<AppUser> {
     let uid = '';
 
     // Tạo account qua Admin API nếu là server, nếu không lỗi sẽ xảy ra do signUp auto login
-    if (typeof window === 'undefined' && supabaseAdmin) {
+    if (typeof window === 'undefined') {
+        const { supabaseAdmin } = await import('@/lib/supabase-admin');
         const { data, error } = await supabaseAdmin.auth.admin.createUser({
             email,
             password: input.password,
@@ -339,8 +339,9 @@ export async function deleteUser(uid: string): Promise<void> {
 // Hard delete (admin only, hiếm dùng)
 export async function hardDeleteUser(uid: string): Promise<void> {
     await dbClient.from('profiles').delete().eq('id', uid);
-    if (typeof window === 'undefined' && supabaseAdmin) {
-       await supabaseAdmin.auth.admin.deleteUser(uid);
+    if (typeof window === 'undefined') {
+       const { supabaseAdmin } = await import('@/lib/supabase-admin');
+       if (supabaseAdmin) await supabaseAdmin.auth.admin.deleteUser(uid);
     }
 }
 

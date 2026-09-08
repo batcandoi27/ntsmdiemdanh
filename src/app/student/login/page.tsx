@@ -14,11 +14,14 @@ export default function StudentLoginPage() {
     e.preventDefault();
     setIsLoading(true);
 
+    const isTest = className === '9A_TEST' || studentCode.toUpperCase().includes('TEST');
+    const studentName = isTest ? 'Trần Thử Nghiệm' : 'Nguyễn Văn An';
+
     setTimeout(() => {
       localStorage.setItem('tbc_student_session', JSON.stringify({
-        studentCode: studentCode || 'HS-821',
-        className: className || '8A13',
-        studentName: 'Nguyễn Văn An'
+        studentCode: studentCode || (isTest ? 'TEST9999' : 'HS-821'),
+        className: className || (isTest ? '9A_TEST' : '8A13'),
+        studentName
       }));
       router.push('/student');
     }, 600);
@@ -56,6 +59,7 @@ export default function StudentLoginPage() {
               <option value="7A1">Lớp 7A1</option>
               <option value="8A13">Lớp 8A13</option>
               <option value="9A1">Lớp 9A1</option>
+              <option value="9A_TEST">Lớp 9A_TEST (Thử Nghiệm)</option>
             </select>
           </div>
 

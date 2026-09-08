@@ -55,6 +55,20 @@ export default function ClassMonitorPage() {
         return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-blue-600" /></div>;
     }
 
+    if (appUser?.role === 'class_monitor') {
+        return (
+            <div className="min-h-screen flex items-center justify-center p-6 text-center">
+                <div className="bg-white p-8 rounded-2xl shadow-sm border border-red-100 max-w-md">
+                    <p className="text-red-600 font-bold mb-2">Không có quyền truy cập</p>
+                    <p className="text-sm text-gray-600 mb-4">Học sinh và Ban Cán Sự không được quyền truy cập Sổ theo dõi.</p>
+                    <Link href="/" className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-sm hover:bg-blue-700 transition">
+                        Về Trang Chủ
+                    </Link>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-slate-50/70 pb-20">
             {/* Header */}

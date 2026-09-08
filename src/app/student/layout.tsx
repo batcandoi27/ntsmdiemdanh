@@ -2,14 +2,19 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { SvgPet } from '@/components/student/svg-pet';
 import { StudentPet } from '@/types/student-portal';
+import { useAuth } from '@/context/auth-context';
+import { LogOut, UserCheck } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 import { GlobalTopPodium } from '@/components/student/global-top-podium';
 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { appUser, signOut } = useAuth();
   const [pet, setPet] = useState<StudentPet | null>(null);
 
   useEffect(() => {
@@ -41,6 +46,21 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
       });
     }
   }, []);
+
+  const handleStudentLogout = async () => {
+    try {
+      localStorage.removeItem('tbc_student_session');
+      localStorage.removeItem('tbc_student_pet_session');
+      if (appUser) {
+        await signOut();
+      }
+      toast.success('Đã đăng xuất tài khoản học sinh thành công!');
+      router.push('/login');
+    } catch (err) {
+      console.error(err);
+      router.push('/login');
+    }
+  };
 
   const navLinks = [
     { href: '/student', label: 'Trung Tâm Lựa Chọn', icon: '⚡' },
@@ -84,7 +104,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
               </span>
             </div>
 
-            {/* Bí danh Avatar */}
+            {/* Bí danh Avatar & Danh tính */}
             <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
               <div className="p-0.5 rounded-xl bg-slate-100 border border-slate-200">
                 <SvgPet
@@ -95,13 +115,25 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
               </div>
               <div className="hidden sm:block text-left">
                 <p className="text-xs font-black text-slate-800">
-                  {pet?.anonymous_name || 'Học sinh'}
+                  {appUser?.displayName || pet?.anonymous_name || 'Học sinh'}
                 </p>
                 <p className="text-[10px] text-blue-600 font-bold">
-                  Level {pet?.level ?? 1} • {pet?.level === 0 ? 'Ấp Trứng' : 'Linh Vật'}
+                  {appUser?.role === 'class_monitor'
+                    ? 'Ban Cán Sự Lớp'
+                    : `Level ${pet?.level ?? 1} • ${pet?.level === 0 ? 'Ấp Trứng' : 'Linh Vật'}`}
                 </p>
               </div>
             </div>
+
+            {/* Nút Đăng Xuất Học Sinh */}
+            <button
+              onClick={handleStudentLogout}
+              title="Đăng xuất tài khoản học sinh"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-300 font-bold text-xs transition-all shadow-2xs active:scale-95 ml-1"
+            >
+              <LogOut size={14} />
+              <span className="hidden sm:inline">Đăng xuất</span>
+            </button>
           </div>
         </div>
 

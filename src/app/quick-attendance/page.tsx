@@ -73,11 +73,13 @@ export default function QuickAttendancePage() {
     const [targetStatus, setTargetStatus] = useState<AttendanceStatus>('P');
 
     useEffect(() => {
-        // Tải từ cache trước để hiển thị tức thì
+        // Tải từ cache trước nếu đã có thông tin GVCN
         const cached = getLocalCache<Class[]>('classes_list');
-        if (cached && Array.isArray(cached)) setClasses(cached);
+        if (cached && Array.isArray(cached) && cached.some(c => c.teacherName)) {
+            setClasses(cached);
+        }
 
-        // Luôn fetch mới để cập nhật dữ liệu ngầm
+        // Luôn fetch mới từ server để cập nhật dữ liệu chính xác nhất
         getAllClasses().then(data => {
             if (data && Array.isArray(data)) {
                 setClasses(data);
@@ -90,6 +92,13 @@ export default function QuickAttendancePage() {
 
     const filteredClasses = (classes || []).filter(c => {
         if (!c) return false;
+        // Lớp TEST giả lập: Chỉ Admin, BGH hoặc người dùng được phân công trực tiếp vào lớp này mới nhìn thấy
+        if (c.classType === 'test' || c.name.includes('TEST')) {
+            const isAssigned = (myClassIds || []).includes(c.id) || (appUser?.assignedClassIds || []).includes(c.id);
+            if (appUser?.role !== 'admin' && appUser?.role !== 'principal' && !isAssigned) {
+                return false;
+            }
+        }
         if (grade === -1) return (myClassIds || []).includes(c.id);
         return c.grade === grade;
     }).sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { numeric: true }));
@@ -148,7 +157,9 @@ export default function QuickAttendancePage() {
         return <div className="p-8 text-center text-gray-500 flex justify-center items-center h-[50vh]"><Loader2 className="animate-spin mr-2" /> Đang tải...</div>;
     }
 
-    if (!flags.quickAttendance) {
+    const isAdmin = ['admin', 'principal'].includes(appUser?.role || '');
+
+    if (!flags.quickAttendance && !isAdmin) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center animate-in fade-in duration-300">
                 <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-4 ring-8 ring-amber-50/50">

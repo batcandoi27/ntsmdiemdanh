@@ -79,7 +79,7 @@ export async function getGradeAttendanceSummary(grade: number, dateStr: string, 
         return [];
     }
     
-    const gradeClasses = allClasses.filter(c => c.grade === grade)
+    const gradeClasses = allClasses.filter(c => c.grade === grade && c.classType !== 'test' && !c.name.includes('TEST'))
         .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
     if (gradeClasses.length === 0) return [];

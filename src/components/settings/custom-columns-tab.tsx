@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Column, ColumnFrequency, PeriodConfig, SubPeriod, Student, Class } from '@/types/models';
 import { getCustomColumns, createColumn, updateColumn, deleteColumn } from '@/services/column-service';
 import { getStudentsAction } from '@/app/actions/student-actions';
-import { Plus, Trash2, Edit2, Loader2, X, Save, Calendar, Clock, CheckSquare, Users, User, Building2, QrCode, Eye, EyeOff, CreditCard } from 'lucide-react';
+import { Plus, Trash2, Edit2, Loader2, X, Save, Calendar, Clock, CheckSquare, Users, User, Building2, QrCode, Eye, EyeOff, CreditCard, Lock, AlertTriangle, Sparkles, History, Landmark } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getBookTheme } from '@/lib/book-themes';
 import { Modal } from '@/components/ui/modal';
@@ -392,10 +392,9 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
                     <button
                         onClick={() => setShowBankModal(true)}
                         className="flex items-center gap-2 px-3.5 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg font-bold hover:bg-indigo-100 transition-colors shadow-sm active:scale-95 text-xs sm:text-sm"
-                        title="Cài đặt STK ngân hàng nhận tiền qua mã VietQR"
                     >
-                        <Building2 size={16} />
-                        <span>Cài đặt STK (VietQR)</span>
+                        <Landmark size={16} />
+                        Cài đặt STK (VietQR)
                     </button>
                     <button
                         onClick={openCreateModal}
@@ -407,34 +406,71 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
                 </div>
             </div>
 
-            {columns.length === 0 ? (
-                <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
-                    <p className="text-gray-400 mb-4">Chưa có cột tùy chỉnh nào</p>
-                    <button
-                        onClick={openCreateModal}
-                        className="text-blue-600 hover:text-blue-700 font-medium"
-                    >
-                        + Tạo cột đầu tiên
-                    </button>
-                </div>
-            ) : (
-                <div className="grid gap-4 md:grid-cols-2">
-                    {columns.map((column, colIdx) => {
-                        const theme = getBookTheme(colIdx, column.id || column.name);
-                        return (
-                            <div
-                                key={column.id}
-                                className={cn(
-                                    "rounded-2xl border p-4 flex flex-col justify-between transition-all hover:shadow-md",
-                                    column.archived
-                                        ? "border-gray-200 opacity-60 bg-gray-50"
-                                        : cn(theme.bgGradient, theme.borderColor, theme.borderLeftAccent)
-                                )}
+            {(() => {
+                // Phân loại cột Năm Học Cũ vs Năm Học Hiện Tại (2026-2027)
+                const isOldYearColumn = (column: Column): boolean => {
+                    const targetClass = selectedClasses.find(c => c.id === column.classId);
+                    if (targetClass?.academicYear && !targetClass.academicYear.includes('2026-2027')) {
+                        return true;
+                    }
+                    if (column.periodConfig?.endDate) {
+                        const end = new Date(column.periodConfig.endDate);
+                        if (end < new Date('2026-08-01')) return true;
+                    }
+                    if (column.createdAt) {
+                        const created = new Date(column.createdAt);
+                        if (created < new Date('2026-08-01')) return true;
+                    }
+                    return false;
+                };
+
+                const currentYearColumns = columns.filter(c => !isOldYearColumn(c));
+                const oldYearColumns = columns.filter(c => isOldYearColumn(c));
+
+                if (columns.length === 0) {
+                    return (
+                        <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                            <p className="text-gray-400 mb-4">Chưa có cột tùy chỉnh nào cho lớp đang chọn</p>
+                            <button
+                                onClick={openCreateModal}
+                                className="text-blue-600 hover:text-blue-700 font-medium"
                             >
-                                <div className="flex justify-between items-start mb-3">
-                                    <div>
-                                        <h3 className={cn("font-black text-lg", theme.titleColor)}>{column.name}</h3>
-                                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                + Tạo cột đầu tiên cho năm học 2026-2027
+                            </button>
+                        </div>
+                    );
+                }
+
+                const renderColumnCard = (column: Column, colIdx: number, isOld: boolean) => {
+                    const theme = getBookTheme(colIdx, column.id || column.name);
+
+                    return (
+                        <div
+                            key={column.id}
+                            className={cn(
+                                "rounded-2xl border p-4 flex flex-col justify-between transition-all shadow-xs",
+                                isOld
+                                    ? "opacity-75 bg-slate-50/90 border-2 border-dashed border-slate-300 hover:opacity-100 hover:shadow-sm"
+                                    : column.archived
+                                        ? "border-gray-200 opacity-60 bg-gray-50"
+                                        : cn(theme.bgGradient, theme.borderColor, theme.borderLeftAccent, "hover:shadow-md")
+                            )}
+                        >
+                            <div className="flex justify-between items-start mb-3">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h3 className={cn("font-black text-lg", isOld ? "text-slate-700" : theme.titleColor)}>
+                                            {column.name}
+                                        </h3>
+                                        {isOld && (
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full font-black bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 uppercase tracking-wider">
+                                                <span>📜</span>
+                                                <span>Lịch sử năm cũ</span>
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-2">
                                         <span className={cn(
                                             "text-xs px-2 py-0.5 rounded-full font-medium border",
                                             column.frequency === 'daily' ? "bg-green-50 text-green-700 border-green-200" :
@@ -475,33 +511,48 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
                                         )}
                                     </div>
                                 </div>
+
+                                {/* Action buttons */}
                                 <div className="flex items-center gap-1">
-                                    <button
-                                        onClick={() => openEditModal(column)}
-                                        className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                    >
-                                        <Edit2 size={18} />
-                                    </button>
+                                    {isOld ? (
+                                        <div
+                                            className="p-2 text-slate-400 cursor-not-allowed rounded-lg"
+                                            title="Sổ năm học cũ: Chỉ ở chế độ xem, không được chỉnh sửa để bảo toàn lịch sử"
+                                        >
+                                            <Lock size={16} />
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={() => openEditModal(column)}
+                                            className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                            title="Chỉnh sửa cột"
+                                        >
+                                            <Edit2 size={18} />
+                                        </button>
+                                    )}
+
+                                    {/* Delete button always available for cleanup */}
                                     <button
                                         onClick={() => handleDelete(column.id)}
                                         className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                        title={isOld ? "Xoá bỏ sổ cũ này" : "Xoá cột"}
                                     >
                                         <Trash2 size={18} />
                                     </button>
                                 </div>
                             </div>
 
-                            <div className="space-y-2 text-sm text-gray-700">
+                            <div className="space-y-1.5 text-xs sm:text-sm text-gray-600 pt-2 border-t border-slate-100">
                                 {column.frequency === 'period' && column.periodConfig && (
                                     <div className="flex items-center gap-2">
-                                        <Clock size={16} className="text-gray-500" />
+                                        <Clock size={14} className="text-gray-400" />
                                         <span>
-                                            {new Date(column.periodConfig.startDate).toLocaleDateString('vi-VN')} - {new Date(column.periodConfig.endDate).toLocaleDateString('vi-VN')}
+                                            Thời gian: {new Date(column.periodConfig.startDate).toLocaleDateString('vi-VN')} - {new Date(column.periodConfig.endDate).toLocaleDateString('vi-VN')}
                                         </span>
                                     </div>
                                 )}
                                 <div className="flex items-center gap-2">
-                                    <Users size={16} className="text-gray-500" />
+                                    <Users size={14} className="text-gray-400" />
                                     <span>
                                         {column.applicableScope === 'subset'
                                             ? `Áp dụng cho ${column.applicableStudentIds?.length || 0} học sinh`
@@ -511,9 +562,47 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
                             </div>
                         </div>
                     );
-                })}
-                </div>
-            )}
+                };
+
+                return (
+                    <div className="space-y-6">
+                        {/* Section 1: Cột năm học hiện tại */}
+                        {currentYearColumns.length > 0 && (
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-2 text-sm font-extrabold text-slate-800 uppercase tracking-wide">
+                                    <Sparkles size={16} className="text-blue-600" />
+                                    <span>Sổ Theo Dõi & Thu Phí Năm Học 2026-2027 ({currentYearColumns.length})</span>
+                                </div>
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    {currentYearColumns.map((col, idx) => renderColumnCard(col, idx, false))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Section 2: Cột năm học cũ */}
+                        {oldYearColumns.length > 0 && (
+                            <div className="space-y-3 pt-2">
+                                <div className="p-4 bg-amber-50/80 border border-amber-200/80 rounded-2xl flex items-start gap-3 text-xs text-amber-950">
+                                    <History className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="font-extrabold uppercase tracking-tight text-amber-950 flex items-center gap-1.5">
+                                            <span>📜 Sổ Theo Dõi Lịch Sử Thuộc Năm Học Cũ ({oldYearColumns.length})</span>
+                                            <span className="text-[10px] font-normal lowercase bg-amber-200/60 px-2 py-0.2 rounded-md">Chỉ xem & cho phép xoá</span>
+                                        </p>
+                                        <p className="mt-1 leading-relaxed text-amber-900 font-medium">
+                                            Các sổ này được thiết lập từ năm học trước. Hệ thống hiển thị ở <strong>chế độ mờ & chỉ xem</strong> để bảo toàn lịch sử và hoàn toàn không liên kết hay ảnh hưởng tới dữ liệu lớp của năm học mới. Thầy/Cô có thể bấm biểu tượng thùng rác 🗑️ để xoá dọn dẹp nếu không còn sử dụng.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    {oldYearColumns.map((col, idx) => renderColumnCard(col, idx, true))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            })()}
 
             {/* Create/Edit Modal */}
             <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingColumn ? 'Chỉnh sửa cột' : 'Tạo cột mới'}>

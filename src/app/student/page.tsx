@@ -18,14 +18,18 @@ import {
     FileText,
     UserCheck,
     Award,
-    Compass
+    Compass,
+    LogOut
 } from 'lucide-react';
 import { STUDENT_PORTAL_CONFIG } from '@/config/student-portal.config';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { useAuth } from '@/context/auth-context';
+import { db } from '@/services/db';
 
 export default function StudentHubPage() {
     const router = useRouter();
+    const { appUser, signOut } = useAuth();
     const [studentInfo, setStudentInfo] = useState<{
         studentName: string;
         studentCode: string;
@@ -35,33 +39,66 @@ export default function StudentHubPage() {
         studentName: 'Nguyễn Văn An',
         studentCode: 'HS-821',
         className: '8A13',
-        role: 'STUDENT'
+        role: 'Học Sinh'
     });
 
     const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
 
     useEffect(() => {
-        // Load saved session if any
-        try {
-            const savedSession = localStorage.getItem('tbc_student_session');
-            const savedRole = localStorage.getItem('user_role') || localStorage.getItem('tbc_user_role');
-            if (savedSession) {
-                const parsed = JSON.parse(savedSession);
-                setStudentInfo(prev => ({
-                    ...prev,
-                    studentCode: parsed.studentCode || prev.studentCode,
-                    className: parsed.className || prev.className,
-                    studentName: parsed.studentName || prev.studentName
-                }));
+        let isMounted = true;
+        async function syncStudentData() {
+            // 1. Ưu tiên người dùng đang đăng nhập qua Auth (Ban cán sự / Học sinh)
+            if (appUser) {
+                let clsName = '9A_TEST';
+                try {
+                    const classes = await db.getClasses();
+                    if (appUser.assignedClassIds && appUser.assignedClassIds.length > 0) {
+                        const foundCls = classes.find(c => c.id === appUser.assignedClassIds![0]);
+                        if (foundCls) clsName = foundCls.name;
+                    }
+                } catch (e) {
+                    console.error('Error fetching classes for student portal', e);
+                }
+
+                if (isMounted) {
+                    setStudentInfo({
+                        studentName: appUser.displayName || 'Trần Thử Nghiệm',
+                        studentCode: appUser.studentCode || 'TEST9999',
+                        className: clsName,
+                        role: appUser.role === 'class_monitor' ? 'Ban Cán Sự Lớp' : 'Học Sinh'
+                    });
+                    if (appUser.role === 'admin' || appUser.role === 'principal') {
+                        setIsAdmin(true);
+                    }
+                }
+                return;
             }
-            if (savedRole === 'admin' || savedRole === 'ADMIN') {
-                setIsAdmin(true);
+
+            // 2. Fallback sang localStorage session nếu là học sinh tra cứu độc lập
+            try {
+                const savedSession = localStorage.getItem('tbc_student_session');
+                const savedRole = localStorage.getItem('user_role') || localStorage.getItem('tbc_user_role');
+                if (savedSession && isMounted) {
+                    const parsed = JSON.parse(savedSession);
+                    setStudentInfo(prev => ({
+                        ...prev,
+                        studentCode: parsed.studentCode || prev.studentCode,
+                        className: parsed.className || prev.className,
+                        studentName: parsed.studentName || prev.studentName
+                    }));
+                }
+                if ((savedRole === 'admin' || savedRole === 'ADMIN') && isMounted) {
+                    setIsAdmin(true);
+                }
+            } catch {
+                // Ignore
             }
-        } catch {
-            // Ignore
         }
-    }, []);
+
+        syncStudentData();
+        return () => { isMounted = false; };
+    }, [appUser]);
 
     const isMetaverseEnabled = STUDENT_PORTAL_CONFIG.ENABLE_METAVERSE_FOR_STUDENTS || isAdmin;
 
@@ -83,6 +120,9 @@ export default function StudentHubPage() {
                         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100/80 border border-blue-200 text-blue-800 text-xs font-bold">
                             <Sparkles size={14} className="text-blue-600" />
                             <span>Cổng Học Sinh 2 Trong 1 • Năm Học 2026–2027</span>
+                            <span className="ml-1 px-2 py-0.5 rounded-md bg-indigo-600 text-white text-[10px] font-black tracking-wider uppercase">
+                                {studentInfo.role}
+                            </span>
                         </div>
                         <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
                             Xin Chào, {studentInfo.studentName}! 👋
@@ -94,15 +134,29 @@ export default function StudentHubPage() {
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs text-center min-w-[120px]">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <div className="p-3 sm:p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs text-center min-w-[100px] sm:min-w-[120px]">
                             <p className="text-[11px] text-slate-500 font-semibold">Chuyên cần</p>
                             <p className="text-xs sm:text-sm font-black text-emerald-600 mt-0.5">✓ Đã Có Mặt</p>
                         </div>
-                        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs text-center min-w-[120px]">
+                        <div className="p-3 sm:p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs text-center min-w-[100px] sm:min-w-[120px]">
                             <p className="text-[11px] text-slate-500 font-semibold">Trạng thái</p>
                             <p className="text-xs sm:text-sm font-black text-blue-600 mt-0.5">Sẵn Sàng Học</p>
                         </div>
+                        <button
+                            onClick={async () => {
+                                localStorage.removeItem('tbc_student_session');
+                                localStorage.removeItem('tbc_student_pet_session');
+                                if (appUser) await signOut();
+                                toast.success('Đã đăng xuất tài khoản!');
+                                router.push('/login');
+                            }}
+                            title="Đăng xuất tài khoản học sinh"
+                            className="p-3 sm:p-4 rounded-2xl bg-red-50 hover:bg-red-100 border border-red-200 shadow-2xs text-center min-w-[90px] text-red-600 hover:text-red-700 transition-all cursor-pointer flex flex-col items-center justify-center active:scale-95"
+                        >
+                            <LogOut size={16} className="mb-0.5" />
+                            <span className="text-xs font-bold">Đăng Xuất</span>
+                        </button>
                     </div>
                 </div>
             </div>

@@ -79,7 +79,9 @@ export default function ImportPage() {
         return <div className="p-8 text-center text-gray-500 flex justify-center items-center h-[50vh]"><Loader2 className="animate-spin mr-2" /> Đang tải...</div>;
     }
 
-    if (!flags.import) {
+    const isAdmin = ['admin', 'principal'].includes(appUser?.role || '');
+
+    if (!flags.import && !isAdmin) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center animate-in fade-in duration-300">
                 <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mb-4 ring-8 ring-amber-50/50">

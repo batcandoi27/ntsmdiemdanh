@@ -30,8 +30,10 @@ import { Student, Class } from '@/types/models';
 import { db } from '@/services/db';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { useAuth } from '@/context/auth-context';
 
 export default function StudentStudyPortalPage() {
+    const { appUser } = useAuth();
     const [activeTab, setActiveTab] = useState<'homework' | 'timetable' | 'tuition' | 'attendance' | 'cv'>('homework');
     const [studentObj, setStudentObj] = useState<Student | null>(null);
     const [studentInfo, setStudentInfo] = useState<{
@@ -65,7 +67,7 @@ export default function StudentStudyPortalPage() {
 
     useEffect(() => {
         initSessionAndData();
-    }, []);
+    }, [appUser]);
 
     const initSessionAndData = async () => {
         setLoading(true);
@@ -78,18 +80,31 @@ export default function StudentStudyPortalPage() {
             let clsName = matchedClass?.name || '8A13';
             let clsId = matchedClass?.id || '';
 
-            // Check localStorage session
-            const savedSession = localStorage.getItem('tbc_student_session');
-            if (savedSession) {
-                try {
-                    const parsed = JSON.parse(savedSession);
-                    if (parsed.className) clsName = parsed.className;
-                    if (parsed.studentCode) stCode = parsed.studentCode;
-                    if (parsed.studentName) stName = parsed.studentName;
-                    const foundCls = classes.find(c => c.name === clsName);
-                    if (foundCls) clsId = foundCls.id;
-                } catch {
-                    // Ignore
+            // 1. Kiểm tra tài khoản Auth đang đăng nhập (Ban cán sự / Học sinh)
+            if (appUser) {
+                stName = appUser.displayName || 'Trần Thử Nghiệm';
+                stCode = appUser.studentCode || 'TEST9999';
+                if (appUser.assignedClassIds && appUser.assignedClassIds.length > 0) {
+                    const foundCls = classes.find(c => c.id === appUser.assignedClassIds![0]);
+                    if (foundCls) {
+                        clsId = foundCls.id;
+                        clsName = foundCls.name;
+                    }
+                }
+            } else {
+                // 2. Check localStorage session
+                const savedSession = localStorage.getItem('tbc_student_session');
+                if (savedSession) {
+                    try {
+                        const parsed = JSON.parse(savedSession);
+                        if (parsed.className) clsName = parsed.className;
+                        if (parsed.studentCode) stCode = parsed.studentCode;
+                        if (parsed.studentName) stName = parsed.studentName;
+                        const foundCls = classes.find(c => c.name === clsName);
+                        if (foundCls) clsId = foundCls.id;
+                    } catch {
+                        // Ignore
+                    }
                 }
             }
 
