@@ -1,0 +1,119 @@
+{
+  "timestamp": "2026-09-19T13:32:00.668Z",
+  "project": "app-diemdanh (THCS Trần Bội Cơ)",
+  "architecture": "Next.js 14 App Router + Supabase PostgreSQL + Firebase Auth/RTDB (Backup) + Zalo Bot Gateway",
+  "machine_checks": {
+    "typecheck": "PASS",
+    "rls_anon_test": "PASS",
+    "ui_lint": "PASS (4 warnings for hex color in inline styles)"
+  },
+  "findings": [
+    {
+      "id": "FINDING-SEC-01",
+      "rule": "BROKEN-ACCESS-CONTROL (Rule 10) & IDOR / MASS-DATA-EXPOSURE (Rule 7)",
+      "severity": "CRITICAL",
+      "file": "src/app/api/admin/backup-zip/route.ts",
+      "line": 51,
+      "description": "Route GET /api/admin/backup-zip dùng supabaseAdmin (Service Role) dump toàn bộ 14 bảng nhạy cảm (students, attendance, student_parents_zalo, zalo_message_logs, v.v.) mà hoàn toàn KHÔNG CÓ kiểm tra authentication hay authorization.",
+      "sink": "supabaseAdmin.from(table).select('*')",
+      "remediation": "Bắt buộc tích hợp verify session via getCurrentUser() & getAppUser() hoặc authenticateRequest(req) yêu cầu quyền admin (canExportData), nếu không có trả về 401/403."
+    },
+    {
+      "id": "FINDING-SEC-02",
+      "rule": "BROKEN-ACCESS-CONTROL (Rule 10) & ELEVATION-OF-PRIVILEGE (Rule 28)",
+      "severity": "CRITICAL",
+      "file": "src/app/actions/admin-users.ts",
+      "line": 12,
+      "description": "Server Actions deleteUserAccount(targetUid) và adminCreateUser(input) không kiểm tra danh tính người gọi. Bất kỳ client nào gọi POST action này đều có thể xóa tài khoản người dùng hoặc tạo tài khoản mới với role='admin' và is_active=true.",
+      "sink": "supabaseAdmin.auth.admin.createUser / supabaseAdmin.from('profiles').insert",
+      "remediation": "Bắt buộc kiểm tra server-side session trong server action: const user = await getCurrentUser(); const profile = await getAppUser(user.id); if (profile?.role !== 'admin') throw new Error('Forbidden');"
+    },
+    {
+      "id": "FINDING-SEC-03",
+      "rule": "CLIENT-TRUSTED-ROLE (Rule 28) & BROKEN-ACCESS-CONTROL (Rule 10)",
+      "severity": "CRITICAL",
+      "file": "src/app/actions/settings.ts",
+      "line": 20,
+      "description": "Action clearAttendance() không xác thực session, cho phép xóa dữ liệu điểm danh. Action saveRoleCodes(roleCodes, updaterRole) tin cậy tham số updaterRole do client tự truyền lên (if (updaterRole !== 'admin')).",
+      "sink": "db.clearAttendanceData / supabaseAdmin.from('settings').upsert",
+      "remediation": "Xác thực role từ cookies/session server-side, không bao giờ nhận role từ tham số người dùng."
+    },
+    {
+      "id": "FINDING-SEC-04",
+      "rule": "VERBOSE-ERROR-DEBUG-MODE (Rule 15) & UNPROTECTED-DEV-ENDPOINT",
+      "severity": "HIGH",
+      "file": "src/app/api/analyze/route.ts",
+      "line": 8,
+      "description": "Route GET /api/analyze đọc file Excel cục bộ (In So Diem Ca Nhan_T9_2025-2026.xlsx) và trả về preview cấu trúc/dữ liệu ra JSON mà không có bảo vệ xác thực hay giới hạn môi trường NODE_ENV === 'development'.",
+      "sink": "fs.readFileSync / XLSX.read / NextResponse.json(result)",
+      "remediation": "Chặn endpoint trên production: if (process.env.NODE_ENV === 'production') return NextResponse.json({ error: 'Not found' }, { status: 404 });"
+    },
+    {
+      "id": "FINDING-SEC-05",
+      "rule": "FAIL-OPEN AUTH BYPASS (GS-10 & Rule 10)",
+      "severity": "HIGH",
+      "file": "src/app/api/admin/classes-list/route.ts",
+      "line": 15,
+      "description": "Kiểm tra auth: if (token && token !== masterKey && token !== 'TBC_MASTER_WEBHOOK_SECRET_2026') => Nếu caller KHÔNG gửi header Authorization (token = ''), điều kiện 'token && ...' là false, kẻ tấn công bypass kiểm tra và lấy danh sách lớp.",
+      "sink": "supabase.from('classes').select(...)",
+      "remediation": "Sửa thành Fail-Closed: if (!token || (token !== masterKey && token !== process.env.ADMIN_KEY)) return 401."
+    },
+    {
+      "id": "FINDING-SEC-06",
+      "rule": "FAIL-OPEN AUTH BYPASS (GS-10 & Rule 10)",
+      "severity": "HIGH",
+      "file": "src/app/api/zalo/webhook/route.ts",
+      "line": 18,
+      "description": "Kiểm tra bridge token: if (token && token !== expectedToken) => Nếu request không gửi token, 'token && ...' là false, cho phép bypass webhook nếu kẻ xấu gửi request trực tiếp.",
+      "sink": "webhook processing state machine",
+      "remediation": "Bắt buộc token: if (!token || token !== expectedToken) return 401."
+    },
+    {
+      "id": "FINDING-SEC-07",
+      "rule": "FAIL-OPEN CONFIG (GS-10)",
+      "severity": "HIGH",
+      "file": "src/app/api/webhook/payment/route.ts",
+      "line": 15,
+      "description": "Kiểm tra if (expectedSecret) => Nếu PAYMENT_WEBHOOK_SECRET chưa được cấu hình trong .env, toàn bộ bước xác thực bị bỏ qua, cho phép bất kỳ ai gửi payload gạch nợ thanh toán.",
+      "sink": "dbClient.from('payment_transactions').insert / column_records update",
+      "remediation": "Fail-Closed: nếu thiếu cấu hình secret trên production, từ chối xử lý hoặc bắt buộc HMAC signature."
+    },
+    {
+      "id": "FINDING-SEC-08",
+      "rule": "UNCHECKED-SELF-ELEVATION (Rule 10 & Rule 28)",
+      "severity": "MEDIUM",
+      "file": "src/app/actions/auth-setup.ts",
+      "line": 33,
+      "description": "Khi người dùng mới đăng ký qua setupRoleWithoutCode, nếu truyền requestedRole: 'principal', hệ thống tự động kích hoạt is_active = true mà không cần admin duyệt.",
+      "sink": "profiles.upsert({ role: requestedRole, is_active: shouldBeActive })",
+      "remediation": "Cấm tự cấp role 'principal' hoặc 'admin' khi đăng ký; chỉ cho phép đăng ký giáo viên và mặc định is_active = false chờ admin duyệt."
+    },
+    {
+      "id": "FINDING-SEC-09",
+      "rule": "HARDCODED-SECRET / FALLBACK TOKEN (Rule 1)",
+      "severity": "MEDIUM",
+      "file": "src/lib/supabase.ts, src/services/google-sheets-webhook-service.ts, src/services/student-cv-service.ts",
+      "line": 4,
+      "description": "Tồn tại các chuỗi fallback cứng trong code: 'TBC_MASTER_WEBHOOK_SECRET_2026', 'sk-zalokeybatcandoi', anon token fallback trong supabase.ts.",
+      "sink": "static string literals",
+      "remediation": "Xóa bỏ các token fallback tĩnh, bắt buộc đọc từ process.env và fail-closed nếu thiếu."
+    },
+    {
+      "id": "FINDING-SEC-10",
+      "rule": "DEFENSE-IN-DEPTH SECURITY HEADERS & SOURCEMAPS (Rule 22 & GS-3/GS-4)",
+      "severity": "LOW / HARDENING",
+      "file": "next.config.mjs",
+      "line": 2,
+      "description": "Chưa cấu hình productionBrowserSourceMaps: false tường minh, và thiếu các HTTP Security Headers tiêu chuẩn (X-Content-Type-Options, X-Frame-Options, Permissions-Policy).",
+      "sink": "HTTP response headers",
+      "remediation": "Thêm productionBrowserSourceMaps: false và bộ headers phòng thủ vào next.config.mjs."
+    }
+  ],
+  "strengths_extracted": [
+    "1. Supabase RLS được cấu hình chuẩn mực: Anon client bị chặn 100% khi cố tình ghi/sửa dữ liệu giáo viên (0 rows modified, Test 3 PASS).",
+    "2. Zero Client Credential: File src/lib/supabase-admin.ts có guard 'typeof window === undefined', hoàn toàn không bundle service role key ra browser client.",
+    "3. Adapter cách ly: src/services/supabase-adapter.ts 100% sạch, không import supabaseAdmin, mọi thao tác client đều đi qua anon client có RLS bảo vệ.",
+    "4. API Middleware v1 (/api/v1/*) có rate limiting (100 req/min/IP) và kiểm tra Bearer token hoặc API Key có RBAC phân quyền chặt chẽ.",
+    "5. Admin Role Impersonation (View-As Mode) dùng sessionStorage độc lập theo tab, ép canEditAttendance: false và editWindowMinutes: 0 (Read-Only Simulation) chống ghi đè dữ liệu thật."
+  ]
+}

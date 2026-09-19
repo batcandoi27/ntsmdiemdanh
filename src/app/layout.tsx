@@ -18,6 +18,7 @@ import { ChatProvider } from '@/context/chat-context';
 import { ChatContainer } from '@/components/chat/chat-container';
 import { Toaster } from 'react-hot-toast';
 import { ExtensionErrorGuard } from '@/components/extension-error-guard';
+import { ImpersonationBanner } from '@/components/admin/impersonation-banner';
 
 const inter = Inter({ subsets: ['latin', 'vietnamese'] });
 
@@ -75,6 +76,7 @@ export default function RootLayout({
                 <ChatProvider>
                   <ViewModeProvider>
                     <div className="flex flex-col min-h-screen pb-20 md:pb-0 bg-app">
+                      <ImpersonationBanner />
                       <SiteHeader />
                       <ViewContainer>
                         {children}

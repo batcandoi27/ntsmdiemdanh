@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { getCurrentUser } from '@/lib/supabase-server';
+import { getCurrentUser, getAppUser } from '@/lib/supabase-server';
+import { authenticateRequest } from '@/lib/api-middleware';
 
 const TABLES = [
   'academic_years',
@@ -48,11 +49,41 @@ async function fetchAllFromTable(tableName: string) {
   return allRows;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    // 1. Kiểm tra xác thực qua Cookie Session (Browser Admin UI)
+    let isAuthorized = false;
+    let actorEmail = '';
+
+    const sessionUser = await getCurrentUser();
+    if (sessionUser) {
+      const appUser = await getAppUser(sessionUser.id, sessionUser.email);
+      if (appUser && (appUser.role === 'admin' || appUser.permissions?.canExportData)) {
+        isAuthorized = true;
+        actorEmail = appUser.email || sessionUser.email || 'admin-session';
+      }
+    }
+
+    // 2. Fallback: Kiểm tra qua Authorization Bearer / X-API-Key Header (CLI / Script)
+    if (!isAuthorized) {
+      const { user: apiUser } = await authenticateRequest(req);
+      if (apiUser && (apiUser.role === 'admin' || apiUser.permissions?.canExportData)) {
+        isAuthorized = true;
+        actorEmail = apiUser.email || 'admin-api-key';
+      }
+    }
+
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { error: 'Forbidden: Yêu cầu quyền Quản trị viên (Admin) hoặc quyền canExportData để xuất toàn bộ cơ sở dữ liệu.' },
+        { status: 403 }
+      );
+    }
+
     const backupData: Record<string, any> = {
       school_name: 'THCS TRẦN BỘI CƠ',
       exported_at: new Date().toISOString(),
+      exported_by: actorEmail,
       tables: {}
     };
 

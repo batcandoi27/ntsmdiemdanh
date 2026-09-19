@@ -1,22 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://mock.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'mock-key';
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getCurrentUser, getAppUser } from '@/lib/supabase-server';
 
 export async function GET(req: NextRequest) {
   try {
-    const authHeader = req.headers.get('authorization') || '';
-    const token = authHeader.replace('Bearer ', '').trim();
+    const authHeader = req.headers.get('authorization') || req.headers.get('x-api-key') || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
 
-    // Verify token (cho phép Admin Key hoặc Master Secret)
-    const masterKey = process.env.GOOGLE_WEBHOOK_SECRET || 'TBC_MASTER_ADMIN_KEY_2026';
-    if (token && token !== masterKey && token !== 'TBC_MASTER_WEBHOOK_SECRET_2026') {
-      return NextResponse.json({ error: 'Unauthorized: Invalid Admin Key' }, { status: 401 });
+    // Verify token (Fail-Closed: bắt buộc token từ biến môi trường hoặc session admin hợp lệ)
+    const masterKey = process.env.GOOGLE_WEBHOOK_SECRET || process.env.ADMIN_SETUP_SECRET;
+    const isTokenValid = Boolean(token && masterKey && token === masterKey);
+
+    if (!isTokenValid) {
+      const sessionUser = await getCurrentUser();
+      const appUser = sessionUser ? await getAppUser(sessionUser.id, sessionUser.email) : null;
+      if (!appUser || (appUser.role !== 'admin' && appUser.role !== 'principal')) {
+        return NextResponse.json({ error: 'Unauthorized: Yêu cầu Admin Key hoặc phiên đăng nhập Quản trị viên' }, { status: 401 });
+      }
     }
 
-    const { data: classes, error } = await supabase
+    const client = supabaseAdmin;
+    if (!client) {
+      return NextResponse.json({ error: 'Database client unavailable' }, { status: 500 });
+    }
+
+    const { data: classes, error } = await client
       .from('classes')
       .select('id, name, grade, year_id, actual_student_count')
       .order('name', { ascending: true });
@@ -38,3 +46,4 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+

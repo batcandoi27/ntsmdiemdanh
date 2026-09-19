@@ -25,7 +25,8 @@ import {
   CalendarCheck,
   Eye,
   EyeOff,
-  LogIn
+  LogIn,
+  Shuffle
 } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { ROLE_DISPLAY, UserRole } from '@/types/models';
@@ -34,6 +35,7 @@ import { useFeatureFlags } from '@/context/feature-flags-context';
 import { usePrivacy } from '@/context/privacy-context';
 import { useViewMode } from '@/context/view-mode-context';
 import { useChat } from '@/context/chat-context';
+import { RoleSwitcherModal } from '@/components/admin/role-switcher-modal';
 
 interface NavLinkItem {
   href: string;
@@ -163,7 +165,8 @@ export function SiteHeader() {
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { viewDevice, setViewDevice } = useViewMode();
-  const { appUser, signOut } = useAuth();
+  const { appUser, realAppUser, isImpersonating, effectiveRole, effectiveClassName, signOut } = useAuth();
+  const [isRoleSwitcherOpen, setIsRoleSwitcherOpen] = useState(false);
   const { systemUnreadCount } = useChat();
   const { flags } = useFeatureFlags();
   const { isPrivacyMode, togglePrivacyMode, maskSchoolName, maskUserName } = usePrivacy();
@@ -409,17 +412,57 @@ export function SiteHeader() {
             {/* User Info (Desktop) */}
             {appUser && (
               <div className="hidden lg:flex items-center gap-2">
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-section rounded-xl border border-border-subtle shadow-xs">
-                  <span className="text-base">{roleInfo?.badge}</span>
-                  <div className="flex flex-col leading-none">
-                    <span className="text-xs font-bold text-text-primary truncate max-w-[120px]">
-                      {maskUserName(appUser.displayName || appUser.studentCode || appUser.email || 'User')}
+                {realAppUser?.role === 'admin' ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsRoleSwitcherOpen(true)}
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-1.5 rounded-xl border shadow-xs transition-all text-left group cursor-pointer",
+                      isImpersonating
+                        ? "bg-amber-50/90 border-amber-300 ring-2 ring-amber-400/40 hover:bg-amber-100/90"
+                        : "bg-surface-section border-border-subtle hover:bg-surface-hover hover:border-primary/40 hover:ring-2 hover:ring-primary/20"
+                    )}
+                    title="Bấm để chuyển đổi góc nhìn kiểm tra giao diện (Admin Switcher)"
+                  >
+                    <span className="text-base transition-transform group-hover:scale-110">
+                      {roleInfo?.badge}
                     </span>
-                    <span className={cn('text-[10px] font-semibold mt-0.5', roleInfo?.color)}>
-                      {roleInfo?.label}
-                    </span>
+                    <div className="flex flex-col leading-none">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-bold text-text-primary truncate max-w-[120px]">
+                          {maskUserName(appUser.displayName || appUser.studentCode || appUser.email || 'User')}
+                        </span>
+                        {isImpersonating && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <span className={cn('text-[10px] font-semibold', isImpersonating ? 'text-amber-800' : roleInfo?.color)}>
+                          {roleInfo?.label}
+                          {effectiveClassName ? ` (${effectiveClassName})` : ''}
+                        </span>
+                        {isImpersonating && (
+                          <span className="text-[9px] px-1 py-0.2 rounded-xs bg-amber-200 text-amber-950 font-bold">
+                            Giả lập
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <Shuffle size={12} className={cn("ml-1 shrink-0 transition-colors", isImpersonating ? "text-amber-700" : "text-text-tertiary group-hover:text-primary")} />
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-section rounded-xl border border-border-subtle shadow-xs">
+                    <span className="text-base">{roleInfo?.badge}</span>
+                    <div className="flex flex-col leading-none">
+                      <span className="text-xs font-bold text-text-primary truncate max-w-[120px]">
+                        {maskUserName(appUser.displayName || appUser.studentCode || appUser.email || 'User')}
+                      </span>
+                      <span className={cn('text-[10px] font-semibold mt-0.5', roleInfo?.color)}>
+                        {roleInfo?.label}
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
                 <button
                   onClick={signOut}
                   className="p-2 text-text-tertiary hover:text-danger hover:bg-rose-50 rounded-xl transition-colors"
@@ -546,28 +589,57 @@ export function SiteHeader() {
 
             {/* Mobile User Info & Logout */}
             {appUser && (
-              <div className="mt-3 pt-3 border-t border-border-subtle">
+              <div className="mt-3 pt-3 border-t border-border-subtle space-y-2">
                 <div className="flex items-center justify-between px-3 py-2 bg-surface-section rounded-xl border border-border-subtle">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <span className="text-base">{roleInfo?.badge}</span>
-                    <div className="flex flex-col leading-none">
-                      <span className="text-sm font-bold text-text-primary">{appUser.displayName}</span>
-                      <span className={cn('text-xs font-semibold mt-0.5', roleInfo?.color)}>{roleInfo?.label}</span>
+                    <div className="flex flex-col leading-none min-w-0">
+                      <span className="text-sm font-bold text-text-primary truncate">{appUser.displayName}</span>
+                      <span className={cn('text-xs font-semibold mt-0.5 truncate', roleInfo?.color)}>
+                        {roleInfo?.label}
+                        {effectiveClassName ? ` (${effectiveClassName})` : ''}
+                      </span>
                     </div>
                   </div>
                   <button
                     onClick={signOut}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-danger hover:bg-rose-50 rounded-lg transition-colors border border-rose-200"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-danger hover:bg-rose-50 rounded-lg transition-colors border border-rose-200 shrink-0"
                   >
                     <LogOut size={15} />
                     Đăng xuất
                   </button>
                 </div>
+
+                {realAppUser?.role === 'admin' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      setIsRoleSwitcherOpen(true);
+                    }}
+                    className={cn(
+                      "w-full py-2 px-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 transition shadow-xs",
+                      isImpersonating
+                        ? "bg-amber-500 text-slate-950 border-amber-600 font-extrabold"
+                        : "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"
+                    )}
+                  >
+                    <Shuffle size={14} />
+                    <span>{isImpersonating ? 'Đổi sang vai trò khác / Thoát về Admin' : 'Chuyển đổi góc nhìn kiểm tra (Admin Switcher)'}</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
         </div>
       )}
+
+      {/* Role Switcher Modal for Admin */}
+      <RoleSwitcherModal 
+        isOpen={isRoleSwitcherOpen} 
+        onClose={() => setIsRoleSwitcherOpen(false)} 
+      />
     </header>
   );
 }
+

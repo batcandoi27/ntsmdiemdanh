@@ -12,11 +12,11 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 
 export async function POST(req: NextRequest) {
     try {
-        // 1. Verify Bridge Token
-        const token = req.headers.get('x-bridge-token') || req.headers.get('authorization')?.replace('Bearer ', '');
+        // 1. Verify Bridge Token (Fail-Closed: Bắt buộc có token từ Zalo Gateway)
+        const token = req.headers.get('x-bridge-token') || req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
         const expectedToken = process.env.ZALO_GATEWAY_TOKEN || process.env.ZALO_BRIDGE_TOKEN || 'sk-zalokeybatcandoi';
-        if (token && token !== expectedToken) {
-            return NextResponse.json({ ok: false, error: 'Unauthorized token' }, { status: 401 });
+        if (!token || token !== expectedToken) {
+            return NextResponse.json({ ok: false, error: 'Unauthorized: Thiếu hoặc sai x-bridge-token' }, { status: 401 });
         }
 
         const body = await req.json();

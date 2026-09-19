@@ -9,33 +9,48 @@ import { getUserProfileByEmail, getUser } from '@/services/user-service';
  * Tự động đọc và ghi cookie để đồng bộ session với trình duyệt.
  */
 export function createClient() {
-  const cookieStore = cookies();
+  try {
+    const cookieStore = cookies();
 
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
+    return createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value;
+          },
+          set(name: string, value: string, options: CookieOptions) {
+            try {
+              cookieStore.set({ name, value, ...options });
+            } catch (error) {
+              // Có thể xảy ra lỗi nếu gọi set cookie trong Server Component (không phải Action/Route)
+            }
+          },
+          remove(name: string, options: CookieOptions) {
+            try {
+              cookieStore.set({ name, value: '', ...options });
+            } catch (error) {
+              // Bỏ qua lỗi
+            }
+          },
         },
-        set(name: string, value: string, options: CookieOptions) {
-          try {
-            cookieStore.set({ name, value, ...options });
-          } catch (error) {
-            // Có thể xảy ra lỗi nếu gọi set cookie trong Server Component (không phải Action/Route)
-          }
+      }
+    );
+  } catch (error) {
+    // Fallback an toàn khi chạy ngoài Next.js HTTP Request context (như unit test, scripts, CLI)
+    return createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get() { return undefined; },
+          set() {},
+          remove() {},
         },
-        remove(name: string, options: CookieOptions) {
-          try {
-            cookieStore.set({ name, value: '', ...options });
-          } catch (error) {
-            // Bỏ qua lỗi
-          }
-        },
-      },
-    }
-  );
+      }
+    );
+  }
 }
 
 /**

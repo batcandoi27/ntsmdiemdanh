@@ -4,9 +4,45 @@ import { db } from '@/services/db';
 import { revalidatePath } from 'next/cache';
 import { AppSettings, Class, AttendanceRecord } from '@/types/models';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getCurrentUser, getAppUser } from '@/lib/supabase-server';
 import { getUsersPaginated } from '@/services/user-service';
 
+/**
+ * Kiểm tra quyền Admin từ Server Session (Cookies)
+ */
+async function assertAdminOnlyCaller(): Promise<{ isAuthorized: boolean; error?: string }> {
+    const sessionUser = await getCurrentUser();
+    if (!sessionUser) {
+        return { isAuthorized: false, error: 'Yêu cầu đăng nhập trước khi thực hiện thao tác quản trị.' };
+    }
+    const caller = await getAppUser(sessionUser.id, sessionUser.email);
+    if (!caller || caller.role !== 'admin') {
+        return { isAuthorized: false, error: 'Truy cập bị từ chối: Chỉ Quản trị viên (Admin) mới có quyền thực hiện thao tác này.' };
+    }
+    return { isAuthorized: true };
+}
+
+/**
+ * Kiểm tra quyền Admin hoặc Ban Giám Hiệu từ Server Session
+ */
+async function assertAdminOrPrincipalCaller(): Promise<{ isAuthorized: boolean; role?: string; error?: string }> {
+    const sessionUser = await getCurrentUser();
+    if (!sessionUser) {
+        return { isAuthorized: false, error: 'Yêu cầu đăng nhập trước khi thực hiện thao tác.' };
+    }
+    const caller = await getAppUser(sessionUser.id, sessionUser.email);
+    if (!caller || (caller.role !== 'admin' && caller.role !== 'principal')) {
+        return { isAuthorized: false, error: 'Truy cập bị từ chối: Chỉ Quản trị viên (Admin) hoặc Ban Giám Hiệu mới có quyền này.' };
+    }
+    return { isAuthorized: true, role: caller.role };
+}
+
 export async function generateMockData(startDate: string, endDate: string, classIds: string[]) {
+    const authCheck = await assertAdminOnlyCaller();
+    if (!authCheck.isAuthorized) {
+        return { success: false, message: authCheck.error };
+    }
+
     try {
         await db.mockGenerateAttendance(startDate, endDate, classIds);
         revalidatePath('/reports');
@@ -18,6 +54,11 @@ export async function generateMockData(startDate: string, endDate: string, class
 }
 
 export async function clearAttendance(startDate?: string, endDate?: string, classIds?: string[]) {
+    const authCheck = await assertAdminOnlyCaller();
+    if (!authCheck.isAuthorized) {
+        return { success: false, message: authCheck.error };
+    }
+
     try {
         await db.clearAttendanceData(startDate, endDate, classIds);
         revalidatePath('/reports');
@@ -40,9 +81,10 @@ export async function getRoleCodes() {
     }
 }
 
-export async function saveRoleCodes(roleCodes: Record<string, string>, updaterRole: string) {
-    if (updaterRole !== 'admin') {
-        return { success: false, message: 'Chỉ Admin mới có quyền cập nhật mã phân quyền.' };
+export async function saveRoleCodes(roleCodes: Record<string, string>, updaterRole?: string) {
+    const authCheck = await assertAdminOnlyCaller();
+    if (!authCheck.isAuthorized) {
+        return { success: false, message: authCheck.error };
     }
     try {
         await supabaseAdmin.from('settings').upsert({ key: 'role_codes', value: roleCodes });
@@ -56,6 +98,7 @@ export async function saveRoleCodes(roleCodes: Record<string, string>, updaterRo
 // --- Feature Flags Actions ---
 
 export async function getFeatureFlags() {
+
     try {
         const { data, error } = await supabaseAdmin.from('settings').select('value').eq('key', 'feature_flags').maybeSingle();
         if (error) throw error;
@@ -67,8 +110,9 @@ export async function getFeatureFlags() {
 }
 
 export async function saveFeatureFlags(flags: Record<string, boolean>, updaterRole?: string) {
-    if (updaterRole && updaterRole !== 'admin' && updaterRole !== 'principal') {
-        return { success: false, message: 'Chỉ Quản trị viên (Admin) hoặc Ban Giám Hiệu mới có quyền bật/tắt tính năng.' };
+    const authCheck = await assertAdminOrPrincipalCaller();
+    if (!authCheck.isAuthorized) {
+        return { success: false, message: authCheck.error };
     }
     try {
         const { error } = await supabaseAdmin.from('settings').upsert(
@@ -109,8 +153,9 @@ export async function getDriveBackupConfig() {
 }
 
 export async function saveDriveBackupConfig(config: Record<string, any>, updaterRole?: string) {
-    if (updaterRole && updaterRole !== 'admin' && updaterRole !== 'principal') {
-        return { success: false, message: 'Chỉ Quản trị viên (Admin) hoặc Ban Giám Hiệu mới có quyền cấu hình sao lưu.' };
+    const authCheck = await assertAdminOrPrincipalCaller();
+    if (!authCheck.isAuthorized) {
+        return { success: false, message: authCheck.error };
     }
     try {
         const { error } = await supabaseAdmin.from('settings').upsert(
@@ -126,9 +171,25 @@ export async function saveDriveBackupConfig(config: Record<string, any>, updater
 }
 
 export async function triggerDriveBackupNow(gasWebhookUrl: string, secretToken: string) {
+    const authCheck = await assertAdminOrPrincipalCaller();
+    if (!authCheck.isAuthorized) {
+        return { success: false, message: authCheck.error };
+    }
     try {
-        if (!gasWebhookUrl || !gasWebhookUrl.startsWith('http')) {
-            return { success: false, message: 'Vui lòng nhập URL Google Apps Script Webhook hợp lệ.' };
+        if (!gasWebhookUrl) {
+            return { success: false, message: 'Vui lòng cung cấp URL Google Apps Script Webhook.' };
+        }
+
+        // SSRF Guard (Rule 5 & GS-8): Chỉ cho phép giao thức HTTPS, port 443 và domain chính thức của Google Apps Script
+        try {
+            const parsedUrl = new URL(gasWebhookUrl);
+            const isGoogleHost = parsedUrl.hostname === 'script.google.com' || parsedUrl.hostname === 'script.googleusercontent.com';
+            const isStandardHttpsPort = parsedUrl.port === '' || parsedUrl.port === '443';
+            if (parsedUrl.protocol !== 'https:' || !isGoogleHost || !isStandardHttpsPort) {
+                return { success: false, message: 'URL bị từ chối: Vì lý do an toàn bảo mật (Anti-SSRF), hệ thống chỉ chấp nhận Webhook chính thức từ Google Apps Script qua HTTPS port 443 (https://script.google.com/macros/s/...).' };
+            }
+        } catch (_) {
+            return { success: false, message: 'Định dạng URL Webhook không hợp lệ.' };
         }
 
         // Gather database summary
@@ -148,11 +209,17 @@ export async function triggerDriveBackupNow(gasWebhookUrl: string, secretToken: 
             }
         };
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s strict timeout
+
         const res = await fetch(gasWebhookUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
+            redirect: 'error', // Chống đòn tấn công Redirect SSRF sang mạng nội bộ
+            signal: controller.signal
         });
+        clearTimeout(timeoutId);
 
         const result = await res.json().catch(() => ({ ok: res.ok }));
 
@@ -195,6 +262,10 @@ export async function fetchAppSettings() {
 }
 
 export async function updateAppSettings(settings: Partial<AppSettings>) {
+    const authCheck = await assertAdminOrPrincipalCaller();
+    if (!authCheck.isAuthorized) {
+        return { success: false, message: authCheck.error };
+    }
     try {
         const { data: existing } = await supabaseAdmin.from('settings').select('value').eq('key', 'app_settings').single();
         const newValue = { ...(existing?.value || {}), ...settings, updatedAt: new Date().toISOString() };
@@ -223,6 +294,10 @@ export async function getClassesList() {
 }
 
 export async function updateManualClassSizes(year: string, updates: { id: string, manualStudentCount?: number, adjustmentCount?: number }[]) {
+    const authCheck = await assertAdminOrPrincipalCaller();
+    if (!authCheck.isAuthorized) {
+        return { success: false, message: authCheck.error };
+    }
     try {
         console.log(`[updateManualClassSizes] START - Year: ${year}, Updates: ${updates.length}`);
         
@@ -253,3 +328,4 @@ export async function updateManualClassSizes(year: string, updates: { id: string
         return { success: false, message: `Lỗi khi cập nhật sĩ số lớp: ${error.message || 'Unknown error'}` };
     }
 }
+

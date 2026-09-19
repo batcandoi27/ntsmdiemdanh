@@ -17,10 +17,10 @@ export async function setupRoleWithoutCode(
             return { success: false, message: 'Người dùng Supabase không hợp lệ hoặc chưa đăng nhập.' };
         }
 
-        // Validate valid roles meant for registration
-        const validRoles: UserRole[] = ['principal', 'supervisor', 'teacher', 'gvbm', 'class_monitor'];
+        // Validate valid roles meant for registration (Chỉ cho phép đăng ký vai trò cơ sở, BGH & Admin phải do Admin gán)
+        const validRoles: UserRole[] = ['supervisor', 'teacher', 'gvbm', 'class_monitor'];
         if (!validRoles.includes(requestedRole)) {
-            return { success: false, message: 'Vai trò chọn không hợp lệ.' };
+            return { success: false, message: 'Vai trò đăng ký không hợp lệ. Quyền Quản trị viên và Ban Giám Hiệu chỉ có thể được thiết lập bởi Admin.' };
         }
 
         // 1. Kiểm tra profile hiện tại
@@ -30,7 +30,8 @@ export async function setupRoleWithoutCode(
             .eq('email', email)
             .maybeSingle();
 
-        const shouldBeActive = existingProfile?.is_active || requestedRole === 'admin' || requestedRole === 'principal';
+        // Tài khoản mới luôn ở trạng thái chờ duyệt (is_active: false) trừ khi đã được admin duyệt trước đó
+        const shouldBeActive = Boolean(existingProfile?.is_active);
         
         // 2. Upsert profile
         const { error: dbError } = await supabaseAdmin

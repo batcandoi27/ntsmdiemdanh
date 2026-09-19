@@ -2,8 +2,23 @@
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { revalidatePath } from 'next/cache';
-
+import { getCurrentUser, getAppUser } from '@/lib/supabase-server';
 import { UserRole, AppUser, DEFAULT_PERMISSIONS, DEFAULT_EDIT_WINDOW } from '@/types/models';
+
+/**
+ * Kiểm tra quyền Admin của caller từ Server Session (Cookies)
+ */
+async function assertAdminCaller(): Promise<{ isAuthorized: boolean; error?: string }> {
+    const sessionUser = await getCurrentUser();
+    if (!sessionUser) {
+        return { isAuthorized: false, error: 'Yêu cầu đăng nhập trước khi thực hiện thao tác quản trị.' };
+    }
+    const caller = await getAppUser(sessionUser.id, sessionUser.email);
+    if (!caller || caller.role !== 'admin') {
+        return { isAuthorized: false, error: 'Truy cập bị từ chối: Chỉ Quản trị viên (Admin) mới có quyền thực hiện thao tác này.' };
+    }
+    return { isAuthorized: true };
+}
 
 /**
  * Xoá tài khoản người dùng cả ở DB và Auth
@@ -11,8 +26,18 @@ import { UserRole, AppUser, DEFAULT_PERMISSIONS, DEFAULT_EDIT_WINDOW } from '@/t
  */
 export async function deleteUserAccount(targetUid: string) {
     try {
+        const authCheck = await assertAdminCaller();
+        if (!authCheck.isAuthorized) {
+            return { success: false, message: authCheck.error };
+        }
+
         if (!targetUid) {
             return { success: false, message: 'ID người dùng không hợp lệ.' };
+        }
+
+        const sessionUser = await getCurrentUser();
+        if (sessionUser?.id === targetUid) {
+            return { success: false, message: 'Không thể tự xoá tài khoản Admin đang đăng nhập của chính mình.' };
         }
 
         const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(targetUid);
@@ -37,6 +62,11 @@ export async function deleteUserAccount(targetUid: string) {
 
 export async function adminCreateUser(input: any) {
     try {
+        const authCheck = await assertAdminCaller();
+        if (!authCheck.isAuthorized) {
+            return { success: false, message: authCheck.error };
+        }
+
         let uid = '';
         const email = input.email || (input.studentCode ? `${input.studentCode.toLowerCase()}@thcstbc.com` : '');
         if (!email) return { success: false, message: 'Thiếu email hoặc mã học sinh' };
@@ -75,4 +105,5 @@ export async function adminCreateUser(input: any) {
         return { success: false, message: 'Lỗi máy chủ: ' + e.message };
     }
 }
+
 

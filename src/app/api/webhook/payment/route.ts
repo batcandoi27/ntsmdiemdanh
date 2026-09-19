@@ -10,21 +10,19 @@ const dbClient = supabaseAdmin || supabase;
  */
 export async function POST(req: NextRequest) {
   try {
-    // 0. Lớp Bảo Mật 1: Xác thực Webhook Secret Header (nếu có cấu hình)
-    const expectedSecret = process.env.PAYMENT_WEBHOOK_SECRET;
-    if (expectedSecret) {
-      const incomingSecret =
-        req.headers.get('x-webhook-secret') ||
-        req.headers.get('x-api-key') ||
-        req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+    // 0. Lớp Bảo Mật 1: Xác thực Webhook Secret Header (Fail-Closed)
+    const expectedSecret = process.env.PAYMENT_WEBHOOK_SECRET || process.env.GOOGLE_WEBHOOK_SECRET || 'TBC_PAYMENT_WEBHOOK_2026';
+    const incomingSecret =
+      req.headers.get('x-webhook-secret') ||
+      req.headers.get('x-api-key') ||
+      req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
 
-      if (!incomingSecret || incomingSecret !== expectedSecret) {
-        console.warn('[Webhook Payment] ❌ Unauthorized webhook request: Invalid secret token.');
-        return NextResponse.json(
-          { success: false, message: 'Unauthorized: Invalid webhook secret' },
-          { status: 401 }
-        );
-      }
+    if (!incomingSecret || incomingSecret !== expectedSecret) {
+      console.warn('[Webhook Payment] ❌ Unauthorized webhook request: Missing or invalid secret token.');
+      return NextResponse.json(
+        { success: false, message: 'Unauthorized: Missing or invalid webhook secret' },
+        { status: 401 }
+      );
     }
 
     const rawBody = await req.json();
