@@ -23,6 +23,34 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 // Ưu tiên dùng Admin Client trên server để bypass RLS
 const dbClient = (typeof window === 'undefined' && supabaseAdmin) ? supabaseAdmin : supabase;
 
+// --- IN-MEMORY DICTIONARY CACHE (TTL 24h) ---
+interface CachedStatus {
+    id: string;
+    code: string;
+    type_id: string;
+}
+let cachedStatuses: CachedStatus[] | null = null;
+let statusCacheExpiry = 0;
+const STATUS_CACHE_TTL = 24 * 60 * 60 * 1000;
+
+export async function getCachedAttendanceStatuses(): Promise<CachedStatus[]> {
+    const now = Date.now();
+    if (cachedStatuses && now < statusCacheExpiry) {
+        return cachedStatuses;
+    }
+    try {
+        const { data } = await dbClient.from('attendance_statuses').select('id, code, type_id');
+        if (data && data.length > 0) {
+            cachedStatuses = data as CachedStatus[];
+            statusCacheExpiry = now + STATUS_CACHE_TTL;
+            return cachedStatuses;
+        }
+    } catch (e) {
+        console.error('Lỗi nạp cached statuses:', e);
+    }
+    return cachedStatuses || [];
+}
+
 import { SessionType } from '@/types/timetable';
 import { AppUser, Student, Class } from '@/types/models';
 import { checkClassEditAccess, checkEditWindow, checkStudentActive } from './auth-guard';
@@ -232,7 +260,7 @@ export async function batchMarkAttendance(
         const codeToIdMap = new Map<string, string>();
         students?.forEach((s: any) => { if (s.students?.student_code) codeToIdMap.set(s.students.student_code, s.student_id); });
 
-        const { data: statuses } = await dbClient.from('attendance_statuses').select('id, code, type_id');
+        const statuses = await getCachedAttendanceStatuses();
         const statusCodeMap = new Map<string, { id: string, type_id: string }>();
         statuses?.forEach(s => statusCodeMap.set(s.code, { id: s.id, type_id: s.type_id }));
 
@@ -334,27 +362,43 @@ export async function batchMarkAttendance(
             }
         });
 
-        // 2. THỰC THI XÓA (Reset danh sách cũ để ghi mới)
+        // 2. THỰC THI XÓA SONG SONG (Parallelized Selective Reset)
+        const deleteOps: Promise<any>[] = [];
         if (studentsToResetAttendance.length > 0 && dailyTypeId) {
-            await dbClient.from('attendance').delete()
-                .in('student_id', studentsToResetAttendance)
-                .eq('type_id', dailyTypeId)
-                .eq('date', dateKey)
-                .eq('session', input.session);
+            deleteOps.push(
+                dbClient.from('attendance').delete()
+                    .in('student_id', studentsToResetAttendance)
+                    .eq('type_id', dailyTypeId)
+                    .eq('date', dateKey)
+                    .eq('session', input.session)
+            );
         }
         if (studentsToResetViolation.length > 0 && violationTypeId) {
-            await dbClient.from('attendance').delete()
-                .in('student_id', studentsToResetViolation)
-                .eq('type_id', violationTypeId)
-                .eq('date', dateKey)
-                .eq('session', input.session);
+            deleteOps.push(
+                dbClient.from('attendance').delete()
+                    .in('student_id', studentsToResetViolation)
+                    .eq('type_id', violationTypeId)
+                    .eq('date', dateKey)
+                    .eq('session', input.session)
+            );
         }
         if (studentsToResetReward.length > 0 && rewardTypeId) {
-            await dbClient.from('attendance').delete()
-                .in('student_id', studentsToResetReward)
-                .eq('type_id', rewardTypeId)
-                .eq('date', dateKey)
-                .eq('session', input.session);
+            deleteOps.push(
+                dbClient.from('attendance').delete()
+                    .in('student_id', studentsToResetReward)
+                    .eq('type_id', rewardTypeId)
+                    .eq('date', dateKey)
+                    .eq('session', input.session)
+            );
+        }
+        if (deleteOps.length > 0) {
+            const deleteResults = await Promise.all(deleteOps);
+            for (const res of deleteResults) {
+                if (res && res.error) {
+                    console.error('Lỗi khi xóa reset điểm danh cũ:', res.error);
+                    throw new Error(`Lỗi reset dữ liệu điểm danh: ${res.error.message}`);
+                }
+            }
         }
 
         // 3. THỰC THI UPSERT (Thêm mới)
@@ -437,11 +481,16 @@ export async function getClassAttendance(
         if (session) q = q.eq('session', session);
 
         const { data, error } = await q;
-        if (error || !data) return [];
+        if (error || !data || data.length === 0) return [];
 
-        // Fetch extra info manually to map (due to broken DB relationship)
-        const { data: students } = await dbClient.from('students').select('id, student_code, full_name');
-        const { data: statuses } = await dbClient.from('attendance_statuses').select('id, code');
+        const studentIds = Array.from(new Set(data.map((r: any) => r.student_id).filter(Boolean)));
+        if (studentIds.length === 0) return [];
+
+        // Scoped query: Chỉ select đúng những học sinh có bản ghi điểm danh
+        const [{ data: students }, statuses] = await Promise.all([
+            dbClient.from('students').select('id, student_code, full_name').in('id', studentIds),
+            getCachedAttendanceStatuses()
+        ]);
         
         const stuMap = new Map((students || []).map(s => [s.id, s as any]));
         const stMap = new Map((statuses || []).map(s => [s.id, s.code]));
@@ -497,11 +546,16 @@ export async function getAttendanceByClasses(
         if (session) q = q.eq('session', session);
 
         const { data, error } = await q;
-        if (error || !data) return [];
+        if (error || !data || data.length === 0) return [];
 
-        // Manual mapping
-        const { data: students } = await dbClient.from('students').select('id, student_code, full_name');
-        const { data: statuses } = await dbClient.from('attendance_statuses').select('id, code');
+        const studentIds = Array.from(new Set(data.map((r: any) => r.student_id).filter(Boolean)));
+        if (studentIds.length === 0) return [];
+
+        // Scoped query: Chỉ select đúng những học sinh có bản ghi điểm danh
+        const [{ data: students }, statuses] = await Promise.all([
+            dbClient.from('students').select('id, student_code, full_name').in('id', studentIds),
+            getCachedAttendanceStatuses()
+        ]);
         
         const stuMap = new Map((students || []).map(s => [s.id, s as any]));
         const stMap = new Map((statuses || []).map(s => [s.id, s.code]));

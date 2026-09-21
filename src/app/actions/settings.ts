@@ -4,6 +4,7 @@ import { db } from '@/services/db';
 import { revalidatePath } from 'next/cache';
 import { AppSettings, Class, AttendanceRecord } from '@/types/models';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { supabase } from '@/lib/supabase';
 import { getCurrentUser, getAppUser } from '@/lib/supabase-server';
 import { getUsersPaginated } from '@/services/user-service';
 
@@ -248,11 +249,21 @@ export async function triggerDriveBackupNow(gasWebhookUrl: string, secretToken: 
 
 // --- App Settings Actions ---
 
+let cachedSettings: { settings: AppSettings; expiry: number } | null = null;
+const SETTINGS_CACHE_TTL = 60 * 1000; // 60s
+
 export async function fetchAppSettings() {
+    const now = Date.now();
+    if (cachedSettings && now < cachedSettings.expiry) {
+        return { success: true, settings: cachedSettings.settings };
+    }
     try {
-        const { data } = await supabaseAdmin.from('settings').select('value').eq('key', 'app_settings').single();
+        const client = supabaseAdmin || supabase;
+        const { data } = await client.from('settings').select('value').eq('key', 'app_settings').single();
         if (data) {
-            return { success: true, settings: data.value as AppSettings };
+            const settings = data.value as AppSettings;
+            cachedSettings = { settings, expiry: now + SETTINGS_CACHE_TTL };
+            return { success: true, settings };
         }
         return { success: false, message: 'Không tìm thấy cấu hình.' };
     } catch (error) {
@@ -270,6 +281,7 @@ export async function updateAppSettings(settings: Partial<AppSettings>) {
         const { data: existing } = await supabaseAdmin.from('settings').select('value').eq('key', 'app_settings').single();
         const newValue = { ...(existing?.value || {}), ...settings, updatedAt: new Date().toISOString() };
         await supabaseAdmin.from('settings').upsert({ key: 'app_settings', value: newValue });
+        cachedSettings = null; // Invalidate cache immediately on update
         revalidatePath('/settings');
         return { success: true, message: 'Đã cập nhật cấu hình hệ thống.' };
     } catch (error) {
@@ -281,8 +293,10 @@ export async function updateAppSettings(settings: Partial<AppSettings>) {
 export async function getClassesList() {
     console.log(`[getClassesList] --- START FETCH ---`);
     try {
-        const classes = await db.getClasses();
-        const settingsRes = await fetchAppSettings();
+        const [classes, settingsRes] = await Promise.all([
+            db.getClasses(),
+            fetchAppSettings()
+        ]);
         const activeYear = settingsRes.success && settingsRes.settings?.activeYear ? settingsRes.settings.activeYear : '2024-2025';
         
         console.log(`[getClassesList] Supabase success: Found ${classes.length} classes`);

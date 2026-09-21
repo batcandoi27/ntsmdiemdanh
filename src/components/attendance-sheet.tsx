@@ -3,7 +3,7 @@
 import { useState, useEffect, useTransition } from 'react';
 import { Student, AttendanceStatus, Class, Column } from '@/types/models';
 import { batchMarkAttendance, getClassAttendance } from '@/services/attendance-v3-service';
-import { saveDailyRecord, getDailyRecords, deleteRecord } from '@/services/record-service';
+import { getDailyRecordsForClass, batchSyncDailyRecords } from '@/services/record-service';
 import { AttendanceStatusV3 } from '@/types/attendance-v3';
 import { useAuth } from '@/context/auth-context';
 import { useLoading } from '@/context/loading-context';
@@ -254,6 +254,7 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
     // Custom Columns
     const [customColumns, setCustomColumns] = useState<Column[]>([]);
     const [customRecords, setCustomRecords] = useState<Record<string, Record<string, boolean>>>({}); // studentCode -> colId -> checked
+    const [initialCustomRecords, setInitialCustomRecords] = useState<Record<string, Record<string, boolean>>>({}); // Snapshot ban đầu để tính Dirty Diff
 
     const { showLoading, hideLoading } = useLoading();
     const { appUser } = useAuth();
@@ -274,13 +275,21 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
         "Đồng phục", "Điện thoại", "Chạy giỡn", "Ăn quà vặt", "Nói chuyện riêng", "Không thuộc bài"
     ];
 
-    // Load Data
+    // Load Data - Song song hóa 3 luồng I/O độc lập
     useEffect(() => {
         const init = async () => {
             setLoading(true);
             try {
-                // 1. Get Class & Students
-                const { cls: c, students: s } = await getClassAndStudents(classId);
+                // 1. Chạy song song 100% các luồng I/O độc lập trong 1 lần Promise.all duy nhất:
+                // Thông tin Lớp/Học sinh, Danh mục cột, Điểm danh V3, và Toàn bộ bản ghi cột của lớp trong ngày
+                const [classAndStudentsRes, colsRes, allRecordsRes, dailyRecordsRes] = await Promise.all([
+                    getClassAndStudents(classId),
+                    getColumnsByFrequency(classId, 'daily'),
+                    getClassAttendance(classId, date, session),
+                    getDailyRecordsForClass(classId, date)
+                ]);
+
+                const { cls: c, students: s } = classAndStudentsRes;
                 const activeStudents = s.filter(student => {
                     const status = getEffectiveStatus(student);
                     return status !== 'dropped_out' && status !== 'suspended';
@@ -288,37 +297,28 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
 
                 setCls(c);
                 setStudents(activeStudents);
+                setCustomColumns(colsRes);
 
-                // 3. Get Custom Columns (Daily)
-                const cols = await getColumnsByFrequency(classId, 'daily');
-                setCustomColumns(cols);
-
-                // 4. Get Custom Records
+                // 2. Map dữ liệu các cột tùy chỉnh từ 1 query duy nhất
                 const recordsMap: Record<string, Record<string, boolean>> = {};
-
-                // Initialize map
                 s.forEach(student => {
                     recordsMap[student.code] = {};
                 });
 
-                await Promise.all(cols.map(async (col) => {
-                    const recs = await getDailyRecords(col.id, date);
-                    recs.forEach(r => {
+                if (dailyRecordsRes && dailyRecordsRes.length > 0) {
+                    dailyRecordsRes.forEach(r => {
                         if (recordsMap[r.studentCode]) {
-                            recordsMap[r.studentCode][col.id] = true;
+                            recordsMap[r.studentCode][r.columnId] = true;
                         }
                     });
-                }));
+                }
                 setCustomRecords(recordsMap);
+                setInitialCustomRecords(JSON.parse(JSON.stringify(recordsMap)));
 
-                // 2. Get Existing Attendance (V3 API)
-                const allRecords = await getClassAttendance(classId, date, session);
-                
-                // Nếu đang ở mode Cả Buổi (period === null), ta lấy tất cả records để gộp icon
-                // Nếu đang ở mode Tiết cụ thể, ta mới lọc đúng tiết đó.
+                // 3. Xử lý bản ghi điểm danh V3 đã tải về song song
                 const records = (period === null || period === 0) 
-                    ? allRecords 
-                    : allRecords.filter(r => r.period === period);
+                    ? allRecordsRes 
+                    : allRecordsRes.filter(r => r.period === period);
 
                 const attMap: Record<string, AttendanceStatus> = {};
                 const noteMap: Record<string, Record<number, string>> = {};
@@ -623,28 +623,34 @@ export function AttendanceSheet({ classId, session = 'morning', dateStr, onClose
                     setMsg({ type: 'error', text: err.message || 'Lỗi lưu điểm danh cơ bản.' });
                 }
 
-                // Save custom columns
-                const customUpdates: Promise<void>[] = [];
+                // Save custom columns using Dirty Diff (Single Batch Request - triệt tiêu 135 calls!)
+                const toInsert: any[] = [];
+                const toDeleteIds: string[] = [];
+
                 for (const student of students) {
                     for (const col of customColumns) {
+                        const wasChecked = initialCustomRecords[student.code]?.[col.id] || false;
                         const isChecked = customRecords[student.code]?.[col.id] || false;
-                        if (isChecked) {
-                            customUpdates.push(saveDailyRecord({
+
+                        if (isChecked && !wasChecked) {
+                            toInsert.push({
                                 classId,
                                 columnId: col.id,
                                 studentCode: student.code,
                                 date: date,
                                 selectedSuggestions: ['True'],
                                 note: ''
-                            }).then());
-                        } else {
-                            const recId = `${col.id}_${date}_${student.code}`;
-                            customUpdates.push(deleteRecord(col.id, recId));
+                            });
+                        } else if (!isChecked && wasChecked) {
+                            toDeleteIds.push(`${col.id}_${date}_${student.code}`);
                         }
                     }
                 }
 
-                await Promise.all(customUpdates);
+                if (toInsert.length > 0 || toDeleteIds.length > 0) {
+                    await batchSyncDailyRecords(toInsert, toDeleteIds);
+                    setInitialCustomRecords(JSON.parse(JSON.stringify(customRecords)));
+                }
 
                 if (coreSuccess) {
                     setMsg({ type: 'success', text: 'Đã lưu điểm danh thành công!' });

@@ -120,6 +120,25 @@ export async function getDailyRecords(columnId: string, date: string): Promise<D
 }
 
 /**
+ * Lấy toàn bộ daily records của một lớp trong một ngày bằng 1 query duy nhất.
+ * Triệt tiêu hoàn toàn việc loop từng custom column khi mở lớp.
+ */
+export async function getDailyRecordsForClass(classId: string, date: string): Promise<DailyRecord[]> {
+    const { data, error } = await supabase
+        .from('column_records')
+        .select('*')
+        .eq('class_id', classId)
+        .eq('date', date)
+        .eq('record_type', 'daily');
+
+    if (error) {
+        console.error('Error fetching daily records for class:', error);
+        return [];
+    }
+    return (data as RecordRow[]).map(rowToDailyRecord);
+}
+
+/**
  * Get daily records for a student in a date range
  */
 export async function getDailyRecordsForStudent(
@@ -356,4 +375,54 @@ export async function getAllRecordsForColumn(
             default: return rowToDailyRecord(row);
         }
     });
+}
+
+/**
+ * Batch sync daily records cho AttendanceSheet
+ * Triệt tiêu hoàn toàn cơn bão 135+ HTTP requests bằng bulk operations.
+ */
+export async function batchSyncDailyRecords(
+    toInsert: Omit<DailyRecord, 'id' | 'updatedAt'>[],
+    toDeleteIds: string[]
+): Promise<{ inserted: number; deleted: number }> {
+    const now = new Date().toISOString();
+
+    // 1. Bulk Upsert các bản ghi được tích chọn
+    if (toInsert.length > 0) {
+        const rows = toInsert.map(record => ({
+            id: `${record.columnId}_${record.date}_${record.studentCode}`,
+            column_id: record.columnId,
+            class_id: record.classId,
+            student_code: record.studentCode,
+            record_type: 'daily',
+            date: record.date,
+            selected_suggestions: record.selectedSuggestions,
+            note: record.note ?? null,
+            updated_at: now,
+        }));
+
+        const { error: upsertError } = await supabase
+            .from('column_records')
+            .upsert(rows, { onConflict: 'id' });
+
+        if (upsertError) {
+            console.error('Error in batchSyncDailyRecords upsert:', upsertError);
+            throw new Error('Lỗi đồng bộ lưu cột tùy chỉnh: ' + upsertError.message);
+        }
+    }
+
+    // 2. Scoped Delete các bản ghi bị gỡ bỏ (chống xóa mù quáng, bảo vệ dữ liệu giáo viên khác)
+    if (toDeleteIds.length > 0) {
+        const { error: deleteError } = await supabase
+            .from('column_records')
+            .delete()
+            .in('id', toDeleteIds);
+
+        if (deleteError) {
+            console.error('Error in batchSyncDailyRecords delete:', deleteError);
+            throw new Error('Lỗi đồng bộ xóa cột tùy chỉnh: ' + deleteError.message);
+        }
+    }
+
+    return { inserted: toInsert.length, deleted: toDeleteIds.length };
 }

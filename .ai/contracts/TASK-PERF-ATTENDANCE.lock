@@ -1,0 +1,8 @@
+{
+  "task_id": "TASK-PERF-ATTENDANCE",
+  "contract_file": "C:\\AI APP\\app-diemdanh\\.ai\\plans\\PLAN-PERF-ATTENDANCE\\TASK-CONTRACT.md",
+  "contract_hash_sha256": "933a9df674c5c3d847cf0d69d68f03ac735b62318c7dea03bbac39ea8126d6d2",
+  "locked_at": "2026-09-21T05:56:44.918Z",
+  "strength_grade": 4,
+  "status": "LOCKED"
+}

@@ -7,6 +7,7 @@ import { DbAdapter } from './db-adapter';
 import { normalizeAttendanceRecord } from './attendance-v3-utils';
 import { StudentStatus } from '@/types/models';
 import { transformDbToStudent, transformStudentToDb } from '@/utils/transformers';
+import { getCachedAttendanceStatuses } from './attendance-v3-service';
 
 export class SupabaseAdapter implements DbAdapter {
 
@@ -492,21 +493,29 @@ export class SupabaseAdapter implements DbAdapter {
             if (allData.length === 0) return [];
             console.log(`[getReportData] Total rows fetched: ${allData.length} (pages: ${Math.ceil(allData.length / PAGE_SIZE)})`);
 
-            // Fetch extra info manually to map (chỉ 1 lần duy nhất)
+            // Fetch extra info manually to map (chỉ query học sinh có bản ghi trong allData)
+            const uniqueStudentIds = Array.from(new Set(allData.map((r: any) => r.student_id).filter(Boolean)));
             let studentsData: any[] = [];
-            let stFrom = 0;
-            while (true) {
-                let stQuery = this.client.from('students').select('id, student_code, full_name').range(stFrom, stFrom + PAGE_SIZE - 1);
-                if (classIds && classIds.length > 0) stQuery = stQuery.in('class_id', classIds);
-                
-                const { data } = await stQuery;
-                if (!data || data.length === 0) break;
-                studentsData = studentsData.concat(data);
-                if (data.length < PAGE_SIZE) break;
-                stFrom += PAGE_SIZE;
+            if (uniqueStudentIds.length > 0) {
+                const CHUNK_SIZE = 500;
+                const chunks: string[][] = [];
+                for (let i = 0; i < uniqueStudentIds.length; i += CHUNK_SIZE) {
+                    chunks.push(uniqueStudentIds.slice(i, i + CHUNK_SIZE));
+                }
+                const chunkResults = await Promise.all(
+                    chunks.map(chunk =>
+                        this.client
+                            .from('students')
+                            .select('id, student_code, full_name')
+                            .in('id', chunk)
+                    )
+                );
+                chunkResults.forEach(res => {
+                    if (res.data) studentsData = studentsData.concat(res.data);
+                });
             }
             
-            const { data: statuses } = await this.client.from('attendance_statuses').select('id, code');
+            const statuses = await getCachedAttendanceStatuses();
 
             const stuMap = new Map(studentsData.map(s => [s.id, s]));
             const stMap = new Map(statuses?.map(s => [s.id, s.code]));

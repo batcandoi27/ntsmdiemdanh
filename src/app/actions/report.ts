@@ -302,22 +302,30 @@ export async function getReports(criteria: ReportCriteria, userRole: string = 't
     const mergedMap: Record<string, Record<string, Record<string, { items: any[] }>>> = {};
 
     // Phase 1: Group all raw status items by class -> student -> date
-    // 1.1: Xây dựng Universal Mapping (ID -> Code) cho từng lớp
+    // 1.1: Xây dựng Universal Mapping (ID -> Code) cho từng lớp độc lập
     const universalMap: Record<string, Record<string, string>> = {}; // classId -> { id -> code, name -> code }
-    const studentInfoMap: Record<string, any> = {}; // code -> { name, stt }
+    const classStudentInfoMap: Record<string, Record<string, { name: string; stt: number }>> = {};
 
-    for (const classId of criteria.classIds || []) {
-        if (!universalMap[classId]) universalMap[classId] = {};
+    const classIds = criteria.classIds || [];
+    const classMappings = await Promise.all(classIds.map(async (classId) => {
+        const classMap: Record<string, string> = {};
+        const infoMap: Record<string, { name: string; stt: number }> = {};
         const studentsInClass = await db.getStudentsByClass(classId);
         studentsInClass.forEach((s, idx) => {
             if (s.code) {
-                if (s.id) universalMap[classId][s.id] = s.code;
-                universalMap[classId][s.code] = s.code; // code -> code
-                studentInfoMap[s.code] = { name: s.fullName, stt: idx + 1 };
+                if (s.id) classMap[s.id] = s.code;
+                classMap[s.code] = s.code; // code -> code
+                infoMap[s.code] = { name: s.fullName, stt: idx + 1 };
             }
         });
-    }
-    console.log('[DEBUG_MAPPING] Universal Map:', JSON.stringify(universalMap, null, 2));
+        return { classId, classMap, infoMap };
+    }));
+
+    classMappings.forEach(({ classId, classMap, infoMap }) => {
+        universalMap[classId] = classMap;
+        classStudentInfoMap[classId] = infoMap;
+    });
+    console.log('[DEBUG_MAPPING] Universal Map generated for classes:', Object.keys(universalMap).length);
 
     for (const rawRecord of records) {
         const record = rawRecord as any;
@@ -405,8 +413,8 @@ export async function getReports(criteria: ReportCriteria, userRole: string = 't
         classSizes[classId] = classObj ? getClassSize(classObj, appSettings) : 0;
 
         for (const [code, dates] of Object.entries(studentDates)) {
-            // Lấy thông tin từ studentInfoMap đã gộp ở Phase 1
-            const info = studentInfoMap[code] || { name: code, stt: 0 };
+            // Lấy thông tin từ classStudentInfoMap đã gộp ở Phase 1 theo từng lớp
+            const info = classStudentInfoMap[classId]?.[code] || { name: code, stt: 0 };
             
             for (const [date, data] of Object.entries(dates)) {
                 const rawItems = data.items;
@@ -513,7 +521,7 @@ export async function getExcelExportData(
         recordsByClass[r.classId].push(r);
     });
 
-    for (const cls of targetClasses) {
+    const exportDataItems: ExportData[] = (await Promise.all(targetClasses.map(async (cls): Promise<ExportData | null> => {
         const students = await getReportStudents(cls.id, startDate, endDate);
         console.log(`[Excel] Class ${cls.name}: Students count: ${students.length}`);
 
@@ -588,7 +596,7 @@ export async function getExcelExportData(
         });
 
         if (mappedStudents.length > 0) {
-            result.push({
+            return {
                 className: cls.name,
                 year: exportYear,
                 month: exportMonth,
@@ -596,9 +604,12 @@ export async function getExcelExportData(
                 endDate: endDate,
                 totalStudents: getClassSize(cls, appSettings),
                 students: mappedStudents.sort((a, b) => compareVietnameseNames(a.name, b.name))
-            });
+            };
         }
-    }
+        return null;
+    }))).filter((item): item is ExportData => item !== null);
+
+    result.push(...exportDataItems);
 
     // Sort by class name naturally (e.g. 6A1, 6A2, 6A10)
     result.sort((a, b) => a.className.localeCompare(b.className, undefined, { numeric: true }));
@@ -733,14 +744,14 @@ export async function getAdvancedReportData(
         ? allClasses.filter(c => classIds.includes(c.id))
         : allClasses;
 
-    const reports: TermReportData[] = [];
+    const reports: TermReportData[] = await Promise.all(targetClasses.map(async (cls) => {
+        // 2 & 3 & 4. Get Students, Custom Columns, and Attendance Records concurrently
+        const [students, columns, attendanceRecords] = await Promise.all([
+            getReportStudents(cls.id, startDate, endDate),
+            getCustomColumns(cls.id, userId),
+            db.getReportData(startDate, endDate, [cls.id])
+        ]);
 
-    for (const cls of targetClasses) {
-        // 2. Get Students
-        const students = await getReportStudents(cls.id, startDate, endDate);
-
-        // 3. Get Custom Columns (Filtered by userId)
-        const columns = await getCustomColumns(cls.id, userId);
         const reportColumns = columns.filter(c => !c.archived && (c.frequency === 'period' || c.frequency === 'one_time'))
             .map(c => ({
                 id: c.id,
@@ -749,13 +760,11 @@ export async function getAdvancedReportData(
                 subPeriods: c.subPeriods?.map(sp => sp.label)
             }));
 
-        // 4. Get Data
         const data: Record<string, { stats: Record<string, number>; custom: Record<string, string> }> = {};
         students.forEach(s => {
             data[s.id] = { stats: {}, custom: {} };
         });
 
-        const attendanceRecords = await db.getReportData(startDate, endDate, [cls.id]);
         const studentRawMap: Record<string, Record<string, any[]>> = {};
 
         attendanceRecords.forEach((r: any) => {
@@ -814,33 +823,22 @@ export async function getAdvancedReportData(
             data[s.id].stats = stats;
         });
 
-        // 4b. Get Custom Records
-        for (const col of columns) {
-            if (col.archived) continue;
+        // 4b. Get Custom Records in parallel
+        await Promise.all(columns.map(async (col) => {
+            if (col.archived) return;
 
             if (col.frequency === 'period') {
                 const allR = await getAllRecordsForColumn(col.id, { startDate, endDate });
                 const records = allR as PeriodRecord[];
                 records.forEach(r => {
-                    const student = students.find(s => s.code === r.studentCode); // periods use Code
+                    const student = students.find(s => s.code === r.studentCode);
                     if (student) {
-                        // For Multi-Period, we might want to allow formatting
-                        // But for Excel single cell, maybe join them? 
-                        // Or if spreadsheet expects multiple columns?
-                        // capture: "Sub1: Val, Sub2: Val"
-                        const existing = data[student.id].custom[col.id] || '';
-                        // Helper to append?
-                        // Actually, let's just store Last Value or specialized formatter
-                        // For simplicity in this version:
-                        // If subPeriods exist, format as "Label: Value\nLabel2: Value"
-                        // Or just "Value" if single.
-
                         let val = String(r.value);
                         if (col.subPeriods && col.subPeriods.length > 0) {
                             const sub = col.subPeriods.find(sp => sp.id === r.periodKey);
                             if (sub) {
                                 val = `${sub.label}: ${val}`;
-                                // Append if multiple
+                                const existing = data[student.id].custom[col.id] || '';
                                 if (existing) val = `${existing}\n${val}`;
                             }
                         }
@@ -858,9 +856,9 @@ export async function getAdvancedReportData(
                     }
                 });
             }
-        }
+        }));
 
-        reports.push({
+        return {
             className: cls.name,
             students: students.map((s: any) => ({ 
                 id: s.id, 
@@ -870,8 +868,8 @@ export async function getAdvancedReportData(
             columns: reportColumns,
             data,
             timeRange: `${startDate} - ${endDate}`
-        });
-    }
+        };
+    }));
 
     return reports;
 }

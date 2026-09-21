@@ -13,7 +13,7 @@ import {
 } from '@/services/attendance-v3-service';
 import { normalizeAttendanceRecord } from '@/services/attendance-v3-utils';
 import { getColumnsByFrequency } from '@/services/column-service';
-import { getDailyRecords, saveDailyRecord, deleteRecord } from '@/services/record-service';
+import { getDailyRecords, getDailyRecordsForClass, saveDailyRecord, deleteRecord } from '@/services/record-service';
 
 export interface BlockAttendanceItem {
     classId: string;
@@ -64,18 +64,16 @@ export interface DailyAttendanceData {
 
 export async function getGradeAttendanceSummary(grade: number, dateStr: string, session: SessionType = 'morning'): Promise<BlockAttendanceItem[]> {
     let appSettings = null;
-    try {
-        const settingsRes = await fetchAppSettings();
-        appSettings = settingsRes.success ? settingsRes.settings : null;
-    } catch (e) {
-        console.error("Lỗi fetchAppSettings:", e);
-    }
-
     let allClasses: Class[] = [];
     try {
-        allClasses = await db.getClasses();
+        const [settingsRes, classesRes] = await Promise.all([
+            fetchAppSettings().catch(e => { console.error("Lỗi fetchAppSettings:", e); return null; }),
+            db.getClasses().catch(e => { console.error("Lỗi db.getClasses:", e); return [] as Class[]; })
+        ]);
+        appSettings = settingsRes?.success ? settingsRes.settings : null;
+        allClasses = classesRes || [];
     } catch (e) {
-        console.error("Lỗi db.getClasses:", e);
+        console.error("Lỗi getGradeAttendanceSummary init:", e);
         return [];
     }
     
@@ -293,9 +291,12 @@ export async function getGradeAttendanceSummary(grade: number, dateStr: string, 
 
 export async function getClassAttendanceDetails(classId: string, dateStr: string, session: SessionType = 'morning'): Promise<StudentAttendanceDetail[]> {
     try {
-        const students = await getActiveStudents(classId);
+        const [students, rawRecords] = await Promise.all([
+            getActiveStudents(classId),
+            getClassAttendance(classId, dateStr, session)
+        ]);
 
-        const records = (await getClassAttendance(classId, dateStr, session)).map(r => normalizeAttendanceRecord(r));
+        const records = rawRecords.map(r => normalizeAttendanceRecord(r));
         const recordMap = new Map<string, any>();
         
         records.forEach(r => {
@@ -657,8 +658,11 @@ export async function getClassesAttendanceSummary(classIds: string[], dateStr: s
 }
 
 export async function getDailyAttendanceData(classId: string, dateStr: string, session: SessionType = 'morning'): Promise<DailyAttendanceData> {
-    const students = await getClassAttendanceDetails(classId, dateStr, session);
-    const allDailyCols = await getColumnsByFrequency(classId, 'daily');
+    const [students, allDailyCols, dailyRecords] = await Promise.all([
+        getClassAttendanceDetails(classId, dateStr, session),
+        getColumnsByFrequency(classId, 'daily'),
+        getDailyRecordsForClass(classId, dateStr)
+    ]);
     const customColumns = allDailyCols.filter(c => !c.archived);
 
     const studentRecords: Record<string, Record<string, boolean>> = {};
@@ -666,14 +670,12 @@ export async function getDailyAttendanceData(classId: string, dateStr: string, s
         studentRecords[s.student.code] = {};
     });
 
-    await Promise.all(customColumns.map(async (col) => {
-        const records = await getDailyRecords(col.id, dateStr);
-        records.forEach(r => {
-            if (studentRecords[r.studentCode]) {
-                studentRecords[r.studentCode][col.id] = true;
-            }
-        });
-    }));
+    const validColIds = new Set(customColumns.map(c => c.id));
+    dailyRecords.forEach(r => {
+        if (validColIds.has(r.columnId) && studentRecords[r.studentCode]) {
+            studentRecords[r.studentCode][r.columnId] = true;
+        }
+    });
 
     return {
         students,

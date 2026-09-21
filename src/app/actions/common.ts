@@ -3,8 +3,10 @@
 import { db } from '@/services/db';
 
 export async function getClassAndStudents(classId: string) {
-    const cls = await db.getClass(classId);
-    const students = await db.getStudentsByClass(classId);
+    const [cls, students] = await Promise.all([
+        db.getClass(classId),
+        db.getStudentsByClass(classId)
+    ]);
     return { cls, students };
 }
 
