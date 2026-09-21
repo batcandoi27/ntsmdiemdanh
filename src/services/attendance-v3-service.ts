@@ -435,7 +435,11 @@ export async function batchMarkAttendance(
                                 .eq('status', 'CONNECTED')
                                 .maybeSingle();
 
-                            if (parentMapping && parentMapping.parent_zalo_id) {
+                            const isRealZaloUid = parentMapping?.parent_zalo_id && 
+                                !parentMapping.parent_zalo_id.startsWith('tel:') && 
+                                /^\d{10,25}$/.test(parentMapping.parent_zalo_id);
+
+                            if (parentMapping && isRealZaloUid) {
                                 const alertStatus = isAbsent ? 'ABSENT' : (isLate ? 'LATE' : 'VIOLATION');
                                 await zaloGateway.sendAttendanceAlert({
                                     parentZaloId: parentMapping.parent_zalo_id,

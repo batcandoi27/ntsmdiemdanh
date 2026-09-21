@@ -106,6 +106,11 @@ export class ZaloGatewayClient {
      * Send direct Text Message (1-1 DM or Group)
      */
     async sendTextMessage(payload: ZaloMessagePayload): Promise<{ ok: boolean; messageId?: string; error?: string }> {
+        const target = String(payload.thread_id || '').trim();
+        if (target.startsWith('tel:') || /^(?:\+84|0)\d{8,11}$/.test(target)) {
+            console.warn(`[ZaloGatewayClient] ⚠️ Bỏ qua gửi tin: Người nhận chưa kết nối Zalo (thread_id: "${target}"). Chỉ được gửi khi phụ huynh có Zalo User ID (UID số).`);
+            return { ok: false, error: 'target_must_be_zalo_uid_not_phone' };
+        }
         return this.enqueue(async () => {
             try {
                 const res = await fetch(`${this.config.baseUrl}/v1/hermes/messages`, {
@@ -244,6 +249,11 @@ export class ZaloGatewayClient {
         teacherName?: string;
         notes?: string;
     }): Promise<{ ok: boolean; error?: string }> {
+        const target = String(options.parentZaloId || '').trim();
+        if (!target || target.startsWith('tel:') || !/^\d{10,25}$/.test(target)) {
+            console.warn(`[ZaloGatewayClient] ⚠️ Bỏ qua cảnh báo điểm danh: Phụ huynh em "${options.studentName}" chưa kết nối Zalo (parentZaloId: "${target}"). Chỉ gửi khi có Zalo UID số.`);
+            return { ok: false, error: 'parent_not_connected_no_zalo_uid' };
+        }
         let title = '⚠️ CẢNH BÁO ĐIỂM DANH HỌC SINH';
         let statusText = 'VẮNG MẶT TẠI LỚP (Chưa điểm danh sau 15 phút)';
 
