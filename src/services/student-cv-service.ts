@@ -315,18 +315,120 @@ export class StudentCurriculumVitaeService {
       } catch {}
     }
 
-    // 3. Xây dựng bản Pre-fill từ dữ liệu có sẵn
-    const birthParts = (student?.birthday || '').split(/[-/]/);
+    // 3. Xây dựng bản Pre-fill từ dữ liệu có sẵn trong students table và status_note
+    let noteData: any = {};
+    if (student?.status_note) {
+      if (typeof student.status_note === 'string') {
+        try {
+          noteData = JSON.parse(student.status_note);
+        } catch {}
+      } else if (typeof student.status_note === 'object') {
+        noteData = student.status_note;
+      }
+    }
+
+    const birthParts = (student?.birthday || '').trim().split(/[-/.]/);
+    let birthDay = '', birthMonth = '', birthYear = '';
+    if (birthParts.length === 3) {
+      if (birthParts[0].length === 4) {
+        // YYYY-MM-DD
+        birthYear = birthParts[0];
+        birthMonth = birthParts[1];
+        birthDay = birthParts[2];
+      } else {
+        // DD-MM-YYYY
+        birthDay = birthParts[0];
+        birthMonth = birthParts[1];
+        birthYear = birthParts[2];
+      }
+    }
+
+    const guardianName = noteData.guardian_name || student?.parent_name || '';
+    const guardianPhone = noteData.guardian_phone || noteData.phone || student?.parent_phone || student?.phone || '';
+    const guardianGovId = noteData.guardian_gov_id || '';
+    const guardianRel = noteData.guardian_relationship || 'Mẹ';
+    const isMother = guardianRel.toLowerCase().includes('mẹ') || guardianRel.toLowerCase().includes('me');
+    const isFather = guardianRel.toLowerCase().includes('cha') || guardianRel.toLowerCase().includes('bố') || guardianRel.toLowerCase().includes('ba');
+    const address = noteData.address || student?.address || '';
+    const ward = noteData.ward || '';
+
     const prefill: Partial<StudentCurriculumVitaeProfileData> = {
       full_name_upper: (student?.full_name || student?.fullName || student?.name || '').toUpperCase(),
       gender: (student?.gender === 'female' || student?.gender === 'Nữ') ? 'Nữ' : 'Nam',
-      birth_day: birthParts[0] || '',
-      birth_month: birthParts[1] || '',
-      birth_year: birthParts[2] || '',
+      birth_day: birthDay,
+      birth_month: birthMonth,
+      birth_year: birthYear,
+      birth_order: noteData.birth_order || '1',
       ethnicity: student?.ethnicity || 'Kinh',
-      nationality: 'Việt Nam',
-      religion: 'Không',
-      citizen_id: student?.gov_id || student?.govId || ''
+      nationality: noteData.nationality || 'Việt Nam',
+      religion: noteData.religion || 'Không',
+      citizen_id: student?.gov_id || student?.govId || noteData.gov_id || '',
+      personal_id_code: student?.student_code || student?.code || '',
+      citizen_id_issue_date: noteData.gov_id_date || '01/01/2023',
+      citizen_id_issue_place: noteData.gov_id_place || 'Cục trưởng Cục Cảnh sát Quản lý hành chính về trật tự xã hội',
+      birth_place_hospital: noteData.birth_hospital || '',
+      birth_place_ward: ward,
+      birth_place_province: 'Thành phố Hồ Chí Minh',
+      birth_register_ward: ward,
+      birth_register_province: 'Thành phố Hồ Chí Minh',
+      hometown: {
+        street_address: address,
+        ward_name: ward,
+        province_name: 'Thành phố Hồ Chí Minh'
+      },
+      permanent_residence: {
+        street_address: address,
+        ward_name: ward,
+        province_name: 'Thành phố Hồ Chí Minh'
+      },
+      current_residence: {
+        street_address: address,
+        ward_name: ward,
+        province_name: 'Thành phố Hồ Chí Minh'
+      },
+      living_with: noteData.living_with || 'Cha và Mẹ',
+      direct_guardian: {
+        full_name: guardianName,
+        relationship: guardianRel,
+        phone: guardianPhone
+      },
+      health_notes: 'Bình thường',
+      father: {
+        full_name: isFather ? guardianName : (noteData.father_name || ''),
+        birth_year: noteData.father_birth_year || '',
+        phone_numbers: isFather ? guardianPhone : (noteData.father_phone || ''),
+        citizen_id: isFather ? guardianGovId : (noteData.father_gov_id || ''),
+        job: noteData.father_job || '',
+        workplace: noteData.father_workplace || ''
+      },
+      mother: {
+        full_name: isMother ? guardianName : (noteData.mother_name || ''),
+        birth_year: noteData.mother_birth_year || '',
+        phone_numbers: isMother ? guardianPhone : (noteData.mother_phone || ''),
+        citizen_id: isMother ? guardianGovId : (noteData.mother_gov_id || ''),
+        job: noteData.mother_job || '',
+        workplace: noteData.mother_workplace || ''
+      },
+      siblings: noteData.siblings || [],
+      personalities: {
+        kien_nhan: false,
+        le_phep: true,
+        huong_noi: false,
+        canh_tranh: false,
+        hoa_dong: true,
+        quan_tam: true,
+        sang_tao: false,
+        noi_loan: false,
+        nong_tinh: false,
+        trung_thuc: true,
+        thu_dong: false,
+        lanh_dao: false,
+        nhay_cam: false,
+        huong_ngoai: true,
+        vo_tu: true
+      },
+      primary_contact_person: isMother ? 'mother' : 'father',
+      parent_signature_name: guardianName || (student?.full_name || '')
     };
 
     return {

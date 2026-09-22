@@ -64,85 +64,27 @@ export function StudentCvDrawer({
       setLoading(true);
       try {
         const res = await StudentCurriculumVitaeService.getStudentCurriculumVitae(student.id);
-        const birthParts = (student.birthday || '').split(/[-/]/);
         
-        if (res.cv) {
+        if (res.cv && res.cv.profile_data) {
           setCvRecord(res.cv);
-          setFormData(res.cv.profile_data);
+          // Merge thông minh: Ưu tiên dữ liệu phụ huynh/GVCN đã nhập, bổ sung các trường chưa có từ prefill
+          setFormData({
+            ...res.prefill,
+            ...res.cv.profile_data,
+            // Đảm bảo các trường con không bị null/undefined
+            hometown: { ...res.prefill.hometown, ...res.cv.profile_data.hometown },
+            permanent_residence: { ...res.prefill.permanent_residence, ...res.cv.profile_data.permanent_residence },
+            current_residence: { ...res.prefill.current_residence, ...res.cv.profile_data.current_residence },
+            direct_guardian: { ...res.prefill.direct_guardian, ...res.cv.profile_data.direct_guardian },
+            father: { ...res.prefill.father, ...res.cv.profile_data.father },
+            mother: { ...res.prefill.mother, ...res.cv.profile_data.mother },
+            personalities: { ...res.prefill.personalities, ...res.cv.profile_data.personalities },
+          } as StudentCurriculumVitaeProfileData);
           setTeacherNotes(res.cv.teacher_notes || '');
         } else {
-          // Khởi tạo form mặc định từ dữ liệu học sinh có sẵn (Không để trống màn hình)
-          const fallbackData: StudentCurriculumVitaeProfileData = {
-            full_name_upper: (student.fullName || (student as any).full_name || (student as any).name || '').toUpperCase(),
-            gender: ((student.gender as any) === 'female' || (student.gender as any) === 'Nữ' || student.gender === 'Nữ') ? 'Nữ' : 'Nam',
-            birth_day: birthParts[0] || '',
-            birth_month: birthParts[1] || '',
-            birth_year: birthParts[2] || '',
-            birth_order: '1',
-            ethnicity: (student as any).ethnicity || 'Kinh',
-            nationality: 'Việt Nam',
-            religion: 'Không',
-            citizen_id: (student as any).gov_id || (student as any).govId || '',
-            birth_place_hospital: '',
-            birth_place_ward: '',
-            birth_place_province: 'TP. Hồ Chí Minh',
-            birth_register_ward: '',
-            birth_register_province: 'TP. Hồ Chí Minh',
-            permanent_residence: {
-              street_address: (student as any).address || '',
-              ward_name: '',
-              province_name: 'TP. Hồ Chí Minh'
-            },
-            current_residence: {
-              street_address: (student as any).address || '',
-              ward_name: '',
-              province_name: 'TP. Hồ Chí Minh'
-            },
-            living_with: 'Cha và Mẹ',
-            direct_guardian: {
-              full_name: (student as any).parent_name || '',
-              relationship: 'Cha ruột',
-              phone: (student as any).parent_phone || (student as any).phone || ''
-            },
-            health_notes: 'Bình thường',
-            father: {
-              full_name: (student as any).parent_name || '',
-              birth_year: '',
-              phone_numbers: (student as any).parent_phone || '',
-              job: '',
-              workplace: ''
-            },
-            mother: {
-              full_name: '',
-              birth_year: '',
-              phone_numbers: '',
-              job: '',
-              workplace: ''
-            },
-            siblings: [],
-            personalities: {
-              kien_nhan: false,
-              le_phep: true,
-              huong_noi: false,
-              canh_tranh: false,
-              hoa_dong: true,
-              quan_tam: true,
-              sang_tao: false,
-              noi_loan: false,
-              nong_tinh: false,
-              trung_thuc: true,
-              thu_dong: false,
-              lanh_dao: false,
-              nhay_cam: false,
-              huong_ngoai: true,
-              vo_tu: true
-            },
-            primary_contact_person: 'father',
-            parent_signature_name: (student as any).parent_name || (student.fullName || '')
-          };
-
+          // Khởi tạo form từ dữ liệu hiện trạng đầy đủ nhất từ hệ thống
           setCvRecord(null);
-          setFormData(fallbackData);
+          setFormData(res.prefill as StudentCurriculumVitaeProfileData);
           setTeacherNotes('');
         }
       } catch (err) {
@@ -166,9 +108,11 @@ export function StudentCvDrawer({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           schoolName: 'TRƯỜNG THCS TRẦN BỘI CƠ',
-          className: className || '8A13',
+          className: className || '8A12',
           schoolYear: '2026-2027',
           teacherName: 'Giáo viên chủ nhiệm',
+          stt: student.order || (student as any).order_index || '01',
+          profile: formData,
           profileData: formData
         })
       });

@@ -55,14 +55,21 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const {
       schoolName = 'TRƯỜNG THCS TRẦN BỘI CƠ',
-      className = '8A13',
-      schoolYear = '2026- 2027',
+      className = '8A12',
+      schoolYear = '2026-2027',
       teacherName = 'Giáo viên chủ nhiệm',
-      stt = '01',
-      profile = {}
+      stt = '01'
     } = body;
 
-    const data: Partial<StudentCurriculumVitaeProfileData> = profile;
+    const rawProfile = body.profile || body.profileData || body.data || {};
+    const data: Partial<StudentCurriculumVitaeProfileData> = rawProfile;
+
+    const formatAddress = (addrObj: any) => {
+      if (!addrObj) return '';
+      if (typeof addrObj === 'string') return addrObj;
+      const parts = [addrObj.street_address, addrObj.ward_name, addrObj.province_name].filter(Boolean);
+      return parts.join(', ');
+    };
 
     const p = (text: string, options: any = {}) =>
       new Paragraph({
@@ -281,7 +288,9 @@ export async function POST(req: NextRequest) {
             rowDots('7. Quê quán: Phải chi tiết (Tổ/Thôn/Xóm/Khu phố):', data.hometown?.street_address),
             rowDots('    Xã/Phường:', data.hometown?.ward_name, 'Tỉnh/TP:', data.hometown?.province_name),
             rowDots('8. Nơi thường trú: (Số nhà + đường):', data.permanent_residence?.street_address),
+            rowDots('    Xã/Phường:', data.permanent_residence?.ward_name, 'Tỉnh/TP:', data.permanent_residence?.province_name),
             rowDots('9. Chỗ ở hiện nay: (Số nhà + đường):', data.current_residence?.street_address),
+            rowDots('    Xã/Phường:', data.current_residence?.ward_name, 'Tỉnh/TP:', data.current_residence?.province_name),
             
             p('10. Học sinh thuộc diện (nếu có đánh dấu X):', { bold: true, size: THEME.fontSizePt13, color: THEME.primary, before: 25, after: 15 }),
             new Paragraph({
