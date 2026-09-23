@@ -117,7 +117,14 @@ export function StudentCvDrawer({
         })
       });
 
-      if (!res.ok) throw new Error('Không thể tạo file Word từ server');
+      if (!res.ok) {
+        let errMsg = 'Không thể tạo file Word từ server';
+        try {
+          const errData = await res.json();
+          if (errData?.error) errMsg = errData.error;
+        } catch {}
+        throw new Error(errMsg);
+      }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');

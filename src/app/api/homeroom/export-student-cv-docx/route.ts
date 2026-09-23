@@ -400,11 +400,21 @@ export async function POST(req: NextRequest) {
 
     const buffer = await Packer.toBuffer(doc);
 
+    // Chuẩn hóa tên file ASCII an toàn cho HTTP Header (tránh lỗi non-ASCII ByteString)
+    const asciiName = (data.full_name_upper || 'hoc-sinh')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[đĐ]/g, 'D')
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      .replace(/_+/g, '_');
+    const safeFilename = `so-yeu-ly-lich-${className}-${asciiName}.docx`;
+    const encodedFilename = encodeURIComponent(`so-yeu-ly-lich-${className}-${data.full_name_upper || 'hoc-sinh'}.docx`);
+
     return new Response(new Uint8Array(buffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'Content-Disposition': `attachment; filename=so-yeu-ly-lich-${className}-${data.full_name_upper || 'hoc-sinh'}.docx`
+        'Content-Disposition': `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`
       }
     });
   } catch (err: any) {
@@ -412,3 +422,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
