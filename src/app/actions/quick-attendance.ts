@@ -203,18 +203,30 @@ export async function getGradeAttendanceSummary(grade: number, dateStr: string, 
                 });
 
                 // Nhóm theo ghi chú để gộp tiết (Ví dụ: T1-2: A, T4: B) - dùng hàm Format chuẩn
-                const formatAggregatedNotes = (notesMap: Record<number, string>) => {
+                const formatAggregatedNotes = (notesMap: Record<number, string>, missedPs?: number[]) => {
                     const notePs: Record<string, number[]> = {};
                     Object.entries(notesMap).forEach(([p, v]) => {
-                        if (!v) return;
-                        if (!notePs[v]) notePs[v] = [];
-                        notePs[v].push(Number(p));
+                        const noteVal = v || '';
+                        if (!notePs[noteVal]) notePs[noteVal] = [];
+                        notePs[noteVal].push(Number(p));
                     });
+
+                    // Nếu có tiết vắng lẻ nhưng chưa có trong notePs, thêm vào nhóm rỗng
+                    if (missedPs && missedPs.length > 0 && missedPs.length < 5) {
+                        const covered = new Set(Object.values(notePs).flat());
+                        missedPs.forEach(p => {
+                            if (!covered.has(p)) {
+                                if (!notePs['']) notePs[''] = [];
+                                notePs[''].push(p);
+                            }
+                        });
+                    }
+
                     const parts: string[] = [];
                     Object.entries(notePs).forEach(([noteText, periods]) => {
                         const sorted = [...periods].sort((a,b) => a - b);
                         if (sorted.length >= 5 && sorted.includes(1) && sorted.includes(5)) {
-                             parts.push(noteText);
+                             if (noteText) parts.push(noteText);
                              return;
                         }
                         const ranges: string[] = [];
@@ -226,14 +238,18 @@ export async function getGradeAttendanceSummary(grade: number, dateStr: string, 
                                 if (i < sorted.length) { start = sorted[i]; prev = sorted[i]; }
                             }
                         }
-                        parts.push(`T${ranges.join(',')}: ${noteText}`);
+                        if (noteText) {
+                            parts.push(`T${ranges.join(',')}: ${noteText}`);
+                        } else {
+                            parts.push(`T${ranges.join(',')}:`);
+                        }
                     });
                     return parts.join(", ");
                 };
 
-                aggregated.note = formatAggregatedNotes(aggregated.statusNotes);
-                aggregated.violationNote = formatAggregatedNotes(aggregated.violationNotes);
-                aggregated.rewardNote = formatAggregatedNotes(aggregated.rewardNotes);
+                aggregated.note = formatAggregatedNotes(aggregated.statusNotes, aggregated.missedPeriods);
+                aggregated.violationNote = formatAggregatedNotes(aggregated.violationNotes, aggregated.violationPeriods);
+                aggregated.rewardNote = formatAggregatedNotes(aggregated.rewardNotes, aggregated.rewardPeriods);
                 
                 // Chuẩn hóa mảng tiết để đồng nhất
                 aggregated.missedPeriods = Array.from(new Set(aggregated.missedPeriods)).sort();
@@ -575,18 +591,30 @@ export async function getClassesAttendanceSummary(classIds: string[], dateStr: s
                     }
                 });
 
-                const formatAggregatedNotes = (notesMap: Record<number, string>) => {
+                const formatAggregatedNotes = (notesMap: Record<number, string>, missedPs?: number[]) => {
                     const notePs: Record<string, number[]> = {};
                     Object.entries(notesMap).forEach(([p, v]) => {
-                        if (!v) return;
-                        if (!notePs[v]) notePs[v] = [];
-                        notePs[v].push(Number(p));
+                        const noteVal = v || '';
+                        if (!notePs[noteVal]) notePs[noteVal] = [];
+                        notePs[noteVal].push(Number(p));
                     });
+
+                    // Nếu có tiết vắng lẻ nhưng chưa có trong notePs, thêm vào nhóm rỗng
+                    if (missedPs && missedPs.length > 0 && missedPs.length < 5) {
+                        const covered = new Set(Object.values(notePs).flat());
+                        missedPs.forEach(p => {
+                            if (!covered.has(p)) {
+                                if (!notePs['']) notePs[''] = [];
+                                notePs[''].push(p);
+                            }
+                        });
+                    }
+
                     const parts: string[] = [];
                     Object.entries(notePs).forEach(([noteText, periods]) => {
                         const sorted = [...periods].sort((a,b) => a - b);
                         if (sorted.length >= 5 && sorted.includes(1) && sorted.includes(5)) {
-                             parts.push(noteText);
+                             if (noteText) parts.push(noteText);
                              return;
                         }
                         const ranges: string[] = [];
@@ -598,14 +626,18 @@ export async function getClassesAttendanceSummary(classIds: string[], dateStr: s
                                 if (i < sorted.length) { start = sorted[i]; prev = sorted[i]; }
                             }
                         }
-                        parts.push(`T${ranges.join(',')}: ${noteText}`);
+                        if (noteText) {
+                            parts.push(`T${ranges.join(',')}: ${noteText}`);
+                        } else {
+                            parts.push(`T${ranges.join(',')}:`);
+                        }
                     });
                     return parts.join(", ");
                 };
 
-                aggregated.note = formatAggregatedNotes(aggregated.statusNotes);
-                aggregated.violationNote = formatAggregatedNotes(aggregated.violationNotes);
-                aggregated.rewardNote = formatAggregatedNotes(aggregated.rewardNotes);
+                aggregated.note = formatAggregatedNotes(aggregated.statusNotes, aggregated.missedPeriods);
+                aggregated.violationNote = formatAggregatedNotes(aggregated.violationNotes, aggregated.violationPeriods);
+                aggregated.rewardNote = formatAggregatedNotes(aggregated.rewardNotes, aggregated.rewardPeriods);
                 
                 aggregated.missedPeriods = Array.from(new Set(aggregated.missedPeriods)).sort();
                 aggregated.violationPeriods = Array.from(new Set(aggregated.violationPeriods)).sort();
