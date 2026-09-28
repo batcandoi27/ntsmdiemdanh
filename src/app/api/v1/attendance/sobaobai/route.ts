@@ -7,7 +7,7 @@ const dbClient = (typeof window === 'undefined' && supabaseAdmin) ? supabaseAdmi
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-requested-with',
 };
 
@@ -246,6 +246,240 @@ export async function GET(req: NextRequest) {
     );
   } catch (error: any) {
     console.error('Lỗi nghiêm trọng trong GET /api/v1/attendance/sobaobai:', error);
+    return NextResponse.json(
+      { success: false, error: error.message || 'Lỗi server nội bộ' },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
+interface BulkItem {
+  date: string;
+  className?: string;
+  classId?: string;
+  session?: string; // 'morning' | 'afternoon'
+  period?: number | string;
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const items: BulkItem[] = body?.items;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Thiếu mảng danh sách tiết cần truy vấn: items' },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    if (items.length > 100) {
+      return NextResponse.json(
+        { success: false, error: 'Mỗi lần truy vấn tối đa 100 tiết' },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    // 1. Thu thập danh sách ngày và lớp độc nhất
+    const uniqueDates = Array.from(new Set(items.map(i => i.date?.trim()).filter(Boolean)));
+    const rawClassNamesOrIds = Array.from(
+      new Set(items.map(i => (i.className || i.classId)?.trim()).filter(Boolean))
+    );
+
+    if (uniqueDates.length === 0 || rawClassNamesOrIds.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Danh sách items không có date hoặc className hợp lệ' },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    // 2. Phân giải danh sách lớp học (Query batch từ classes)
+    const { data: allClasses } = await dbClient
+      .from('classes')
+      .select('id, name');
+
+    const classLookup = new Map<string, { id: string; name: string }>();
+    allClasses?.forEach((c: any) => {
+      if (c.id) classLookup.set(c.id.toLowerCase(), { id: c.id, name: c.name });
+      if (c.name) classLookup.set(c.name.toLowerCase(), { id: c.id, name: c.name });
+    });
+
+    // Gom danh sách class_id thực tế
+    const resolvedClassIds: string[] = [];
+    rawClassNamesOrIds.forEach(raw => {
+      const found = classLookup.get(raw.toLowerCase());
+      if (found && !resolvedClassIds.includes(found.id)) {
+        resolvedClassIds.push(found.id);
+      }
+    });
+
+    // 3. Lấy sĩ số theo từng lớp (Query batch từ student_classes)
+    const classSizes = new Map<string, number>();
+    if (resolvedClassIds.length > 0) {
+      const { data: stuClasses } = await dbClient
+        .from('student_classes')
+        .select('class_id')
+        .in('class_id', resolvedClassIds);
+      
+      stuClasses?.forEach((sc: any) => {
+        const cur = classSizes.get(sc.class_id) || 0;
+        classSizes.set(sc.class_id, cur + 1);
+      });
+    }
+
+    // 4. Lấy trạng thái điểm danh (Query batch từ attendance_statuses)
+    const { data: statuses } = await dbClient
+      .from('attendance_statuses')
+      .select('id, code, label, type_id');
+    const statusMap = new Map<string, { code: string; label: string }>();
+    statuses?.forEach((s: any) => {
+      statusMap.set(s.id, { code: s.code, label: s.label || s.code });
+    });
+
+    // 5. Lấy toàn bộ bản ghi điểm danh theo danh sách lớp và ngày (Query batch từ attendance)
+    let records: any[] = [];
+    if (resolvedClassIds.length > 0 && uniqueDates.length > 0) {
+      const { data: attList, error: attError } = await dbClient
+        .from('attendance')
+        .select('*')
+        .in('class_id', resolvedClassIds)
+        .in('date', uniqueDates);
+
+      if (attError) {
+        console.error('Lỗi batch attendance:', attError);
+      } else if (attList) {
+        records = attList;
+      }
+    }
+
+    // 6. Lấy thông tin học sinh vắng (Query batch từ students)
+    const relevantStudentIds = new Set<string>();
+    records.forEach(r => {
+      const st = statusMap.get(r.status_id);
+      const code = st?.code || '';
+      if (['K', 'P', 'V', 'absent', 'excused'].includes(code) && r.student_id) {
+        relevantStudentIds.add(r.student_id);
+      }
+    });
+
+    const studentMap = new Map<string, { student_code: string; full_name: string }>();
+    if (relevantStudentIds.size > 0) {
+      const { data: stuList } = await dbClient
+        .from('students')
+        .select('id, student_code, full_name')
+        .in('id', Array.from(relevantStudentIds));
+      
+      stuList?.forEach((s: any) => {
+        studentMap.set(s.id, { student_code: s.student_code, full_name: s.full_name });
+      });
+    }
+
+    // 7. Xử lý từng item trong batch và đóng gói dictionary kết quả
+    const results: Record<string, any> = {};
+
+    items.forEach(item => {
+      const date = item.date?.trim();
+      const rawClass = (item.className || item.classId)?.trim();
+      const session = item.session?.trim() || 'morning';
+      const period = item.period !== undefined && item.period !== null && item.period !== '' 
+        ? parseInt(String(item.period), 10) 
+        : null;
+
+      const cacheKey = `${date}_${rawClass}_${session}_${period}`;
+      const resolvedClass = rawClass ? classLookup.get(rawClass.toLowerCase()) : null;
+
+      if (!resolvedClass) {
+        results[cacheKey] = {
+          success: false,
+          error: `Không tìm thấy lớp "${rawClass}" trong hệ thống.`
+        };
+        return;
+      }
+
+      const classId = resolvedClass.id;
+      const className = resolvedClass.name;
+      const totalStudents = classSizes.get(classId) || 0;
+
+      // Lọc các bản ghi khớp với date, classId, session, period
+      const matchingRecords = records.filter(r => {
+        if (r.class_id !== classId || r.date !== date) return false;
+        if (session && r.session && r.session !== session) return false;
+
+        const st = statusMap.get(r.status_id);
+        const code = st?.code || '';
+        const isAbsent = ['K', 'P', 'V', 'absent', 'excused'].includes(code);
+        if (!isAbsent) return false;
+
+        if (period !== null) {
+          const isSessionWide = r.period === null || r.period === undefined;
+          const isSpecificPeriod = r.period === period;
+          const isInMissedPeriods = Array.isArray(r.missed_periods) && r.missed_periods.includes(period);
+          return isSessionWide || isSpecificPeriod || isInMissedPeriods;
+        }
+
+        return true;
+      });
+
+      // Tạo danh sách học sinh vắng
+      const absentStudents = matchingRecords.map(r => {
+        const stu = studentMap.get(r.student_id);
+        const st = statusMap.get(r.status_id);
+        const code = st?.code || 'K';
+        const label = st?.label || (code === 'P' ? 'Vắng có phép' : 'Vắng không phép');
+
+        return {
+          id: r.student_id,
+          studentCode: stu?.student_code || '',
+          fullName: stu?.full_name || 'Học sinh',
+          status: code,
+          statusLabel: label,
+          note: r.note || '',
+          isFullDay: r.period === null || r.period === undefined,
+          period: r.period || null,
+          session: r.session || session,
+          missedPeriods: r.missed_periods || []
+        };
+      });
+
+      // Deduplicate học sinh vắng
+      const uniqueAbsentMap = new Map<string, any>();
+      absentStudents.forEach(stu => {
+        if (!uniqueAbsentMap.has(stu.id)) {
+          uniqueAbsentMap.set(stu.id, stu);
+        }
+      });
+      const uniqueAbsentList = Array.from(uniqueAbsentMap.values());
+
+      results[cacheKey] = {
+        success: true,
+        date,
+        className,
+        classId,
+        session,
+        period,
+        totalStudents,
+        absentCount: uniqueAbsentList.length,
+        absentStudents: uniqueAbsentList,
+        meta: {
+          timestamp: new Date().toISOString()
+        }
+      };
+    });
+
+    return NextResponse.json(
+      {
+        success: true,
+        total: items.length,
+        results,
+        meta: {
+          timestamp: new Date().toISOString(),
+          version: '2.0-batch'
+        }
+      },
+      { status: 200, headers: corsHeaders }
+    );
+  } catch (error: any) {
+    console.error('Lỗi nghiêm trọng trong POST /api/v1/attendance/sobaobai:', error);
     return NextResponse.json(
       { success: false, error: error.message || 'Lỗi server nội bộ' },
       { status: 500, headers: corsHeaders }
