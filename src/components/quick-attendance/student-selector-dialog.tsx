@@ -469,11 +469,20 @@ export function StudentSelectorDialog({
             getClassAttendanceDetails(classId, date, session)
                 .then(data => {
                     const sortedData = [...data].sort((a, b) => {
+                        // 1. Ưu tiên theo thứ tự STT/order trong lớp
+                        if (a.student.order !== undefined && b.student.order !== undefined && a.student.order !== b.student.order) {
+                            return (a.student.order || 0) - (b.student.order || 0);
+                        }
+                        // 2. Sắp xếp theo mã học sinh (hỗ trợ cả dạng 8A8_15 và mã Bộ 79774504-00-4250)
                         const codeA = a.student.code || '';
                         const codeB = b.student.code || '';
-                        const numA = parseInt(codeA.split('_').pop() || '0');
-                        const numB = parseInt(codeB.split('_').pop() || '0');
-                        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+                        const matchA = codeA.match(/\d+$/);
+                        const matchB = codeB.match(/\d+$/);
+                        if (matchA && matchB) {
+                            const numA = parseInt(matchA[0], 10);
+                            const numB = parseInt(matchB[0], 10);
+                            if (numA !== numB) return numA - numB;
+                        }
                         return codeA.localeCompare(codeB, undefined, { numeric: true });
                     });
 

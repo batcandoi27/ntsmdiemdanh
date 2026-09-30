@@ -222,6 +222,8 @@ export interface Student {
     classId: string;
     order: number; // STT
     fullName: string;
+    rawFullName?: string;
+    nameSuffix?: string;
     firstName: string;
     lastName: string;
     gender: 'Nam' | 'Nữ';

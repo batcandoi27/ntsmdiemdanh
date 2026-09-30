@@ -16,15 +16,21 @@ import { checkPermission } from '@/services/permission-service';
 import { SYSTEM_MODE } from '@/config/system';
 
 const compareVietnameseNames = (nameA: string, nameB: string) => {
-    const a = (nameA || '').trim();
-    const b = (nameB || '').trim();
-    const partsA = a.split(' ');
-    const partsB = b.split(' ');
+    const cleanA = (nameA || '').replace(/\s*\([A-Za-z0-9]+\)$/, '').trim();
+    const cleanB = (nameB || '').replace(/\s*\([A-Za-z0-9]+\)$/, '').trim();
+
+    const partsA = cleanA.split(/\s+/);
+    const partsB = cleanB.split(/\s+/);
     const lastNameA = partsA.pop() || '';
     const lastNameB = partsB.pop() || '';
+
     const cmp = lastNameA.localeCompare(lastNameB, 'vi', { sensitivity: 'base' });
     if (cmp !== 0) return cmp;
-    return a.localeCompare(b, 'vi', { sensitivity: 'base' });
+
+    const cmpFull = cleanA.localeCompare(cleanB, 'vi', { sensitivity: 'base' });
+    if (cmpFull !== 0) return cmpFull;
+
+    return (nameA || '').localeCompare(nameB || '', 'vi', { sensitivity: 'base' });
 };
 
 // User will be dynamically fetched via SSR Auth

@@ -93,11 +93,12 @@ export function formatShortStudentName(fullName: string): string {
  */
 export function getVietnameseSortKey(fullName: string): string {
   if (!fullName) return '';
-  const words = fullName.trim().split(/\s+/);
+  const clean = fullName.replace(/\s*\([A-Za-z0-9]+\)$/, '').trim();
+  const words = clean.split(/\s+/);
   if (words.length === 0) return '';
   const firstName = words[words.length - 1].toLowerCase();
   const rest = words.slice(0, -1).join(' ').toLowerCase();
-  return `${firstName} ${rest}`;
+  return `${firstName} ${rest} ${fullName.toLowerCase()}`;
 }
 
 /**

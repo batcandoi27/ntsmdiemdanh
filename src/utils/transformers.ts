@@ -20,10 +20,14 @@ export const transformStudentToDb = (student: Student) => {
  * Transforms Database row to UI Student model
  */
 export const transformDbToStudent = (dbRow: any): Student => {
+    const rawName = dbRow.raw_full_name || dbRow.full_name?.replace(/\s*\([A-Za-z0-9]+\)$/, '') || '';
+    const nameParts = rawName.trim().split(/\s+/);
     return {
         id: dbRow.id,
         code: dbRow.student_code,
         fullName: dbRow.full_name,
+        rawFullName: rawName,
+        nameSuffix: dbRow.name_suffix || undefined,
         gender: dbRow.gender === 'male' ? 'Nam' : dbRow.gender === 'female' ? 'Nữ' : 'Khác',
         birthday: dbRow.birthday,
         statusV3: dbRow.status as StudentStatus,
@@ -33,7 +37,7 @@ export const transformDbToStudent = (dbRow: any): Student => {
         order: dbRow.order || 0,
         classId: dbRow.class_id,
         is_deleted: dbRow.is_deleted || false,
-        firstName: dbRow.full_name.split(' ').pop() || '',
-        lastName: dbRow.full_name.split(' ').slice(0, -1).join(' ') || ''
+        firstName: nameParts.pop() || '',
+        lastName: nameParts.join(' ') || ''
     } as Student;
 };

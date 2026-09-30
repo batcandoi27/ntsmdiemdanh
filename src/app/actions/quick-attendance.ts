@@ -110,7 +110,10 @@ export async function getGradeAttendanceSummary(grade: number, dateStr: string, 
                 if (s.id) studentMap.set(s.id, s);
             });
 
-            const getSTT = (code: string) => {
+            const getSTT = (code: string, order?: number) => {
+                if (order !== undefined && order !== null && order > 0) return String(order);
+                const match = code.match(/\d+$/);
+                if (match) return match[0];
                 const parts = code.split('_');
                 return parts.length > 1 ? parts[parts.length - 1] : '';
             };
@@ -127,7 +130,7 @@ export async function getGradeAttendanceSummary(grade: number, dateStr: string, 
                 if (!student) return;
 
                 const name = student.fullName || studentIdOrCode;
-                const stt = getSTT(student.code);
+                const stt = getSTT(student.code, student.order);
                 const item = { name, stt };
 
                 // --- GỘP DỮ LIỆU TIẾT LẺ ---
@@ -432,7 +435,21 @@ export async function getClassAttendanceDetails(classId: string, dateStr: string
                 note: note,
                 effectiveStatus: getEffectiveStatus(s)
             };
-        }).sort((a, b) => a.student.order - b.student.order);
+        }).sort((a, b) => {
+            if (a.student.order !== undefined && b.student.order !== undefined && a.student.order !== b.student.order) {
+                return (a.student.order || 0) - (b.student.order || 0);
+            }
+            const codeA = a.student.code || '';
+            const codeB = b.student.code || '';
+            const matchA = codeA.match(/\d+$/);
+            const matchB = codeB.match(/\d+$/);
+            if (matchA && matchB) {
+                const numA = parseInt(matchA[0], 10);
+                const numB = parseInt(matchB[0], 10);
+                if (numA !== numB) return numA - numB;
+            }
+            return (a.student.code || '').localeCompare(b.student.code || '', undefined, { numeric: true });
+        });
     } catch (e) {
         console.error("Lỗi getClassAttendanceDetails:", e);
         return [];
@@ -506,7 +523,10 @@ export async function getClassesAttendanceSummary(classIds: string[], dateStr: s
             const studentMap = new Map(students.map(s => [s.code, s]));
             const studentUuidMap = new Map(students.map(s => [s.id, s]));
             
-            const getSTT = (code: string) => {
+            const getSTT = (code: string, order?: number) => {
+                if (order !== undefined && order !== null && order > 0) return String(order);
+                const match = code.match(/\d+$/);
+                if (match) return match[0];
                 const parts = code.split('_');
                 return parts.length > 1 ? parts[parts.length - 1] : '';
             };
@@ -522,7 +542,7 @@ export async function getClassesAttendanceSummary(classIds: string[], dateStr: s
                 const student = studentMap.get(studentIdOrCode) || studentUuidMap.get(studentIdOrCode);
                 if (!student) return;
 
-                const stt = getSTT(student.code);
+                const stt = getSTT(student.code, student.order);
                 const item = { name: student.fullName, stt };
 
                 const studentRecordsValues = studentRecords.get(studentIdOrCode) || [];
