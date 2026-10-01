@@ -321,6 +321,30 @@ export interface PaymentTransaction {
     createdAt: string;
 }
 
+export type ActivityType = 'composite' | 'field';
+export type FieldDataType = 'boolean' | 'text' | 'number' | 'select';
+export type FieldInputMode = 'checkbox' | 'inline_text' | 'select' | 'number';
+
+export interface CompositeActivityConfig {
+    type: ActivityType;
+    version: number;
+    activityCode?: string;
+    hasNotes?: boolean; // Tùy chọn: kèm cột ghi chú kế bên
+    allowDynamicChildren?: boolean;
+    dataType?: FieldDataType;
+    inputMode?: FieldInputMode;
+    exportHeader?: string;
+    exportFormat?: 'mark' | 'text' | 'number';
+    options?: string[]; // Cho select/multi-select
+}
+
+export interface ColumnDisplayConfig {
+    width?: number;
+    color?: string;
+    icon?: string;
+    isNotesColumn?: boolean;
+}
+
 /**
  * Column - Định nghĩa một cột theo dõi
  */
@@ -349,6 +373,13 @@ export interface Column {
     // Parent Portal & Payment Configuration
     isSharedWithParents?: boolean; // Tùy chọn chia sẻ cho HS/PH xem ở /portal (Mặc định: false)
     paymentConfig?: ColumnPaymentConfig; // Cấu hình thu tiền & sinh mã VietQR
+
+    // Composite Multi-Column Support
+    parentColumnId?: string | null; // NULL = Parent Activity; NOT NULL = Child Field Column
+    activityConfig?: CompositeActivityConfig | null;
+    displayConfig?: ColumnDisplayConfig | null;
+    schemaVersion?: number;
+    children?: Column[]; // Client-side resolved sub-columns
 
     order: number; // Thứ tự hiển thị
     createdAt: string; // ISO string

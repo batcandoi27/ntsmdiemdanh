@@ -1,7 +1,7 @@
 "use client";
 
 import { AttendanceStatus } from "@/types/models";
-import { cn } from "@/lib/utils";
+import { cn, formatStudentCode } from "@/lib/utils";
 import { CheckCircle2, Clock, FileText, Ban, AlertTriangle, User, MoreVertical, X, ChevronLeft, Save, Star } from "lucide-react";
 import { Drawer } from "vaul"; // Using Vaul for bottom sheet
 import { useState, useEffect } from "react";
@@ -221,7 +221,7 @@ export function MobileStudentCard({
                             )}
                             <div className="flex flex-col items-center">
                                 <span className="truncate max-w-[240px] leading-tight">{student.name}</span>
-                                <span className="text-xs font-mono text-gray-400 font-normal mt-1">{student.code}</span>
+                                <span className="text-xs font-mono text-gray-400 font-normal mt-1" title={student.code}>{formatStudentCode(student.code)}</span>
                             </div>
                         </Drawer.Title>
 

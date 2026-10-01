@@ -30,6 +30,10 @@ interface ColumnRow {
     default_visibility: boolean;
     is_shared_with_parents?: boolean;
     payment_config?: Record<string, unknown> | null;
+    parent_column_id?: string | null;
+    activity_config?: Record<string, unknown> | null;
+    display_config?: Record<string, unknown> | null;
+    schema_version?: number;
     order: number;
     created_at: string;
     updated_at: string;
@@ -64,6 +68,10 @@ function rowToColumn(row: ColumnRow): Column {
         defaultVisibility: row.default_visibility,
         isSharedWithParents: row.is_shared_with_parents ?? false,
         paymentConfig,
+        parentColumnId: row.parent_column_id ?? null,
+        activityConfig: (row.activity_config as any) ?? null,
+        displayConfig: (row.display_config as any) ?? null,
+        schemaVersion: row.schema_version ?? 1,
         order: row.order,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
@@ -88,6 +96,10 @@ function columnToRow(col: Column): Record<string, unknown> {
         default_visibility: col.defaultVisibility ?? true,
         is_shared_with_parents: col.isSharedWithParents ?? false,
         payment_config: col.paymentConfig ?? null,
+        parent_column_id: col.parentColumnId ?? null,
+        activity_config: col.activityConfig ?? null,
+        display_config: col.displayConfig ?? null,
+        schema_version: col.schemaVersion ?? 1,
         order: col.order,
         created_at: col.createdAt,
         updated_at: col.updatedAt,
@@ -271,17 +283,27 @@ export async function deleteColumn(columnId: string): Promise<void> {
 }
 
 /**
- * Archive a column
+ * Archive a column (Cascades to child columns if this is a composite parent)
  */
 export async function archiveColumn(columnId: string): Promise<void> {
     await updateColumn(columnId, { archived: true });
+    // C13 Blocker: Cascade archive to all child columns
+    await dbClient
+        .from('columns')
+        .update({ archived: true, updated_at: new Date().toISOString() })
+        .eq('parent_column_id', columnId);
 }
 
 /**
- * Unarchive a column
+ * Unarchive a column (Cascades unarchive to child columns)
  */
 export async function unarchiveColumn(columnId: string): Promise<void> {
     await updateColumn(columnId, { archived: false });
+    // C14 Blocker: Cascade unarchive to all child columns
+    await dbClient
+        .from('columns')
+        .update({ archived: false, updated_at: new Date().toISOString() })
+        .eq('parent_column_id', columnId);
 }
 
 /**
@@ -325,11 +347,11 @@ export async function getFixedColumns(classId: string, userId?: string): Promise
 }
 
 /**
- * Get custom columns for a class
+ * Get custom columns for a class (Top-level only, filters out child/sub columns of composite activities)
  */
 export async function getCustomColumns(classId: string, userId?: string): Promise<Column[]> {
     const columns = await getColumns(classId, userId);
-    return columns.filter(c => c.scope === 'custom');
+    return columns.filter(c => c.scope === 'custom' && !c.parentColumnId);
 }
 
 /**
@@ -372,4 +394,190 @@ export async function getExpiredColumns(classId: string, userId?: string): Promi
         }
         return false;
     });
+}
+
+// ============================================
+// COMPOSITE ACTIVITY REGISTRY (MULTI-COLUMN)
+// ============================================
+
+export interface CreateChildColumnDto {
+    name: string;
+    dataType?: 'boolean' | 'text' | 'number' | 'select';
+    inputMode?: 'checkbox' | 'inline_text' | 'select' | 'number';
+    isNotesColumn?: boolean;
+    order?: number;
+    options?: string[];
+    suggestions?: string[];
+}
+
+/**
+ * Lấy toàn bộ cây Hoạt động phức hợp (Composite Activities) cho một lớp
+ */
+export async function getCompositeActivitiesForClass(classId: string, userId?: string, includeArchived = false): Promise<Column[]> {
+    // 1. Fetch parent columns
+    let parentQuery = dbClient
+        .from('columns')
+        .select('*')
+        .eq('class_id', classId)
+        .is('parent_column_id', null)
+        .not('activity_config', 'is', null);
+
+    if (!includeArchived) {
+        parentQuery = parentQuery.eq('archived', false);
+    }
+    if (userId) {
+        parentQuery = parentQuery.or(`user_id.eq.system,user_id.eq.${userId}`);
+    }
+
+    const { data: parentRows, error: parentError } = await parentQuery.order('order', { ascending: true });
+    if (parentError || !parentRows) {
+        console.error('Error fetching composite parents:', parentError);
+        return [];
+    }
+
+    const parents = (parentRows as ColumnRow[]).map(rowToColumn);
+    if (parents.length === 0) return [];
+
+    // 2. Fetch all child columns for these parents
+    const parentIds = parents.map(p => p.id);
+    let childQuery = dbClient
+        .from('columns')
+        .select('*')
+        .in('parent_column_id', parentIds);
+
+    if (!includeArchived) {
+        childQuery = childQuery.eq('archived', false);
+    }
+
+    const { data: childRows, error: childError } = await childQuery.order('order', { ascending: true });
+    if (childError) {
+        console.error('Error fetching composite children:', childError);
+    }
+
+    const children = ((childRows as ColumnRow[]) || []).map(rowToColumn);
+
+    // 3. Attach children to parents
+    return parents.map(parent => ({
+        ...parent,
+        children: children.filter(c => c.parentColumnId === parent.id)
+    }));
+}
+
+/**
+ * Tạo một Hoạt động phức hợp kèm các cột con (Composite Activity with Sub-columns)
+ */
+export async function createCompositeActivityWithChildren(
+    activity: Omit<Column, 'createdAt' | 'updatedAt' | 'id'> & { id?: string },
+    subColumns: CreateChildColumnDto[]
+): Promise<Column> {
+    // C01 Blocker: Hoạt động phức hợp phải có ít nhất một cột con
+    if (!subColumns || subColumns.length === 0) {
+        throw new Error('Hoạt động phức hợp phải có ít nhất một cột con.');
+    }
+
+    const parentId = activity.id || `${activity.classId}_act_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    
+    // Parent column
+    const parentData: Omit<Column, 'createdAt' | 'updatedAt'> = {
+        ...activity,
+        id: parentId,
+        parentColumnId: null,
+        activityConfig: {
+            type: 'composite',
+            version: 1,
+            activityCode: activity.activityConfig?.activityCode || parentId,
+            hasNotes: activity.activityConfig?.hasNotes ?? false,
+            allowDynamicChildren: true,
+        },
+    };
+
+    const createdParent = await createColumn(parentData);
+
+    // Create children
+    const childPromises = subColumns.map(async (sub, idx) => {
+        const childId = `${parentId}_col_${Date.now()}_${idx}_${Math.random().toString(36).substr(2, 4)}`;
+        const childData: Omit<Column, 'createdAt' | 'updatedAt'> = {
+            id: childId,
+            classId: activity.classId, // Invariant: strict inheritance
+            userId: activity.userId,
+            name: sub.name,
+            scope: 'custom',
+            frequency: 'one_time',
+            allowFreeText: true,
+            archived: false,
+            order: (sub.order ?? idx) + 1,
+            suggestions: sub.suggestions || [],
+            applicableScope: activity.applicableScope || 'all',
+            applicableStudentIds: activity.applicableStudentIds,
+            parentColumnId: parentId,
+            activityConfig: {
+                type: 'field',
+                version: 1,
+                dataType: sub.dataType || (sub.isNotesColumn ? 'text' : 'boolean'),
+                inputMode: sub.inputMode || (sub.isNotesColumn ? 'inline_text' : 'checkbox'),
+                exportHeader: sub.name,
+                exportFormat: sub.isNotesColumn ? 'text' : 'mark',
+                options: sub.options,
+            },
+            displayConfig: {
+                isNotesColumn: sub.isNotesColumn || false,
+            }
+        };
+        return createColumn(childData);
+    });
+
+    const createdChildren = await Promise.all(childPromises);
+    return {
+        ...createdParent,
+        children: createdChildren,
+    };
+}
+
+/**
+ * Thêm cột con vào một Hoạt động đã có
+ */
+export async function addChildColumnToActivity(
+    parentColumnId: string,
+    subColumn: CreateChildColumnDto,
+    userId?: string
+): Promise<Column> {
+    const parent = await getColumn(parentColumnId);
+    if (!parent) {
+        throw new Error('Không tìm thấy hoạt động cha');
+    }
+    // C02/C03 Blocker: Cấm lồng sâu hơn 2 tầng
+    if (parent.parentColumnId) {
+        throw new Error('Không thể thêm cột con vào một cột con khác (chỉ hỗ trợ cấu trúc 2 tầng).');
+    }
+
+    const childId = `${parentColumnId}_col_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+    const childData: Omit<Column, 'createdAt' | 'updatedAt'> = {
+        id: childId,
+        classId: parent.classId, // Invariant: strict inheritance
+        userId: userId || parent.userId,
+        name: subColumn.name,
+        scope: 'custom',
+        frequency: 'one_time',
+        allowFreeText: true,
+        archived: false,
+        order: subColumn.order ?? 10,
+        suggestions: subColumn.suggestions || [],
+        applicableScope: parent.applicableScope || 'all',
+        applicableStudentIds: parent.applicableStudentIds,
+        parentColumnId: parent.id,
+        activityConfig: {
+            type: 'field',
+            version: 1,
+            dataType: subColumn.dataType || (subColumn.isNotesColumn ? 'text' : 'boolean'),
+            inputMode: subColumn.inputMode || (subColumn.isNotesColumn ? 'inline_text' : 'checkbox'),
+            exportHeader: subColumn.name,
+            exportFormat: subColumn.isNotesColumn ? 'text' : 'mark',
+            options: subColumn.options,
+        },
+        displayConfig: {
+            isNotesColumn: subColumn.isNotesColumn || false,
+        }
+    };
+
+    return createColumn(childData);
 }

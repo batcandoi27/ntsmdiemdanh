@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { useViewMode } from '@/context/view-mode-context';
+import { formatStudentCode } from '@/lib/utils';
 
 interface StudentListProps {
     classInfo: Class;
@@ -147,7 +148,7 @@ export function StudentList({ classInfo, initialStudents }: StudentListProps) {
                                         <h3 className={`font-bold text-lg ${s.status === 'Nghỉ học' || s.status === 'Chuyển trường' || s.is_deleted ? 'line-through text-red-500' : 'text-gray-800'}`}>
                                             {s.fullName}
                                         </h3>
-                                        <div className="text-blue-600 font-mono text-sm font-medium">{s.code}</div>
+                                        <div className="text-blue-600 font-mono text-sm font-medium" title={s.code}>{formatStudentCode(s.code)}</div>
                                     </div>
                                     <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${s.gender === 'Nam' ? 'bg-blue-50 text-blue-600' : 'bg-pink-50 text-pink-600'}`}>
                                         {s.gender}
@@ -210,7 +211,7 @@ export function StudentList({ classInfo, initialStudents }: StudentListProps) {
                                     {filteredStudents.map((s) => (
                                         <tr key={s.code} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-6 py-4 font-medium text-gray-500">{s.order}</td>
-                                            <td className="px-6 py-4 text-blue-600 font-mono text-xs">{s.code}</td>
+                                            <td className="px-6 py-4 text-blue-600 font-mono text-xs" title={s.code}>{formatStudentCode(s.code)}</td>
                                             <td className={`px-6 py-4 font-semibold ${s.status === 'Nghỉ học' || s.status === 'Chuyển trường' || s.is_deleted ? 'line-through text-red-500' : 'text-gray-800'}`}>
                                                 {s.fullName}
                                             </td>

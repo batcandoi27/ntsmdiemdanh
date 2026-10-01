@@ -30,22 +30,22 @@ export default function MonitorDashboardPage() {
 
     useEffect(() => {
         if (!appUser) return;
+        let myIds: string[] = [];
         const saved = localStorage.getItem(`myClasses_${appUser.uid}`) || localStorage.getItem('my-classes');
         if (saved) {
             try {
-                const ids = JSON.parse(saved);
-                setMyClassIds(ids);
+                myIds = JSON.parse(saved);
             } catch (e) {
                 console.error("Failed to parse my-classes", e);
             }
-        } else if (appUser.assignedClassIds && appUser.assignedClassIds.length > 0) {
-            setMyClassIds(appUser.assignedClassIds);
         }
+        if (myIds.length === 0 && appUser.assignedClassIds && appUser.assignedClassIds.length > 0) {
+            myIds = appUser.assignedClassIds;
+        }
+        setMyClassIds(myIds);
 
-        // Setup initial default grade tab
-        if (appUser.role !== 'teacher') {
-            setGrade(6); // Admins/Supervisors see Grade 6 initially by default if they prefer
-        }
+        // Mặc định luôn là 'Lớp Của Tôi' (-1)
+        setGrade(-1);
 
         getAllClasses().then(setClasses);
     }, [appUser]);
@@ -235,11 +235,24 @@ export default function MonitorDashboardPage() {
                     })}
                 </div>
             ) : (
-                <div className="text-center py-20 opacity-50">
-                    <BookOpen size={64} className="mx-auto text-gray-400 mb-4" />
-                    <p className="text-xl font-bold text-gray-400">
-                        Chưa có dữ liệu lớp học
+                <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-gray-200 p-8 shadow-2xs max-w-md mx-auto">
+                    <BookOpen size={48} className="mx-auto text-yellow-500 mb-3" />
+                    <h3 className="text-base font-bold text-gray-800 mb-1">
+                        {grade === -1 ? 'Chưa cấu hình "Lớp của tôi"' : 'Chưa có dữ liệu lớp học'}
+                    </h3>
+                    <p className="text-xs text-gray-500 mb-4">
+                        {grade === -1
+                            ? 'Vui lòng chọn lớp bạn phụ trách trong Cài Đặt, hoặc chọn các tab Khối 6, 7, 8, 9 ở trên để xem.'
+                            : 'Không tìm thấy lớp học nào thuộc khối này.'}
                     </p>
+                    {grade === -1 && (
+                        <Link
+                            href="/settings?tab=my-classes"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-xl text-xs font-bold shadow-xs transition"
+                        >
+                            <span>⚙️ Cài đặt Lớp Của Tôi</span>
+                        </Link>
+                    )}
                 </div>
             )}
         </div>

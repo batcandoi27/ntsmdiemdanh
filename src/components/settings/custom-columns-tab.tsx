@@ -56,33 +56,39 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
     const [formScope, setFormScope] = useState<'all' | 'subset'>('all');
     const [formStudentIds, setFormStudentIds] = useState<string[]>([]);
 
+    // State lớp đang được chọn để xem/cấu hình sổ
+    const [activeClassId, setActiveClassId] = useState<string>(classIds[0] || '');
+
     useEffect(() => {
         if (classIds.length > 0) {
-            loadData();
+            if (!activeClassId || !classIds.includes(activeClassId)) {
+                setActiveClassId(classIds[0]);
+            } else {
+                loadData(activeClassId);
+            }
         } else {
+            setActiveClassId('');
             setColumns([]);
             setLoading(false);
         }
     }, [classIds]);
 
-    const loadData = async () => {
+    useEffect(() => {
+        if (activeClassId) {
+            loadData(activeClassId);
+        }
+    }, [activeClassId]);
+
+    const loadData = async (targetId = activeClassId || classIds[0]) => {
+        if (!targetId) return;
         setLoading(true);
         try {
-            // Load data from the first class (template)
-            const firstClassId = classIds[0];
             const [cols, studList] = await Promise.all([
-                getCustomColumns(firstClassId, appUser?.uid),
-                getStudentsAction(firstClassId)
+                getCustomColumns(targetId, appUser?.uid),
+                getStudentsAction(targetId)
             ]);
             setColumns(cols);
-
-            // Only load students if we are selecting a single class
-            // If multiple classes, we restrict scope to 'all' and don't show student list
-            if (classIds.length === 1) {
-                setStudents(studList);
-            } else {
-                setStudents([]);
-            }
+            setStudents(studList);
         } catch (error) {
             console.error('Error loading data:', error);
         } finally {
@@ -101,7 +107,7 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
         setFormSubPeriods([]);
         setFormScope('all');
         setFormStudentIds([]);
-        setFormSelectedClassIds(classIds);
+        setFormSelectedClassIds(activeClassId ? [activeClassId] : classIds);
         setFormIsSharedWithParents(false);
         setFormPaymentEnabled(false);
         setFormRecipientType('school');
@@ -366,11 +372,27 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
                     </div>
                     <div>
                         <h4 className="font-bold text-gray-800 text-sm">Các lớp đang cấu hình ({classIds.length})</h4>
+                        {selectedClasses.length > 1 && (
+                            <p className="text-xs text-slate-500 mt-0.5">Bấm vào tên lớp để chuyển đổi xem và cấu hình sổ cho lớp đó:</p>
+                        )}
                         <div className="flex flex-wrap gap-2 mt-2">
                             {selectedClasses.length > 0 ? selectedClasses.map(cls => (
-                                <span key={cls.id} className="inline-flex items-center px-2.5 py-1 rounded-md bg-white border border-blue-200 text-blue-700 text-xs font-medium shadow-sm">
-                                    {cls.name}
-                                </span>
+                                <button
+                                    key={cls.id}
+                                    type="button"
+                                    onClick={() => setActiveClassId(cls.id)}
+                                    className={cn(
+                                        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs",
+                                        activeClassId === cls.id
+                                            ? "bg-blue-600 text-white shadow-blue-200 ring-2 ring-blue-400"
+                                            : "bg-white border border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-blue-50/50"
+                                    )}
+                                >
+                                    <span>{cls.name}</span>
+                                    {selectedClasses.length > 1 && activeClassId === cls.id && (
+                                        <span className="text-[10px] bg-white/20 px-1.5 py-0.2 rounded-full font-black">Đang chọn</span>
+                                    )}
+                                </button>
                             )) : (
                                 <span className="text-gray-500 text-xs italic">Đang tải tên lớp...</span>
                             )}
@@ -410,7 +432,10 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
                 // Phân loại cột Năm Học Cũ vs Năm Học Hiện Tại (2026-2027)
                 const isOldYearColumn = (column: Column): boolean => {
                     const targetClass = selectedClasses.find(c => c.id === column.classId);
-                    if (targetClass?.academicYear && !targetClass.academicYear.includes('2026-2027')) {
+                    if (!targetClass) {
+                        return true;
+                    }
+                    if (targetClass.academicYear && !targetClass.academicYear.includes('2026-2027')) {
                         return true;
                     }
                     if (column.periodConfig?.endDate) {
@@ -443,6 +468,8 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
 
                 const renderColumnCard = (column: Column, colIdx: number, isOld: boolean) => {
                     const theme = getBookTheme(colIdx, column.id || column.name);
+                    const targetClass = selectedClasses.find(c => c.id === column.classId);
+                    const className = targetClass?.name || 'Chưa gán lớp';
 
                     return (
                         <div
@@ -458,10 +485,14 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
                         >
                             <div className="flex justify-between items-start mb-3">
                                 <div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
                                         <h3 className={cn("font-black text-lg", isOld ? "text-slate-700" : theme.titleColor)}>
                                             {column.name}
                                         </h3>
+                                        <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-blue-100 text-blue-800 border border-blue-200 flex items-center gap-1 shadow-2xs">
+                                            <span>🏫</span>
+                                            <span>Lớp {className}</span>
+                                        </span>
                                         {isOld && (
                                             <span className="text-[10px] px-2 py-0.5 rounded-full font-black bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 uppercase tracking-wider">
                                                 <span>📜</span>
@@ -552,11 +583,17 @@ export function CustomColumnsTab({ classIds, selectedClasses = [] }: Props) {
                                     </div>
                                 )}
                                 <div className="flex items-center gap-2">
-                                    <Users size={14} className="text-gray-400" />
-                                    <span>
-                                        {column.applicableScope === 'subset'
-                                            ? `Áp dụng cho ${column.applicableStudentIds?.length || 0} học sinh`
-                                            : 'Áp dụng cho tất cả học sinh'}
+                                    <Users size={14} className="text-gray-400 shrink-0" />
+                                    <span className="font-medium text-slate-700">
+                                        {column.applicableScope === 'subset' ? (
+                                            <span className="text-amber-700 font-semibold">
+                                                👤 Nhóm chỉ định: {column.applicableStudentIds?.length || 0} học sinh (lớp {className})
+                                            </span>
+                                        ) : (
+                                            <span className="text-blue-700 font-semibold">
+                                                👥 Áp dụng cho tất cả học sinh lớp {className} ({students.length > 0 ? `${students.length} HS` : 'Toàn bộ'})
+                                            </span>
+                                        )}
                                     </span>
                                 </div>
                             </div>

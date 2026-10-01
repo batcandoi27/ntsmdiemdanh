@@ -45,6 +45,16 @@ export default function SettingsPage() {
     const { appUser } = useAuth();
 
     useEffect(() => {
+        // Read tab from query params if specified (e.g. /settings?tab=custom-columns)
+        if (typeof window !== 'undefined') {
+            const urlParams = new URLSearchParams(window.location.search);
+            const tabParam = urlParams.get('tab');
+            const validTabs = ['tenant-setup', 'data', 'subjects', 'teacher-groups', 'fixed-columns', 'custom-columns', 'my-classes', 'users', 'timetable', 'year', 'export', 'api', 'feature-flags', 'class-size'];
+            if (tabParam && validTabs.includes(tabParam)) {
+                setActiveTab(tabParam as TabType);
+            }
+        }
+
         // Initial load
         if (appUser) {
             loadMyClasses();
@@ -97,6 +107,7 @@ export default function SettingsPage() {
     };
 
     const selectedClasses = classes.filter(c => myClassIds.includes(c.id));
+    const activeClassIds = selectedClasses.map(c => c.id);
 
     // ... handleGenerate, handleClear ...
     const handleGenerate = () => {
@@ -299,11 +310,11 @@ export default function SettingsPage() {
                     )}
 
                     {activeTab === 'fixed-columns' && (
-                        <FixedColumnsTab classIds={myClassIds} selectedClasses={selectedClasses} />
+                        <FixedColumnsTab classIds={activeClassIds} selectedClasses={selectedClasses} />
                     )}
 
                     {activeTab === 'custom-columns' && (
-                        <CustomColumnsTab classIds={myClassIds} selectedClasses={selectedClasses} />
+                        <CustomColumnsTab classIds={activeClassIds} selectedClasses={selectedClasses} />
                     )}
 
                     {activeTab === 'class-size' && (
@@ -314,9 +325,9 @@ export default function SettingsPage() {
                         <FeatureFlagsTab />
                     )}
 
-                    {(activeTab === 'fixed-columns' || activeTab === 'custom-columns') && myClassIds.length === 0 && (
+                    {(activeTab === 'fixed-columns' || activeTab === 'custom-columns') && activeClassIds.length === 0 && (
                         <div className="text-center py-12 text-gray-400">
-                            Vui lòng chọn ít nhất một lớp trong tab "Lớp của tôi" để xem cài đặt.
+                            Vui lòng chọn ít nhất một lớp thuộc năm học hiện tại trong tab "Lớp của tôi" để xem cài đặt.
                         </div>
                     )}
                 </div>

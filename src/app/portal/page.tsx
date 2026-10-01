@@ -37,7 +37,7 @@ import {
 } from '@/services/homeroom-service';
 import { ParentStudentOverview, LeaveRequest } from '@/types/homeroom';
 import { Class, Student } from '@/types/models';
-import { cn } from '@/lib/utils';
+import { cn, formatStudentCode } from '@/lib/utils';
 import { getBookTheme } from '@/lib/book-themes';
 import { VietQRPaymentModal } from '@/components/portal/vietqr-payment-modal';
 import { StudentCurriculumVitaeTab } from '@/components/portal/student-curriculum-vitae-tab';
@@ -421,7 +421,7 @@ export default function ParentPortalPage() {
                 <div>
                   <h2 className="text-xl font-black text-slate-900">{overview.student.full_name}</h2>
                   <p className="text-xs text-slate-500 font-medium mt-0.5">
-                    Lớp <span className="text-indigo-700 font-bold">{overview.student.class_name ? `Lớp ${overview.student.class_name}` : ''}</span> • Mã HS: <span className="font-mono text-slate-800 font-bold">{overview.student.code}</span>
+                    Lớp <span className="text-indigo-700 font-bold">{overview.student.class_name ? `Lớp ${overview.student.class_name}` : ''}</span> • Mã HS: <span className="font-mono text-slate-800 font-bold" title={overview.student.code}>{formatStudentCode(overview.student.code)}</span>
                   </p>
                   <p className="text-xs text-slate-600 mt-0.5">
                     GVCN: <span className="font-bold text-slate-800">{overview.student.homeroom_teacher_name}</span>

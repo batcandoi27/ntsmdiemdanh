@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getColumn, updateColumn } from '@/services/column-service';
 import { getActiveStudents } from '@/services/student-service';
-import { getAllRecordsForColumn, savePeriodRecord, getOneTimeRecords, saveOneTimeRecord } from '@/services/record-service';
+import { getAllRecordsForColumn, savePeriodRecord, getOneTimeRecords, saveOneTimeRecord, getDailyRecords, saveDailyRecord } from '@/services/record-service';
 import { Column, Student, PeriodRecord, OneTimeRecord } from '@/types/models';
 import {
   ArrowLeft,
@@ -30,12 +30,13 @@ import {
   Calendar,
   AlertCircle
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatStudentCode } from '@/lib/utils';
 import { getBookTheme } from '@/lib/book-themes';
 import { Modal } from '@/components/ui/modal';
 import { getMonitorExportData } from '@/app/actions/monitor';
 import { exportMonitorBook, MonitorExportData, compareVietnameseNames } from '@/lib/export-utils';
 import { MonitorMessageModal } from '@/components/monitor/monitor-message-modal';
+import { CompositeMatrixGrid } from '@/components/monitor/composite-matrix-grid';
 import { db } from '@/services/db';
 import toast from 'react-hot-toast';
 
@@ -68,6 +69,7 @@ export default function MonitorDetailPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'done' | 'pending'>('all');
 
   // Records State
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [periodRecords, setPeriodRecords] = useState<Record<string, Record<string, string>>>({}); // studentCode -> periodKey -> value
   const [oneTimeRecords, setOneTimeRecords] = useState<Record<string, { completed: boolean; value?: string; note?: string }>>({}); // studentCode -> { completed, value, note }
 
@@ -117,6 +119,17 @@ export default function MonitorDetailPage() {
           map[r.studentCode][r.periodKey] = r.value as string;
         });
         setPeriodRecords(map);
+      } else if (col.frequency === 'daily') {
+        const records = await getDailyRecords(columnId, selectedDate);
+        const map: Record<string, any> = {};
+        records.forEach(r => {
+          map[r.studentCode] = { 
+            completed: (r.selectedSuggestions && r.selectedSuggestions.length > 0) || !!r.note,
+            value: r.selectedSuggestions?.join(', ') || '',
+            note: r.note 
+          };
+        });
+        setOneTimeRecords(map);
       } else if (col.frequency === 'one_time') {
         const records = await getOneTimeRecords(columnId);
         const map: Record<string, any> = {};
@@ -132,6 +145,25 @@ export default function MonitorDetailPage() {
     }
   };
 
+  const handleDateChange = async (newDate: string) => {
+    setSelectedDate(newDate);
+    if (!column || column.frequency !== 'daily') return;
+    try {
+      const records = await getDailyRecords(columnId, newDate);
+      const map: Record<string, any> = {};
+      records.forEach(r => {
+        map[r.studentCode] = { 
+          completed: (r.selectedSuggestions && r.selectedSuggestions.length > 0) || !!r.note,
+          value: r.selectedSuggestions?.join(', ') || '',
+          note: r.note 
+        };
+      });
+      setOneTimeRecords(map);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleOneTimeToggle = async (studentCode: string) => {
     if (!column) return;
     const current = oneTimeRecords[studentCode] || { completed: false };
@@ -143,13 +175,24 @@ export default function MonitorDetailPage() {
     }));
 
     try {
-      await saveOneTimeRecord({
-        columnId: column.id,
-        classId,
-        studentCode,
-        status: newCompleted ? 'done' : 'pending',
-        note: current.note
-      });
+      if (column.frequency === 'daily') {
+        await saveDailyRecord({
+          columnId: column.id,
+          classId,
+          studentCode,
+          date: selectedDate,
+          selectedSuggestions: newCompleted ? (column.suggestions.length > 0 ? [column.suggestions[0]] : ['X']) : [],
+          note: current.note
+        });
+      } else {
+        await saveOneTimeRecord({
+          columnId: column.id,
+          classId,
+          studentCode,
+          status: newCompleted ? 'done' : 'pending',
+          note: current.note
+        });
+      }
     } catch (error) {
       console.error(error);
       alert('Lỗi lưu trạng thái: ' + (error as Error).message);
@@ -175,15 +218,28 @@ export default function MonitorDetailPage() {
         note: current?.note
       };
 
-      promises.push(
-        saveOneTimeRecord({
-          columnId: column.id,
-          classId,
-          studentCode: s.code,
-          status: completed ? 'done' : 'pending',
-          note: current?.note
-        })
-      );
+      if (column.frequency === 'daily') {
+        promises.push(
+          saveDailyRecord({
+            columnId: column.id,
+            classId,
+            studentCode: s.code,
+            date: selectedDate,
+            selectedSuggestions: completed ? (column.suggestions.length > 0 ? [column.suggestions[0]] : ['X']) : [],
+            note: current?.note
+          })
+        );
+      } else {
+        promises.push(
+          saveOneTimeRecord({
+            columnId: column.id,
+            classId,
+            studentCode: s.code,
+            status: completed ? 'done' : 'pending',
+            note: current?.note
+          })
+        );
+      }
     }
     setOneTimeRecords(nextRecords);
     try {
@@ -406,6 +462,22 @@ export default function MonitorDetailPage() {
     );
   }
 
+  // --- HOẠT ĐỘNG PHỨC HỢP / NHIỀU CỘT (COMPOSITE ACTIVITY) ---
+  const isComposite = column?.activityConfig?.type === 'composite';
+  if (isComposite) {
+    return (
+      <div className="min-h-screen bg-slate-50/70 p-4 max-w-7xl mx-auto space-y-4">
+        <CompositeMatrixGrid
+          classId={classId}
+          classInfo={currentClass}
+          students={students}
+          activityId={columnId}
+          onBack={() => router.push(`/classes/${classId}/monitor`)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50/80 pb-24 text-slate-900">
       {/* 1. Header Top Navigation Bar */}
@@ -429,13 +501,26 @@ export default function MonitorDetailPage() {
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-medium">
-                {students.length} học sinh • {column.frequency === 'period' ? 'Theo giai đoạn / tháng' : 'Nhiệm vụ một lần'}
+                {students.length} học sinh • {column.frequency === 'period' ? 'Theo giai đoạn / tháng' : (column.frequency === 'daily' ? `Theo ngày (${selectedDate})` : 'Nhiệm vụ một lần')}
               </p>
             </div>
           </div>
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
+            {column.frequency === 'daily' && (
+              <div className="flex items-center gap-1.5 bg-sky-50 border border-sky-200 px-2.5 py-1.5 rounded-xl shadow-2xs">
+                <Calendar size={14} className="text-sky-600 shrink-0" />
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={e => handleDateChange(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-sky-900 outline-none cursor-pointer"
+                  title="Chọn ngày ghi nhận"
+                />
+              </div>
+            )}
+
             <button
               onClick={() => setIsMessageModalOpen(true)}
               className="px-3.5 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-xl hover:from-teal-700 hover:to-emerald-700 transition-all flex items-center gap-1.5 text-xs font-bold shadow-sm shadow-emerald-500/20 active:scale-95"
@@ -681,8 +766,8 @@ export default function MonitorDetailPage() {
                                 <div className="font-bold text-slate-900 text-xs truncate">
                                   {student.fullName}
                                 </div>
-                                <div className="text-[10px] text-slate-400 font-mono">
-                                  {student.code}
+                                <div className="text-[10px] text-slate-400 font-mono" title={student.code}>
+                                  {formatStudentCode(student.code)}
                                 </div>
                               </div>
                             </div>
@@ -814,8 +899,8 @@ export default function MonitorDetailPage() {
                           <div className={cn("font-bold text-xs truncate", isDone ? "text-emerald-950" : "text-slate-800")}>
                             {student.fullName}
                           </div>
-                          <div className="text-[10px] text-slate-400 font-mono">
-                            {student.code}
+                          <div className="text-[10px] text-slate-400 font-mono" title={student.code}>
+                            {formatStudentCode(student.code)}
                           </div>
                         </div>
                       </div>

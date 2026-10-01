@@ -11,7 +11,7 @@ import { AttendanceStatus } from '@/types/models';
 
 import { SessionType } from '@/types/timetable';
 import { Search, Loader2, Save, X, CheckCircle2, Edit3, Plus, ChevronDown, ChevronUp, Users, User } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatStudentCode } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
@@ -969,7 +969,7 @@ export function StudentSelectorDialog({
                                                             <h4 className={cn("font-bold text-sm truncate transition-colors", isMultiSelected ? "text-white" : (currentStatus === 'P' ? "text-yellow-600" : currentStatus === 'K' ? "text-red-600" : (currentStatus === 'T' || currentStatus === 'V') ? "text-blue-600" : hasViolation ? "text-purple-600" : hasReward ? "text-green-600" : "text-gray-800"))}>
                                                                 {item.student.fullName}
                                                             </h4>
-                                                            <span className={cn("text-xs font-mono shrink-0", isMultiSelected ? "text-white/70" : "text-gray-400")}>{item.student.code}</span>
+                                                            <span className={cn("text-xs font-mono shrink-0", isMultiSelected ? "text-white/70" : "text-gray-400")} title={item.student.code}>{formatStudentCode(item.student.code)}</span>
                                                         </div>
                                                     </div>
                                                 </div>

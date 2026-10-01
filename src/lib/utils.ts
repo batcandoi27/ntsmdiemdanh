@@ -27,3 +27,23 @@ export function sortStudentsByCode<T extends { code?: string; order?: number }>(
         return (a.order || 0) - (b.order || 0);
     });
 }
+
+/**
+ * Rút gọn mã học sinh để hiển thị (chỉ lấy số đuôi)
+ * Ví dụ: 79774504-00-3238 -> 3238
+ *        8A12_05 -> 05
+ */
+export function formatStudentCode(code?: string | null): string {
+    if (!code) return '';
+    const clean = String(code).trim();
+    if (!clean) return '';
+    if (clean.includes('-')) {
+        const parts = clean.split('-');
+        return parts[parts.length - 1];
+    }
+    if (clean.includes('_')) {
+        const parts = clean.split('_');
+        return parts[parts.length - 1];
+    }
+    return clean;
+}

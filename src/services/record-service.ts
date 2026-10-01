@@ -426,3 +426,91 @@ export async function batchSyncDailyRecords(
 
     return { inserted: toInsert.length, deleted: toDeleteIds.length };
 }
+
+// ============================================
+// COMPOSITE MATRIX RECORDS
+// ============================================
+
+export interface MatrixCellChange {
+    columnId: string;
+    classId: string;
+    studentCode: string;
+    value: unknown;
+    note?: string;
+    status?: 'done' | 'pending';
+}
+
+/**
+ * Lưu hàng loạt các ô thay đổi trong bảng Ma Trận Hoạt Động (Composite Matrix)
+ */
+export async function batchSaveMatrixRecords(
+    changes: MatrixCellChange[]
+): Promise<{ success: boolean; count: number }> {
+    if (!changes || changes.length === 0) return { success: true, count: 0 };
+
+    // C04/C05 Blocker: Validate that every change contains required fields
+    for (const ch of changes) {
+        if (!ch.columnId || !ch.studentCode || !ch.classId) {
+            throw new Error(`Dữ liệu bản ghi không hợp lệ: thiếu columnId, studentCode hoặc classId.`);
+        }
+    }
+
+    const now = new Date().toISOString();
+    const rows = changes.map(ch => ({
+        id: `${ch.columnId}_${ch.studentCode}`,
+        column_id: ch.columnId,
+        class_id: ch.classId,
+        student_code: ch.studentCode,
+        record_type: 'one_time',
+        status: ch.status || (ch.value ? 'done' : 'pending'),
+        value: ch.value,
+        note: ch.note ?? null,
+        completed_at: ch.value ? now : null,
+        updated_at: now,
+    }));
+
+    const { error } = await supabase
+        .from('column_records')
+        .upsert(rows, { onConflict: 'id' });
+
+    if (error) {
+        console.error('Error in batchSaveMatrixRecords:', error);
+        throw new Error('Lỗi lưu ma trận hoạt động: ' + error.message);
+    }
+
+    return { success: true, count: rows.length };
+}
+
+/**
+ * Lấy tất cả bản ghi cho danh sách các cột (để render ma trận nhanh trong 1 query)
+ */
+export async function getRecordsForColumns(
+    columnIds: string[]
+): Promise<Record<string, Record<string, { value: unknown; note?: string; status?: string }>>> {
+    if (!columnIds || columnIds.length === 0) return {};
+
+    const { data, error } = await supabase
+        .from('column_records')
+        .select('column_id, student_code, value, note, status')
+        .in('column_id', columnIds);
+
+    if (error || !data) {
+        console.error('Error in getRecordsForColumns:', error);
+        return {};
+    }
+
+    // result: { [studentCode]: { [columnId]: { value, note, status } } }
+    const result: Record<string, Record<string, { value: unknown; note?: string; status?: string }>> = {};
+    for (const row of data) {
+        if (!result[row.student_code]) {
+            result[row.student_code] = {};
+        }
+        result[row.student_code][row.column_id] = {
+            value: row.value,
+            note: row.note ?? undefined,
+            status: row.status ?? undefined,
+        };
+    }
+
+    return result;
+}
