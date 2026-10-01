@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Column } from '@/types/models';
 import { updateColumn, deleteColumn, addChildColumnToActivity } from '@/services/column-service';
 import { batchSaveMatrixRecords, MatrixCellChange } from '@/services/record-service';
@@ -28,10 +28,8 @@ export function EditCompositeActivityModal({
     students,
     onSuccess,
 }: Props) {
-    if (!activity) return null;
-
-    const [name, setName] = useState(activity.name);
-    const [children, setChildren] = useState<Column[]>(activity.children || []);
+    const [name, setName] = useState(activity?.name || '');
+    const [children, setChildren] = useState<Column[]>(activity?.children || []);
     const [editingChildId, setEditingChildId] = useState<string | null>(null);
     const [editingChildName, setEditingChildName] = useState('');
     const [editingChildSuggestions, setEditingChildSuggestions] = useState('');
@@ -39,6 +37,16 @@ export function EditCompositeActivityModal({
     const [newChildMode, setNewChildMode] = useState<'checkbox' | 'suggestions' | 'inline_text'>('checkbox');
     const [newChildSuggestions, setNewChildSuggestions] = useState('');
     const [saving, setSaving] = useState(false);
+
+    // Sync state when activity prop updates
+    useEffect(() => {
+        if (activity) {
+            setName(activity.name);
+            setChildren(activity.children || []);
+        }
+    }, [activity]);
+
+    if (!isOpen || !activity) return null;
 
     // Save activity name change
     const handleSaveActivityName = async () => {
